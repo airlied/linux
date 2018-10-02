@@ -804,6 +804,7 @@ create_pinned_context(struct intel_engine_cs *engine,
 	int err;
 
 	ce = intel_context_create(engine);
+
 	if (IS_ERR(ce))
 		return ce;
 
@@ -867,16 +868,32 @@ static int engine_init_common(struct intel_engine_cs *engine)
 		return PTR_ERR(ce);
 
 	ret = measure_breadcrumb_dw(ce);
-	if (ret < 0)
-		goto err_context;
+	if (ret < 0) {
+		intel_context_put(ce);
+		return ret;
+	}
 
 	engine->emit_fini_breadcrumb_dw = ret;
 	engine->kernel_context = ce;
 
+	/*
+	 * The blitter context is used to quickly memset or migrate objects
+	 * in local memory, so it has to always be available.
+	 */
+	if (engine->class == COPY_ENGINE_CLASS) {
+		ce = create_kernel_context(engine);
+		if (IS_ERR(ce)) {
+			ret = PTR_ERR(ce);
+			goto err_kernel_context;
+		}
+
+		engine->blitter_context = ce;
+	}
+
 	return 0;
 
-err_context:
-	intel_context_put(ce);
+err_kernel_context:
+	intel_context_put(engine->kernel_context);
 	return ret;
 }
 
@@ -931,6 +948,11 @@ void intel_engine_cleanup_common(struct intel_engine_cs *engine)
 
 	if (engine->default_state)
 		fput(engine->default_state);
+
+	if (engine->blitter_context) {
+		intel_context_unpin(engine->blitter_context);
+		intel_context_put(engine->blitter_context);
+	}
 
 	if (engine->kernel_context) {
 		intel_context_unpin(engine->kernel_context);
