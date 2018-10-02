@@ -25,6 +25,7 @@
 #include <drm/drm_print.h>
 
 #include "gem/i915_gem_context.h"
+#include "gem/i915_gem_lmem.h"
 
 #include "i915_drv.h"
 
@@ -652,7 +653,14 @@ static int init_status_page(struct intel_engine_cs *engine)
 	 * in GFP_DMA32 for i965, and no earlier physical address users had
 	 * access to more than 4G.
 	 */
-	obj = i915_gem_object_create_internal(engine->i915, PAGE_SIZE);
+	if (HAS_LMEM(engine->i915)) {
+		obj = i915_gem_object_create_lmem(engine->i915,
+						  PAGE_SIZE,
+						  I915_BO_ALLOC_CONTIGUOUS |
+						  I915_BO_ALLOC_VOLATILE);
+	} else {
+		obj = i915_gem_object_create_internal(engine->i915, PAGE_SIZE);
+	}
 	if (IS_ERR(obj)) {
 		drm_err(&engine->i915->drm,
 			"Failed to allocate status page\n");
