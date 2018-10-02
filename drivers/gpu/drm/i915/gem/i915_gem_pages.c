@@ -251,8 +251,18 @@ static void *i915_gem_object_map(struct drm_i915_gem_object *obj,
 	struct vm_struct *area;
 	pgprot_t pgprot;
 
-	if (!i915_gem_object_has_struct_page(obj) && type != I915_MAP_WC)
-		return NULL;
+	/*
+	 * XXX: we need to check all the places that try to kmap LMEM,
+	 * and ensure that they only do so with WC(if we are certain
+	 * that such an object should reside there). After that we can
+	 * then re-add the following:
+	 *
+	 * if (!i915_gem_object_has_struct_page(obj) && type != I915_MAP_WC)
+	 *	return NULL;
+	 */
+
+	 if (!i915_gem_object_has_struct_page(obj) && type != I915_MAP_WC)
+		 type = I915_MAP_WC;
 
 	/* A single page can always be kmapped */
 	if (n_pte == 1 && type == I915_MAP_WB)
