@@ -5,6 +5,7 @@
 
 #include <linux/log2.h>
 
+#include "gem/i915_gem_lmem.h"
 #include "gen8_ppgtt.h"
 #include "i915_scatterlist.h"
 #include "i915_trace.h"
@@ -46,6 +47,21 @@ static u64 gen8_pte_encode(dma_addr_t addr,
 		pte |= PPAT_CACHED;
 		break;
 	}
+
+	return pte;
+}
+
+static u64 gen12_pte_encode(dma_addr_t addr,
+			    enum i915_cache_level level,
+			    u32 flags)
+{
+	gen8_pte_t pte = addr | _PAGE_PRESENT | _PAGE_RW;
+
+	if (unlikely(flags & PTE_READ_ONLY))
+		pte &= ~_PAGE_RW;
+
+	if (flags & PTE_LM)
+		pte |= GEN12_PPGTT_PTE_LM;
 
 	return pte;
 }
@@ -365,7 +381,7 @@ gen8_ppgtt_insert_pte(struct i915_ppgtt *ppgtt,
 		      u32 flags)
 {
 	struct i915_page_directory *pd;
-	const gen8_pte_t pte_encode = gen8_pte_encode(0, cache_level, flags);
+	const gen8_pte_t pte_encode = ppgtt->vm.pte_encode(0, cache_level, flags);
 	gen8_pte_t *vaddr;
 	bool needs_flush;
 
@@ -413,7 +429,7 @@ static void gen8_ppgtt_insert_huge(struct i915_vma *vma,
 				   enum i915_cache_level cache_level,
 				   u32 flags)
 {
-	const gen8_pte_t pte_encode = gen8_pte_encode(0, cache_level, flags);
+	const gen8_pte_t pte_encode = vma->vm->pte_encode(0, cache_level, flags);
 	u64 start = vma->node.start;
 	dma_addr_t rem = iter->sg->length;
 	bool needs_flush;
@@ -555,6 +571,7 @@ static void gen8_ppgtt_insert(struct i915_address_space *vm,
 
 static int gen8_init_scratch(struct i915_address_space *vm)
 {
+	u32 pte_flags = vm->has_read_only;
 	int ret;
 	int i;
 
@@ -578,9 +595,12 @@ static int gen8_init_scratch(struct i915_address_space *vm)
 	if (ret)
 		return ret;
 
+	if (i915_gem_object_is_lmem(vm->scratch[0]))
+		pte_flags |= PTE_LM;
+
 	vm->scratch[0]->encode =
-		gen8_pte_encode(px_dma(vm->scratch[0]),
-				I915_CACHE_LLC, vm->has_read_only);
+		vm->pte_encode(px_dma(vm->scratch[0]),
+			       I915_CACHE_LLC, pte_flags);
 
 	for (i = 1; i <= vm->top; i++) {
 		struct drm_i915_gem_object *obj;
@@ -709,6 +729,11 @@ struct i915_ppgtt *gen8_ppgtt_create(struct intel_gt *gt)
 	else
 		ppgtt->vm.alloc_pt_dma = alloc_pt_dma;
 
+	if (INTEL_GEN(gt->i915) >= 12)
+		ppgtt->vm.pte_encode = gen12_pte_encode;
+	else
+		ppgtt->vm.pte_encode = gen8_pte_encode;
+
 	err = gen8_init_scratch(&ppgtt->vm);
 	if (err)
 		goto err_free;
@@ -729,8 +754,6 @@ struct i915_ppgtt *gen8_ppgtt_create(struct intel_gt *gt)
 	ppgtt->vm.insert_entries = gen8_ppgtt_insert;
 	ppgtt->vm.allocate_va_range = gen8_ppgtt_alloc;
 	ppgtt->vm.clear_range = gen8_ppgtt_clear;
-
-	ppgtt->vm.pte_encode = gen8_pte_encode;
 
 	if (intel_vgpu_active(gt->i915))
 		gen8_ppgtt_notify_vgt(ppgtt, true);
