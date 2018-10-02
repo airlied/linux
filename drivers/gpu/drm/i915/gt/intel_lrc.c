@@ -133,6 +133,8 @@
  */
 #include <linux/interrupt.h>
 
+#include "gem/i915_gem_lmem.h"
+
 #include "i915_drv.h"
 #include "i915_perf.h"
 #include "i915_trace.h"
@@ -5317,6 +5319,21 @@ static struct intel_timeline *pinned_timeline(struct intel_context *ce)
 						 page_unmask_bits(tl));
 }
 
+static int context_clear_lmem(struct drm_i915_gem_object *ctx_obj)
+{
+	void *vaddr;
+
+	vaddr = i915_gem_object_pin_map(ctx_obj, I915_MAP_WC);
+	if (IS_ERR(vaddr))
+		return PTR_ERR(vaddr);
+
+	memset64(vaddr, 0, ctx_obj->base.size / sizeof(u64));
+
+	i915_gem_object_unpin_map(ctx_obj);
+
+	return 0;
+}
+
 static int __execlists_context_alloc(struct intel_context *ce,
 				     struct intel_engine_cs *engine)
 {
@@ -5337,9 +5354,21 @@ static int __execlists_context_alloc(struct intel_context *ce,
 		context_size += PAGE_SIZE;
 	}
 
-	ctx_obj = i915_gem_object_create_shmem(engine->i915, context_size);
+	if (HAS_LMEM(engine->i915)) {
+		ctx_obj = i915_gem_object_create_lmem(engine->i915,
+						      context_size,
+						      I915_BO_ALLOC_CONTIGUOUS);
+	} else {
+		ctx_obj = i915_gem_object_create_shmem(engine->i915, context_size);
+	}
 	if (IS_ERR(ctx_obj))
 		return PTR_ERR(ctx_obj);
+
+	if (HAS_LMEM(engine->i915)) {
+		ret = context_clear_lmem(ctx_obj);
+		if (ret)
+			goto error_deref_obj;
+	}
 
 	vma = i915_vma_instance(ctx_obj, &engine->gt->ggtt->vm, NULL);
 	if (IS_ERR(vma)) {
