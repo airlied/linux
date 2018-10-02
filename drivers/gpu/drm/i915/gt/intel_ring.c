@@ -4,6 +4,7 @@
  * Copyright © 2019 Intel Corporation
  */
 
+#include "gem/i915_gem_lmem.h"
 #include "gem/i915_gem_object.h"
 #include "i915_drv.h"
 #include "i915_vma.h"
@@ -108,10 +109,16 @@ static struct i915_vma *create_ring_vma(struct i915_ggtt *ggtt, int size)
 	struct i915_vma *vma;
 
 	obj = ERR_PTR(-ENODEV);
-	if (i915_ggtt_has_aperture(ggtt))
-		obj = i915_gem_object_create_stolen(i915, size);
-	if (IS_ERR(obj))
-		obj = i915_gem_object_create_internal(i915, size);
+	if (HAS_LMEM(i915)) {
+		obj = i915_gem_object_create_lmem(i915, size,
+						  I915_BO_ALLOC_CONTIGUOUS |
+						  I915_BO_ALLOC_VOLATILE);
+	} else {
+		if (i915_ggtt_has_aperture(ggtt))
+			obj = i915_gem_object_create_stolen(i915, size);
+		if (IS_ERR(obj))
+			obj = i915_gem_object_create_internal(i915, size);
+	}
 	if (IS_ERR(obj))
 		return ERR_CAST(obj);
 
