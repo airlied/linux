@@ -257,6 +257,19 @@ static void *i915_gem_object_map_page(struct drm_i915_gem_object *obj,
 	pgprot_t pgprot;
 	void *vaddr;
 
+	/*
+	 * XXX: we need to check all the places that try to kmap LMEM,
+	 * and ensure that they only do so with WC(if we are certain
+	 * that such an object should reside there). After that we can
+	 * then re-add the following:
+	 *
+	 * if (!i915_gem_object_has_struct_page(obj) && type != I915_MAP_WC)
+	 *	return NULL;
+	 */
+
+	 if (!i915_gem_object_has_struct_page(obj) && type != I915_MAP_WC)
+		 type = I915_MAP_WC;
+
 	switch (type) {
 	default:
 		MISSING_CASE(type);
