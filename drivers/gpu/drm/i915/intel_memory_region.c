@@ -280,6 +280,18 @@ int intel_memory_regions_hw_probe(struct drm_i915_private *i915)
 {
 	int err, i;
 
+	/* All platforms currently have system memory */
+	GEM_BUG_ON(!HAS_REGION(i915, REGION_SMEM));
+
+	if (IS_DGFX(i915)) {
+		if (IS_ENABLED(CONFIG_DRM_I915_PCIE_STRICT_WRITE_ORDERING))
+			pcie_capability_clear_word(i915->drm.pdev, PCI_EXP_DEVCTL,
+						   PCI_EXP_DEVCTL_RELAX_EN);
+		else
+			pcie_capability_set_word(i915->drm.pdev, PCI_EXP_DEVCTL,
+						 PCI_EXP_DEVCTL_RELAX_EN);
+	}
+
 	for (i = 0; i < ARRAY_SIZE(i915->mm.regions); i++) {
 		struct intel_memory_region *mem = ERR_PTR(-ENODEV);
 		u16 type, instance;
