@@ -212,3 +212,14 @@ config DRM_I915_DEBUG_RUNTIME_PM
 	  driver loading, suspend and resume operations.
 
 	  If in doubt, say "N"
+
+config DRM_I915_PCIE_STRICT_WRITE_ORDERING
+	bool "Enable PCIe strict ordering "
+	depends on DRM_I915
+	default n
+	help
+	  Relaxed ordering in writes is enabled by default to improve system
+	  performance. Strict ordering can be selected instead to assist in
+	  debugging.
+
+	  If in doubt, say "N".
