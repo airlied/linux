@@ -44,20 +44,23 @@ const struct intel_memory_region_ops intel_region_lmem_ops = {
 static struct intel_memory_region *
 setup_lmem(struct drm_i915_private *dev_priv)
 {
+	struct intel_uncore *uncore = &dev_priv->uncore;
 	struct pci_dev *pdev = dev_priv->drm.pdev;
 	struct intel_memory_region *mem;
 	resource_size_t io_start;
-	resource_size_t size;
+	resource_size_t lmem_size;
 
 	/* Enables Local Memory functionality in GAM */
 	I915_WRITE(GEN12_LMEM_CFG_ADDR, I915_READ(GEN12_LMEM_CFG_ADDR) | LMEM_ENABLE);
 
+	/* Stolen starts from GSMBASE on DG1 */
+	lmem_size = intel_uncore_read64(uncore, GEN12_GSMBASE);
+
 	io_start = pci_resource_start(pdev, 2);
-	size = pci_resource_len(pdev, 2);
 
 	mem = intel_memory_region_create(dev_priv,
 					 0,
-					 size,
+					 lmem_size,
 					 I915_GTT_PAGE_SIZE_4K,
 					 io_start,
 					 &intel_region_lmem_ops);
@@ -66,7 +69,7 @@ setup_lmem(struct drm_i915_private *dev_priv)
 		DRM_INFO("Intel graphics LMEM IO start: %llx\n",
 			 (u64)mem->io_start);
 		DRM_INFO("Intel graphics LMEM size: %llx\n",
-			 (u64)size);
+			 (u64)lmem_size);
 	}
 
 	return mem;
