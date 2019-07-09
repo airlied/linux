@@ -12056,6 +12056,8 @@ enum skl_power_gate {
 #define GEN12_LMEM_CFG_ADDR		_MMIO(0xcf58)
 #define   LMEM_ENABLE			(1 << 31)
 
+#define GEN12_GSMBASE			_MMIO(0x108100)
+
 /* gamt regs */
 #define GEN8_L3_LRA_1_GPGPU _MMIO(0x4dd4)
 #define   GEN8_L3_LRA_1_GPGPU_DEFAULT_VALUE_BDW  0x67F1427F /* max/min for LRA1/2 */
