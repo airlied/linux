@@ -6,6 +6,7 @@
 #ifndef __INTEL_MEMORY_REGION_H__
 #define __INTEL_MEMORY_REGION_H__
 
+#include <drm/drm_mm.h>
 #include <linux/kref.h>
 #include <linux/ioport.h>
 #include <linux/mutex.h>
@@ -76,6 +77,8 @@ struct intel_memory_region {
 
 	/* For fake LMEM */
 	struct drm_mm_node fake_mappable;
+
+	struct drm_mm stolen;
 
 	struct i915_buddy_mm mm;
 	struct mutex mm_lock;
