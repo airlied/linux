@@ -437,6 +437,7 @@ static int find_compression_threshold(struct drm_i915_private *dev_priv,
 				      unsigned int size,
 				      unsigned int fb_cpp)
 {
+	struct intel_memory_region *mem = i915_stolen_region(dev_priv);
 	int compression_threshold = 1;
 	int ret;
 	u64 end;
@@ -460,7 +461,7 @@ static int find_compression_threshold(struct drm_i915_private *dev_priv,
 	 */
 
 	/* Try to over-allocate to reduce reallocations and fragmentation. */
-	ret = i915_gem_stolen_insert_node_in_range(dev_priv, node, size <<= 1,
+	ret = i915_gem_stolen_insert_node_in_range(mem, node, size <<= 1,
 						   4096, 0, end);
 	if (ret == 0)
 		return compression_threshold;
@@ -471,7 +472,7 @@ again:
 	    (fb_cpp == 2 && compression_threshold == 2))
 		return 0;
 
-	ret = i915_gem_stolen_insert_node_in_range(dev_priv, node, size >>= 1,
+	ret = i915_gem_stolen_insert_node_in_range(mem, node, size >>= 1,
 						   4096, 0, end);
 	if (ret && INTEL_GEN(dev_priv) <= 4) {
 		return 0;
@@ -486,6 +487,7 @@ again:
 static int intel_fbc_alloc_cfb(struct drm_i915_private *dev_priv,
 			       unsigned int size, unsigned int fb_cpp)
 {
+	struct intel_memory_region *mem = i915_stolen_region(dev_priv);
 	struct intel_fbc *fbc = &dev_priv->fbc;
 	struct drm_mm_node *compressed_llb;
 	int ret;
@@ -515,7 +517,7 @@ static int intel_fbc_alloc_cfb(struct drm_i915_private *dev_priv,
 		if (!compressed_llb)
 			goto err_fb;
 
-		ret = i915_gem_stolen_insert_node(dev_priv, compressed_llb,
+		ret = i915_gem_stolen_insert_node(mem, compressed_llb,
 						  4096, 4096);
 		if (ret)
 			goto err_fb;
@@ -542,15 +544,16 @@ static int intel_fbc_alloc_cfb(struct drm_i915_private *dev_priv,
 
 err_fb:
 	kfree(compressed_llb);
-	i915_gem_stolen_remove_node(dev_priv, &fbc->compressed_fb);
+	i915_gem_stolen_remove_node(mem, &fbc->compressed_fb);
 err_llb:
-	if (drm_mm_initialized(&dev_priv->mm.stolen))
+	if (drm_mm_initialized(&mem->stolen))
 		drm_info_once(&dev_priv->drm, "not enough stolen space for compressed buffer (need %d more bytes), disabling. Hint: you may be able to increase stolen memory size in the BIOS to avoid this.\n", size);
 	return -ENOSPC;
 }
 
 static void __intel_fbc_cleanup_cfb(struct drm_i915_private *dev_priv)
 {
+	struct intel_memory_region *mem = i915_stolen_region(dev_priv);
 	struct intel_fbc *fbc = &dev_priv->fbc;
 
 	if (WARN_ON(intel_fbc_hw_is_active(dev_priv)))
@@ -560,11 +563,11 @@ static void __intel_fbc_cleanup_cfb(struct drm_i915_private *dev_priv)
 		return;
 
 	if (fbc->compressed_llb) {
-		i915_gem_stolen_remove_node(dev_priv, fbc->compressed_llb);
+		i915_gem_stolen_remove_node(mem, fbc->compressed_llb);
 		kfree(fbc->compressed_llb);
 	}
 
-	i915_gem_stolen_remove_node(dev_priv, &fbc->compressed_fb);
+	i915_gem_stolen_remove_node(mem, &fbc->compressed_fb);
 }
 
 void intel_fbc_cleanup_cfb(struct drm_i915_private *dev_priv)
@@ -1461,12 +1464,13 @@ static bool need_fbc_vtd_wa(struct drm_i915_private *dev_priv)
 void intel_fbc_init(struct drm_i915_private *dev_priv)
 {
 	struct intel_fbc *fbc = &dev_priv->fbc;
+	struct intel_memory_region *mem = i915_stolen_region(dev_priv);
 
 	INIT_WORK(&fbc->underrun_work, intel_fbc_underrun_work_fn);
 	mutex_init(&fbc->lock);
 	fbc->active = false;
 
-	if (!drm_mm_initialized(&dev_priv->mm.stolen))
+	if (!mem || !drm_mm_initialized(&mem->stolen))
 		mkwrite_device_info(dev_priv)->display.has_fbc = false;
 
 	if (need_fbc_vtd_wa(dev_priv))
