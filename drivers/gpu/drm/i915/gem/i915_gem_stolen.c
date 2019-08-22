@@ -10,6 +10,7 @@
 #include <drm/drm_mm.h>
 #include <drm/i915_drm.h>
 
+#include "gem/i915_gem_lmem.h"
 #include "gem/i915_gem_region.h"
 #include "i915_drv.h"
 #include "i915_gem_stolen.h"
@@ -118,6 +119,14 @@ static int i915_adjust_stolen(struct drm_i915_private *i915,
 				dsm);
 		}
 	}
+
+	/*
+	 * With device local memory, we don't need to check the address range,
+	 * this is device memory physical address, could overlap with system
+	 * memory.
+	 */
+	if (HAS_LMEM(i915))
+		return 0;
 
 	/*
 	 * Verify that nothing else uses this physical address. Stolen
@@ -558,7 +567,7 @@ static void i915_gem_object_put_pages_stolen(struct drm_i915_gem_object *obj,
 	kfree(pages);
 }
 
-static const struct drm_i915_gem_object_ops i915_gem_object_stolen_ops = {
+static struct drm_i915_gem_object_ops i915_gem_object_stolen_ops = {
 	.name = "i915_gem_object_stolen",
 	.get_pages = i915_gem_object_get_pages_stolen,
 	.put_pages = i915_gem_object_put_pages_stolen,
@@ -661,7 +670,19 @@ i915_gem_object_create_stolen(struct drm_i915_private *i915,
 
 static int init_stolen(struct intel_memory_region *mem)
 {
-	intel_memory_region_set_name(mem, "stolen");
+	if (mem->type == INTEL_MEMORY_STOLEN_SYSTEM)
+		intel_memory_region_set_name(mem, "stolen-system");
+	else
+		intel_memory_region_set_name(mem, "stolen-local");
+
+	if (HAS_LMEM(mem->i915)) {
+		i915_gem_object_stolen_ops.pread = i915_gem_object_lmem_pread;
+		i915_gem_object_stolen_ops.pwrite = i915_gem_object_lmem_pwrite;
+		if (!io_mapping_init_wc(&mem->iomap,
+					mem->io_start,
+					resource_size(&mem->region)))
+			return -EIO;
+	}
 
 	/*
 	 * Initialise stolen early so that we may reserve preallocated
@@ -681,8 +702,39 @@ static const struct intel_memory_region_ops i915_region_stolen_ops = {
 	.create_object = i915_gem_object_create_stolen_region,
 };
 
+static
+struct intel_memory_region *setup_lmem_stolen(struct drm_i915_private *i915)
+{
+	struct intel_uncore *uncore = &i915->uncore;
+	struct pci_dev *pdev = i915->drm.pdev;
+	struct intel_memory_region *mem;
+	resource_size_t io_start;
+	resource_size_t lmem_size;
+	u64 lmem_base;
+
+	lmem_base = intel_uncore_read64(uncore, GEN12_DSMBASE);
+	lmem_size = pci_resource_len(pdev, 2) - lmem_base;
+	io_start = pci_resource_start(pdev, 2) + lmem_base;
+
+	mem = intel_memory_region_create(i915, lmem_base, lmem_size,
+					 I915_GTT_PAGE_SIZE_4K, io_start,
+					 &i915_region_stolen_ops);
+	if (!IS_ERR(mem)) {
+		DRM_INFO("Intel graphics stolen LMEM: %pR\n", &mem->region);
+		DRM_INFO("Intel graphics stolen LMEM IO start: %llx\n",
+			 (u64)mem->io_start);
+		/* this is real device memory */
+		mem->is_devmem = true;
+	}
+
+	return mem;
+}
+
 struct intel_memory_region *i915_gem_stolen_setup(struct drm_i915_private *i915)
 {
+	if (HAS_LMEM(i915))
+		return setup_lmem_stolen(i915);
+
 	return intel_memory_region_create(i915,
 					  intel_graphics_stolen_res.start,
 					  resource_size(&intel_graphics_stolen_res),

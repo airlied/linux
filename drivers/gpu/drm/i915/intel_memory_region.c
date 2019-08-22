@@ -19,6 +19,10 @@ const struct intel_memory_region_info intel_region_map[] = {
                .class = INTEL_MEMORY_STOLEN_SYSTEM,
                .instance = 0,
        },
+       [INTEL_REGION_STOLEN_LMEM] = {
+               .class = INTEL_MEMORY_STOLEN_LOCAL,
+               .instance = 0,
+       },
 };
 
 struct intel_memory_region *
@@ -305,6 +309,7 @@ int intel_memory_regions_hw_probe(struct drm_i915_private *i915)
 		case INTEL_MEMORY_SYSTEM:
 			mem = i915_gem_shmem_setup(i915);
 			break;
+		case INTEL_MEMORY_STOLEN_LOCAL: /* fallthrough */
 		case INTEL_MEMORY_STOLEN_SYSTEM:
 			mem = i915_gem_stolen_setup(i915);
 			break;
