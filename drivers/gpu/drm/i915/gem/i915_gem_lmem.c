@@ -8,8 +8,8 @@
 #include "gem/i915_gem_lmem.h"
 #include "i915_drv.h"
 
-static int lmem_pread(struct drm_i915_gem_object *obj,
-		      const struct drm_i915_gem_pread *arg)
+int i915_gem_object_lmem_pread(struct drm_i915_gem_object *obj,
+			       const struct drm_i915_gem_pread *arg)
 {
 	struct drm_i915_private *i915 = to_i915(obj->base.dev);
 	struct intel_runtime_pm *rpm = &i915->runtime_pm;
@@ -94,8 +94,8 @@ out_unpin:
 	return ret;
 }
 
-static int lmem_pwrite(struct drm_i915_gem_object *obj,
-		       const struct drm_i915_gem_pwrite *arg)
+int i915_gem_object_lmem_pwrite(struct drm_i915_gem_object *obj,
+				const struct drm_i915_gem_pwrite *arg)
 {
 	struct drm_i915_private *i915 = to_i915(obj->base.dev);
 	struct intel_runtime_pm *rpm = &i915->runtime_pm;
@@ -187,8 +187,8 @@ const struct drm_i915_gem_object_ops i915_gem_lmem_obj_ops = {
 	.put_pages = i915_gem_object_put_pages_buddy,
 	.release = i915_gem_object_release_memory_region,
 
-	.pread = lmem_pread,
-	.pwrite = lmem_pwrite,
+	.pread = i915_gem_object_lmem_pread,
+	.pwrite = i915_gem_object_lmem_pwrite,
 };
 
 void __iomem *
