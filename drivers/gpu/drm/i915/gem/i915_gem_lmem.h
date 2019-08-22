@@ -11,8 +11,15 @@
 struct drm_i915_private;
 struct drm_i915_gem_object;
 struct intel_memory_region;
+struct drm_i915_gem_pread;
+struct drm_i915_gem_pwrite;
 
 extern const struct drm_i915_gem_object_ops i915_gem_lmem_obj_ops;
+
+int i915_gem_object_lmem_pread(struct drm_i915_gem_object *obj,
+			       const struct drm_i915_gem_pread *args);
+int i915_gem_object_lmem_pwrite(struct drm_i915_gem_object *obj,
+				const struct drm_i915_gem_pwrite *args);
 
 void __iomem *
 i915_gem_object_lmem_io_map(struct drm_i915_gem_object *obj,
