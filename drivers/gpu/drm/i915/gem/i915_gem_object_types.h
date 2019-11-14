@@ -166,10 +166,12 @@ struct drm_i915_gem_object {
 #define I915_BO_ALLOC_CONTIGUOUS BIT(0)
 #define I915_BO_ALLOC_VOLATILE   BIT(1)
 #define I915_BO_ALLOC_STRUCT_PAGE BIT(2)
+#define I915_BO_ALLOC_CPU_CLEAR  BIT(3)
 #define I915_BO_ALLOC_FLAGS (I915_BO_ALLOC_CONTIGUOUS | \
 			     I915_BO_ALLOC_VOLATILE | \
-			     I915_BO_ALLOC_STRUCT_PAGE)
-#define I915_BO_READONLY         BIT(3)
+			     I915_BO_ALLOC_STRUCT_PAGE | \
+			     I915_BO_ALLOC_CPU_CLEAR)
+#define I915_BO_READONLY         BIT(4)
 
 	/*
 	 * Is the object to be mapped as read-only to the GPU
