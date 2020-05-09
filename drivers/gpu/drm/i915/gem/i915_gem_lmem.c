@@ -215,6 +215,21 @@ i915_gem_object_lmem_io_map_page_atomic(struct drm_i915_gem_object *obj,
 	return io_mapping_map_atomic_wc(&obj->mm.region->iomap, offset);
 }
 
+void __iomem *
+i915_gem_object_lmem_io_map(struct drm_i915_gem_object *obj,
+			    unsigned long n,
+			    unsigned long size)
+{
+	resource_size_t offset;
+
+	GEM_BUG_ON(!i915_gem_object_is_contiguous(obj));
+
+	offset = i915_gem_object_get_dma_address(obj, n);
+	offset -= obj->mm.region->region.start;
+
+	return io_mapping_map_wc(&obj->mm.region->iomap, offset, size);
+}
+
 bool i915_gem_object_is_lmem(struct drm_i915_gem_object *obj)
 {
 	struct intel_memory_region *region = obj->mm.region;
@@ -227,6 +242,32 @@ bool i915_gem_object_is_devmem(struct drm_i915_gem_object *obj)
 	struct intel_memory_region *region = obj->mm.region;
 
 	return region && region->is_devmem;
+}
+
+struct drm_i915_gem_object *
+i915_gem_object_create_lmem_from_data(struct drm_i915_private *i915,
+				      const void *data, size_t size)
+{
+	struct drm_i915_gem_object *obj;
+	void *map;
+
+	obj = i915_gem_object_create_lmem(i915,
+					  round_up(size, PAGE_SIZE),
+					  I915_BO_ALLOC_CONTIGUOUS);
+	if (IS_ERR(obj))
+		return obj;
+
+	map = i915_gem_object_pin_map(obj, I915_MAP_WC);
+	if (IS_ERR(map)) {
+		i915_gem_object_put(obj);
+		return map;
+	}
+
+	memcpy(map, data, size);
+
+	i915_gem_object_unpin_map(obj);
+
+	return obj;
 }
 
 struct drm_i915_gem_object *
