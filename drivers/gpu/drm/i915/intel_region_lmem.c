@@ -136,3 +136,41 @@ intel_setup_fake_lmem(struct drm_i915_private *i915)
 
 	return mem;
 }
+
+static struct intel_memory_region *
+setup_lmem(struct drm_i915_private *dev_priv)
+{
+	struct pci_dev *pdev = dev_priv->drm.pdev;
+	struct intel_memory_region *mem;
+	resource_size_t io_start;
+	resource_size_t size;
+
+	/* Enables Local Memory functionality in GAM */
+	I915_WRITE(GEN12_LMEM_CFG_ADDR, I915_READ(GEN12_LMEM_CFG_ADDR) | LMEM_ENABLE);
+
+	io_start = pci_resource_start(pdev, 2);
+	size = pci_resource_len(pdev, 2);
+
+	mem = intel_memory_region_create(dev_priv,
+					 0,
+					 size,
+					 I915_GTT_PAGE_SIZE_4K,
+					 io_start,
+					 &intel_region_lmem_ops);
+	if (!IS_ERR(mem)) {
+		DRM_INFO("Intel graphics LMEM: %pR\n", &mem->region);
+		DRM_INFO("Intel graphics LMEM IO start: %llx\n",
+			 (u64)mem->io_start);
+		DRM_INFO("Intel graphics LMEM size: %llx\n",
+			 (u64)size);
+	}
+
+	return mem;
+}
+
+struct intel_memory_region *
+i915_gem_setup_lmem(struct drm_i915_private *i915)
+{
+	return setup_lmem(i915);
+}
+
