@@ -41,6 +41,48 @@ const struct intel_memory_region_ops intel_region_lmem_ops = {
 	.create_object = __i915_gem_lmem_object_create,
 };
 
+static void get_legacy_lowmem_region(struct intel_uncore *uncore,
+				     u64 *start, u32 *size)
+{
+	*start = 0;
+	*size = 0;
+
+	if (!IS_DG1_REVID(uncore->i915, DG1_REVID_A0, DG1_REVID_A0))
+		return;
+
+	*size = SZ_1M;
+
+	DRM_DEBUG_DRIVER("LMEM: reserved legacy low-memory [0x%llx-0x%llx]\n",
+			 *start, *start + *size);
+}
+
+static int reserve_lowmem_region(struct intel_uncore *uncore,
+				 struct intel_memory_region *mem)
+{
+	u64 reserve_start;
+	u64 reserve_end;
+	u64 region_start;
+	u32 region_size;
+	int ret;
+
+	get_legacy_lowmem_region(uncore, &region_start, &region_size);
+	reserve_start = region_start;
+	reserve_end = region_start + region_size;
+
+	if (!reserve_end)
+		return 0;
+
+	DRM_INFO("LMEM: reserving low-memory region [0x%llx-0x%llx]\n",
+		 reserve_start, reserve_end);
+	ret = i915_buddy_alloc_range(&mem->mm, &mem->reserved,
+				     reserve_start,
+				     reserve_end - reserve_start);
+	if (ret)
+		DRM_ERROR("LMEM: reserving low memory region failed\n");
+
+	return ret;
+}
+
 static struct intel_memory_region *
 setup_lmem(struct drm_i915_private *dev_priv)
 {
@@ -64,6 +106,16 @@ setup_lmem(struct drm_i915_private *dev_priv)
 					 I915_GTT_PAGE_SIZE_4K,
 					 io_start,
 					 &intel_region_lmem_ops);
+	if (!IS_ERR(mem)) {
+		int err;
+
+		err = reserve_lowmem_region(uncore, mem);
+		if (err) {
+			intel_memory_region_put(mem);
+			return ERR_PTR(err);
+		}
+	}
+
 	if (!IS_ERR(mem)) {
 		DRM_INFO("Intel graphics LMEM: %pR\n", &mem->region);
 		DRM_INFO("Intel graphics LMEM IO start: %llx\n",
