@@ -313,6 +313,10 @@ int intel_memory_regions_hw_probe(struct drm_i915_private *i915)
 		mem->type = type;
 		mem->instance = instance;
 
+		if (HAS_LMEM(mem->i915) && type != INTEL_MEMORY_SYSTEM)
+			intel_memory_region_set_name(mem, "%s%u",
+						     mem->name, mem->instance);
+
 		i915->mm.regions[i] = mem;
 	}
 
