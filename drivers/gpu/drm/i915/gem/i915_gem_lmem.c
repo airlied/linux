@@ -217,7 +217,16 @@ i915_gem_object_lmem_io_map_page_atomic(struct drm_i915_gem_object *obj,
 
 bool i915_gem_object_is_lmem(struct drm_i915_gem_object *obj)
 {
-	return obj->ops == &i915_gem_lmem_obj_ops;
+	struct intel_memory_region *region = obj->mm.region;
+
+	return region && (region->is_devmem || region->type == INTEL_MEMORY_LOCAL);
+}
+
+bool i915_gem_object_is_devmem(struct drm_i915_gem_object *obj)
+{
+	struct intel_memory_region *region = obj->mm.region;
+
+	return region && region->is_devmem;
 }
 
 struct drm_i915_gem_object *
