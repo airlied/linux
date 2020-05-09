@@ -70,6 +70,9 @@ setup_lmem(struct drm_i915_private *dev_priv)
 			 (u64)mem->io_start);
 		DRM_INFO("Intel graphics LMEM size: %llx\n",
 			 (u64)lmem_size);
+
+		/* this is real device memory */
+		mem->is_devmem = true;
 	}
 
 	return mem;
