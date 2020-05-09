@@ -297,7 +297,16 @@ int intel_memory_regions_hw_probe(struct drm_i915_private *i915)
 			mem = i915_gem_stolen_setup(i915);
 			break;
 		case INTEL_MEMORY_LOCAL:
-			mem = intel_setup_fake_lmem(i915);
+#if IS_ENABLED(CONFIG_DRM_I915_SELFTEST)
+			if (IS_ENABLED(CONFIG_DRM_I915_UNSTABLE_FAKE_LMEM)) {
+				if (INTEL_GEN(i915) >= 9 && i915_selftest.live < 0 &&
+				    i915->params.fake_lmem_start)
+					mem = intel_setup_fake_lmem(i915);
+			}
+#endif
+
+			if (IS_ERR(mem))
+				mem = i915_gem_setup_lmem(i915);
 			break;
 		}
 
