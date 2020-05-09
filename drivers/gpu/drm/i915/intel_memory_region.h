@@ -96,6 +96,8 @@ struct intel_memory_region {
 	char name[16];
 	bool is_devmem;	/* true for device memory */
 
+	struct list_head reserved;
+
 	dma_addr_t remap_addr;
 
 	struct {
