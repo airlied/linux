@@ -7,6 +7,7 @@
 #include <linux/firmware.h>
 #include <drm/drm_print.h>
 
+#include "gem/i915_gem_lmem.h"
 #include "intel_uc_fw.h"
 #include "intel_uc_fw_abi.h"
 #include "i915_drv.h"
@@ -371,7 +372,11 @@ int intel_uc_fw_fetch(struct intel_uc_fw *uc_fw)
 		}
 	}
 
-	obj = i915_gem_object_create_shmem_from_data(i915, fw->data, fw->size);
+	if (HAS_LMEM(i915))
+		obj = i915_gem_object_create_lmem_from_data(i915, fw->data, fw->size);
+	else
+		obj = i915_gem_object_create_shmem_from_data(i915, fw->data, fw->size);
+
 	if (IS_ERR(obj)) {
 		err = PTR_ERR(obj);
 		goto fail;
@@ -420,14 +425,19 @@ static void uc_fw_bind_ggtt(struct intel_uc_fw *uc_fw)
 		.pages = obj->mm.pages,
 		.vm = &ggtt->vm,
 	};
+	u32 pte_flags = 0;
 
 	GEM_BUG_ON(!i915_gem_object_has_pinned_pages(obj));
 	GEM_BUG_ON(dummy.node.size > ggtt->uc_fw.size);
 
 	/* uc_fw->obj cache domains were not controlled across suspend */
-	drm_clflush_sg(dummy.pages);
+	if (i915_gem_object_has_struct_page(obj))
+		drm_clflush_sg(dummy.pages);
 
-	ggtt->vm.insert_entries(&ggtt->vm, &dummy, I915_CACHE_NONE, 0);
+	if (i915_gem_object_is_lmem(obj))
+		pte_flags |= PTE_LM;
+
+	ggtt->vm.insert_entries(&ggtt->vm, &dummy, I915_CACHE_NONE, pte_flags);
 }
 
 static void uc_fw_unbind_ggtt(struct intel_uc_fw *uc_fw)
@@ -592,7 +602,24 @@ size_t intel_uc_fw_copy_rsa(struct intel_uc_fw *uc_fw, void *dst, u32 max_len)
 
 	GEM_BUG_ON(!intel_uc_fw_is_available(uc_fw));
 
-	return sg_pcopy_to_buffer(pages->sgl, pages->nents, dst, size, offset);
+	if (i915_gem_object_is_lmem(uc_fw->obj)) {
+		unsigned long page_idx = offset >> PAGE_SHIFT;
+		unsigned int page_off = offset_in_page(offset);
+		void __iomem *vaddr;
+
+		vaddr = i915_gem_object_lmem_io_map(uc_fw->obj,
+						    page_idx,
+						    page_off + size);
+		if (!vaddr)
+			return 0;
+
+		memcpy(dst, vaddr + page_off, size);
+		io_mapping_unmap(vaddr);
+		return size;
+	} else {
+		return sg_pcopy_to_buffer(pages->sgl, pages->nents,
+					  dst, size, offset);
+	}
 }
 
 /**
