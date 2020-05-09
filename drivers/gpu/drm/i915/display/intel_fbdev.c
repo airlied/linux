@@ -41,6 +41,7 @@
 #include <drm/drm_fb_helper.h>
 #include <drm/drm_fourcc.h>
 
+#include "gem/i915_gem_lmem.h"
 #include "i915_drv.h"
 #include "intel_display_types.h"
 #include "intel_fbdev.h"
@@ -137,14 +138,22 @@ static int intelfb_alloc(struct drm_fb_helper *helper,
 	size = mode_cmd.pitches[0] * mode_cmd.height;
 	size = PAGE_ALIGN(size);
 
-	/* If the FB is too big, just don't use it since fbdev is not very
-	 * important and we should probably use that space with FBC or other
-	 * features. */
 	obj = ERR_PTR(-ENODEV);
-	if (size * 2 < dev_priv->stolen_usable_size)
-		obj = i915_gem_object_create_stolen(dev_priv, size);
-	if (IS_ERR(obj))
-		obj = i915_gem_object_create_shmem(dev_priv, size);
+	if (HAS_LMEM(dev_priv)) {
+		obj = i915_gem_object_create_lmem(dev_priv, size,
+						  I915_BO_ALLOC_CONTIGUOUS);
+	} else {
+		/*
+		 * If the FB is too big, just don't use it since fbdev is not very
+		 * important and we should probably use that space with FBC or other
+		 * features.
+		 */
+		if (size * 2 < dev_priv->stolen_usable_size)
+			obj = i915_gem_object_create_stolen(dev_priv, size);
+		if (IS_ERR(obj))
+			obj = i915_gem_object_create_shmem(dev_priv, size);
+	}
+
 	if (IS_ERR(obj)) {
 		drm_err(&dev_priv->drm, "failed to allocate framebuffer\n");
 		return PTR_ERR(obj);
