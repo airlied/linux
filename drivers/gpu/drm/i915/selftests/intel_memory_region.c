@@ -129,6 +129,94 @@ static void igt_object_release(struct drm_i915_gem_object *obj)
 	i915_gem_object_put(obj);
 }
 
+static int igt_reserve_range(struct intel_memory_region *mem,
+			     struct list_head *reserved,
+			     u64 offset,
+			     u64 size)
+{
+	int ret;
+	LIST_HEAD(blocks);
+
+	ret = i915_buddy_alloc_range(&mem->mm, &blocks, offset, size);
+	if (!ret)
+		list_splice_tail(&blocks, reserved);
+
+	return ret;
+}
+
+static int igt_mock_reserve(void *arg)
+{
+	struct drm_i915_gem_object *obj;
+	struct intel_memory_region *mem = arg;
+	resource_size_t avail = resource_size(&mem->region);
+	I915_RND_STATE(prng);
+	LIST_HEAD(objects);
+	LIST_HEAD(reserved);
+	u32 i, offset, count, *order;
+	u64 allocated, cur_avail;
+	const u32 chunk_size = SZ_32M;
+	int err = 0;
+
+	count = avail / chunk_size;
+	order = i915_random_order(count, &prng);
+	if (!order)
+		return 0;
+
+	/* Reserve a bunch of ranges within the region */
+	for (i = 0; i < count; ++i) {
+		u64 start = order[i] * chunk_size;
+		u64 size = i915_prandom_u32_max_state(chunk_size, &prng);
+
+		/* Allow for some really big holes */
+		if (!size)
+			continue;
+
+		size = round_up(size, PAGE_SIZE);
+		offset = igt_random_offset(&prng, 0, chunk_size, size,
+					   PAGE_SIZE);
+
+		err = igt_reserve_range(mem, &reserved, start + offset, size);
+		if (err) {
+			pr_err("%s failed to reserve range", __func__);
+			goto out_close;
+		}
+
+		/* XXX: maybe sanity check the block range here? */
+		avail -= size;
+	}
+
+	/* Try to see if we can allocate from the remaining space */
+	allocated = 0;
+	cur_avail = avail;
+	do {
+		u64 size = i915_prandom_u32_max_state(cur_avail, &prng);
+
+		size = max_t(u64, round_up(size, PAGE_SIZE), (u64)PAGE_SIZE);
+		obj = igt_object_create(mem, &objects, size, 0);
+
+		if (IS_ERR(obj)) {
+			if (PTR_ERR(obj) == -ENXIO)
+				break;
+
+			err = PTR_ERR(obj);
+			goto out_close;
+		}
+		cur_avail -= size;
+		allocated += size;
+	} while (1);
+
+	if (allocated != avail) {
+		pr_err("%s mismatch between allocation and free space", __func__);
+		err = -EINVAL;
+	}
+
+out_close:
+	kfree(order);
+	close_objects(mem, &objects);
+	i915_buddy_free_list(&mem->mm, &reserved);
+	return err;
+}
+
 static int igt_mock_contiguous(void *arg)
 {
 	struct intel_memory_region *mem = arg;
@@ -851,6 +939,7 @@ static int perf_memcpy(void *arg)
 int intel_memory_region_mock_selftests(void)
 {
 	static const struct i915_subtest tests[] = {
+		SUBTEST(igt_mock_reserve),
 		SUBTEST(igt_mock_fill),
 		SUBTEST(igt_mock_contiguous),
 	};
