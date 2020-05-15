@@ -72,6 +72,7 @@ __intel_memory_region_get_pages_buddy(struct intel_memory_region *mem,
 				      struct list_head *blocks)
 {
 	unsigned int min_order = 0;
+	unsigned int max_order;
 	unsigned long n_pages;
 
 	GEM_BUG_ON(!IS_ALIGNED(size, mem->mm.chunk_size));
@@ -92,13 +93,24 @@ __intel_memory_region_get_pages_buddy(struct intel_memory_region *mem,
 
 	n_pages = size >> ilog2(mem->mm.chunk_size);
 
+	/*
+	 * When allocating pages for an lmem object of size > 4G
+	 * the memory blocks allocated from buddy system could be
+	 * from sizes greater than 4G requiring > 32b to represent
+	 * block size. But those blocks cannot be used in sg list
+	 * construction(in caller) as sg->length is only 32b wide.
+	 * Hence limiting the block size to 4G.
+	 */
+	max_order = (ilog2(SZ_4G) - 1) - ilog2(mem->mm.chunk_size);
+
 	mutex_lock(&mem->mm_lock);
 
 	do {
 		struct i915_buddy_block *block;
 		unsigned int order;
 
-		order = fls(n_pages) - 1;
+		order = min_t(u32, (fls(n_pages) - 1), max_order);
+
 		GEM_BUG_ON(order > mem->mm.max_order);
 		GEM_BUG_ON(order < min_order);
 
