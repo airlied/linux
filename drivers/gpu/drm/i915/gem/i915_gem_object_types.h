@@ -203,6 +203,15 @@ struct drm_i915_gem_object {
 		atomic_t shrink_pin;
 
 		/**
+		 * Priority list of potential placements for this object.
+		 */
+		struct intel_memory_region **placements;
+		int n_placements;
+
+		/* XXX: Nasty hack, see gem_create */
+		int gem_create_posted_err;
+
+		/**
 		 * Memory region for this object.
 		 */
 		struct intel_memory_region *region;
