@@ -22,6 +22,26 @@ const struct intel_memory_region_info intel_region_map[] = {
 };
 
 struct intel_memory_region *
+intel_memory_region_lookup(struct drm_i915_private *i915,
+			   u16 class, u16 instance)
+{
+	int i;
+
+	/* XXX: consider maybe converting to an rb tree at some point */
+	for (i = 0; i < ARRAY_SIZE(i915->mm.regions); ++i) {
+		struct intel_memory_region *region = i915->mm.regions[i];
+
+		if (!region)
+			continue;
+
+		if (region->type == class && region->instance == instance)
+			return region;
+	}
+
+	return NULL;
+}
+
+struct intel_memory_region *
 intel_memory_region_by_type(struct drm_i915_private *i915,
 			    enum intel_memory_type mem_type)
 {
