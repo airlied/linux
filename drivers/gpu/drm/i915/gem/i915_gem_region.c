@@ -33,6 +33,10 @@ i915_gem_object_get_pages_buddy(struct drm_i915_gem_object *obj)
 	unsigned int sg_page_sizes;
 	int ret;
 
+	/* XXX: Check if we have any post. This is nasty hack, see gem_create */
+	if (obj->mm.gem_create_posted_err)
+		return obj->mm.gem_create_posted_err;
+
 	st = kmalloc(sizeof(*st), GFP_KERNEL);
 	if (!st)
 		return -ENOMEM;
