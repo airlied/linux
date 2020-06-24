@@ -2,6 +2,8 @@
 #define I915_TTM_H
 
 #include "i915_ttm_object_types.h"
+#define I915_BO_INVALID_OFFSET     LONG_MAX
+
 
 int i915_ttm_init(struct drm_i915_private *i915);
 void i915_ttm_fini(struct drm_i915_private *i915);
