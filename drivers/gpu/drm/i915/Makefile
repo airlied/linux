@@ -151,8 +151,15 @@ gem-y += \
 	gem/i915_gem_userptr.o \
 	gem/i915_gem_wait.o \
 	gem/i915_gemfs.o
+
+ttm-y += \
+	ttm/i915_ttm.o \
+	ttm/i915_ttm_vram_mgr.o \
+	ttm/i915_ttm_gtt_mgr.o
+
 i915-y += \
 	  $(gem-y) \
+	  $(ttm-y) \
 	  i915_active.o \
 	  i915_buddy.o \
 	  i915_cmd_parser.o \

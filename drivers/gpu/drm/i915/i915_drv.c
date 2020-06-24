@@ -87,6 +87,7 @@
 #include "intel_pm.h"
 #include "vlv_suspend.h"
 
+#include "ttm/i915_ttm.h"
 static struct drm_driver driver;
 
 static int i915_get_bridge_dev(struct drm_i915_private *dev_priv)
@@ -267,7 +268,10 @@ static int i915_driver_modeset_probe(struct drm_i915_private *i915)
 	if (ret)
 		goto out;
 
-	ret = i915_gem_init(i915);
+	if (i915_modparams.use_ttm)
+		ret = i915_ttm_init(i915);
+	else
+		ret = i915_gem_init(i915);
 	if (ret)
 		goto cleanup_modeset;
 
