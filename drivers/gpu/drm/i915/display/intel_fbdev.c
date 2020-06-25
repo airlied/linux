@@ -110,6 +110,60 @@ static const struct fb_ops intelfb_ops = {
 	.fb_blank = intel_fbdev_blank,
 };
 
+
+static void i915_ttm_fb_destroy_pinned_object(struct drm_gem_object *gobj)
+{
+	struct i915_ttm_bo *bo = ttm_gem_to_i915_bo(gobj);
+	int ret;
+
+	ret = i915_ttm_bo_reserve(bo, true);
+	if (likely(ret == 0)) {
+		i915_ttm_bo_kunmap(bo);
+		i915_ttm_bo_unpin(bo);
+		i915_ttm_bo_unreserve(bo);
+	}
+	drm_gem_object_put(gobj);
+}
+
+static int i915_ttm_fb_create_pinned_object(struct drm_i915_private *dev_priv,
+					    uint32_t size,
+					    u32 region,
+					    struct drm_gem_object **gobj_p)
+{
+	struct drm_gem_object *gobj;
+	struct i915_ttm_bo *bo;
+	int ret;
+	ret = i915_ttm_gem_object_create(dev_priv, size, 0,
+				       REGION_LMEM | REGION_STOLEN, 0,
+				       ttm_bo_type_kernel, NULL, &gobj);
+	if (ret)
+		return ret;
+
+	bo = ttm_gem_to_i915_bo(gobj);
+	
+	ret = i915_ttm_bo_reserve(bo, false);
+	if (ret != 0)
+		goto out_unref;
+
+	ret = i915_ttm_bo_pin(bo, region);
+	if (ret) {
+		i915_ttm_bo_unreserve(bo);
+		goto out_unref;
+	}
+
+	ret = i915_ttm_bo_kmap(bo, NULL);
+	i915_ttm_bo_unreserve(bo);
+	if (ret)
+		goto out_unref;
+
+	*gobj_p = gobj;
+	return 0;
+out_unref:
+	i915_ttm_fb_destroy_pinned_object(gobj);
+	*gobj_p = NULL;
+	return ret;
+}
+
 static int intelfb_alloc(struct drm_fb_helper *helper,
 			 struct drm_fb_helper_surface_size *sizes)
 {
@@ -144,11 +198,16 @@ static int intelfb_alloc(struct drm_fb_helper *helper,
 	obj = ERR_PTR(-ENODEV);
 	if (i915_modparams.use_ttm) {
 		int r;
-		r = i915_ttm_bo_create_kernel(dev_priv, size, PAGE_SIZE,
-					      REGION_LMEM | REGION_STOLEN,
-					      &bo, NULL, NULL);
+		struct drm_gem_object *gobj;
+
+		r = i915_ttm_fb_create_pinned_object(dev_priv, size,
+						 REGION_LMEM | REGION_STOLEN,
+						 &gobj);
 		if (r)
 			return r;
+
+		bo = ttm_gem_to_i915_bo(gobj);
+		drm_info(&dev_priv->drm, "created TTM bo for fbdev %d\n", size);
 	} else {
 		if (size * 2 < dev_priv->stolen_usable_size)
 			obj = i915_gem_object_create_stolen(dev_priv, size);
@@ -195,6 +254,7 @@ static int intelfb_create(struct drm_fb_helper *helper,
 	bool prealloc = false;
 	void __iomem *vaddr;
 	int ret;
+	bool use_ttm = i915_modparams.use_ttm;
 
 	if (intel_fb &&
 	    (sizes->fb_width > intel_fb->base.width ||
@@ -223,17 +283,18 @@ static int intelfb_create(struct drm_fb_helper *helper,
 
 	wakeref = intel_runtime_pm_get(&dev_priv->runtime_pm);
 
-	/* Pin the GGTT vma for our access via info->screen_base.
-	 * This also validates that any existing fb inherited from the
-	 * BIOS is suitable for own access.
-	 */
-	vma = intel_pin_and_fence_fb_obj(&ifbdev->fb->base,
-					 &view, false, &flags);
-	if (IS_ERR(vma)) {
-		ret = PTR_ERR(vma);
-		goto out_unlock;
+	if (!use_ttm) {
+		/* Pin the GGTT vma for our access via info->screen_base.
+		 * This also validates that any existing fb inherited from the
+		 * BIOS is suitable for own access.
+		 */
+		vma = intel_pin_and_fence_fb_obj(&ifbdev->fb->base,
+						 &view, false, &flags);
+		if (IS_ERR(vma)) {
+			ret = PTR_ERR(vma);
+			goto out_unlock;
+		}
 	}
-
 	intel_frontbuffer_flush(to_frontbuffer(ifbdev), ORIGIN_DIRTYFB);
 
 	info = drm_fb_helper_alloc_fbi(helper);
@@ -251,20 +312,28 @@ static int intelfb_create(struct drm_fb_helper *helper,
 	info->apertures->ranges[0].base = ggtt->gmadr.start;
 	info->apertures->ranges[0].size = ggtt->mappable_end;
 
-	/* Our framebuffer is the entirety of fbdev's system memory */
-	info->fix.smem_start =
-		(unsigned long)(ggtt->gmadr.start + vma->node.start);
-	info->fix.smem_len = vma->node.size;
+	if (!use_ttm) {
+		/* Our framebuffer is the entirety of fbdev's system memory */
+		info->fix.smem_start =
+			(unsigned long)(ggtt->gmadr.start + vma->node.start);
+		info->fix.smem_len = vma->node.size;
 
-	vaddr = i915_vma_pin_iomap(vma);
-	if (IS_ERR(vaddr)) {
-		drm_err(&dev_priv->drm,
-			"Failed to remap framebuffer into virtual memory\n");
-		ret = PTR_ERR(vaddr);
-		goto out_unpin;
+		vaddr = i915_vma_pin_iomap(vma);
+		if (IS_ERR(vaddr)) {
+			drm_err(&dev_priv->drm,
+				"Failed to remap framebuffer into virtual memory\n");
+			ret = PTR_ERR(vaddr);
+			goto out_unpin;
+		}
+		info->screen_base = vaddr;
+		info->screen_size = vma->node.size;
+		ifbdev->vma = vma;
+		ifbdev->vma_flags = flags;
+	} else {
+		struct i915_ttm_bo *bo = intel_fb_bo(&ifbdev->fb->base);
+		info->screen_base = i915_ttm_bo_kptr(bo);
+		info->screen_size = i915_ttm_bo_size(bo);
 	}
-	info->screen_base = vaddr;
-	info->screen_size = vma->node.size;
 
 	drm_fb_helper_fill_info(info, &ifbdev->helper, sizes);
 
@@ -272,16 +341,17 @@ static int intelfb_create(struct drm_fb_helper *helper,
 	 * If the object is stolen however, it will be full of whatever
 	 * garbage was left in there.
 	 */
-	if (vma->obj->stolen && !prealloc)
-		memset_io(info->screen_base, 0, info->screen_size);
+	if (!use_ttm) {
+		if (vma->obj->stolen && !prealloc)
+			memset_io(info->screen_base, 0, info->screen_size);
+	}
 
 	/* Use default scratch pixmap (info->pixmap.flags = FB_PIXMAP_SYSTEM) */
 
 	drm_dbg_kms(&dev_priv->drm, "allocated %dx%d fb: 0x%08x\n",
 		    ifbdev->fb->base.width, ifbdev->fb->base.height,
 		    i915_ggtt_offset(vma));
-	ifbdev->vma = vma;
-	ifbdev->vma_flags = flags;
+
 
 	intel_runtime_pm_put(&dev_priv->runtime_pm, wakeref);
 	vga_switcheroo_client_fb_set(pdev, info);
