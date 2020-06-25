@@ -56,7 +56,7 @@ struct intel_plane;
 struct intel_plane_state;
 struct intel_remapped_info;
 struct intel_rotation_info;
-
+struct i915_ttm_bo;
 enum i915_gpio {
 	GPIOA,
 	GPIOB,
@@ -559,6 +559,9 @@ void intel_unpin_fb_vma(struct i915_vma *vma, unsigned long flags);
 struct drm_framebuffer *
 intel_framebuffer_create(struct drm_i915_gem_object *obj,
 			 struct drm_mode_fb_cmd2 *mode_cmd);
+struct drm_framebuffer *
+intel_framebuffer_create_ttm(struct i915_ttm_bo *bo,
+			     struct drm_mode_fb_cmd2 *mode_cmd);
 int intel_prepare_plane_fb(struct drm_plane *plane,
 			   struct drm_plane_state *new_state);
 void intel_cleanup_plane_fb(struct drm_plane *plane,

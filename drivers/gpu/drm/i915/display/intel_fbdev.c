@@ -45,7 +45,7 @@
 #include "intel_display_types.h"
 #include "intel_fbdev.h"
 #include "intel_frontbuffer.h"
-
+#include "ttm/i915_ttm.h"
 static struct intel_frontbuffer *to_frontbuffer(struct intel_fbdev *ifbdev)
 {
 	return ifbdev->fb->frontbuffer;
@@ -119,7 +119,8 @@ static int intelfb_alloc(struct drm_fb_helper *helper,
 	struct drm_device *dev = helper->dev;
 	struct drm_i915_private *dev_priv = to_i915(dev);
 	struct drm_mode_fb_cmd2 mode_cmd = {};
-	struct drm_i915_gem_object *obj;
+	struct drm_i915_gem_object *obj = NULL;
+	struct i915_ttm_bo *bo = NULL;
 	int size;
 
 	/* we don't do packed 24bpp */
@@ -141,17 +142,32 @@ static int intelfb_alloc(struct drm_fb_helper *helper,
 	 * important and we should probably use that space with FBC or other
 	 * features. */
 	obj = ERR_PTR(-ENODEV);
-	if (size * 2 < dev_priv->stolen_usable_size)
-		obj = i915_gem_object_create_stolen(dev_priv, size);
-	if (IS_ERR(obj))
-		obj = i915_gem_object_create_shmem(dev_priv, size);
+	if (i915_modparams.use_ttm) {
+		int r;
+		r = i915_ttm_bo_create_kernel(dev_priv, size, PAGE_SIZE,
+					      REGION_LMEM | REGION_STOLEN,
+					      &bo, NULL, NULL);
+		if (r)
+			return r;
+	} else {
+		if (size * 2 < dev_priv->stolen_usable_size)
+			obj = i915_gem_object_create_stolen(dev_priv, size);
+		if (IS_ERR(obj))
+			obj = i915_gem_object_create_shmem(dev_priv, size);
+	}
 	if (IS_ERR(obj)) {
 		drm_err(&dev_priv->drm, "failed to allocate framebuffer\n");
 		return PTR_ERR(obj);
 	}
 
-	fb = intel_framebuffer_create(obj, &mode_cmd);
-	i915_gem_object_put(obj);
+	if (i915_modparams.use_ttm)
+		fb = intel_framebuffer_create_ttm(bo, &mode_cmd);
+	else
+		fb = intel_framebuffer_create(obj, &mode_cmd);
+	if (obj)
+		i915_gem_object_put(obj);
+	else
+		i915_ttm_bo_unref(&bo);
 	if (IS_ERR(fb))
 		return PTR_ERR(fb);
 

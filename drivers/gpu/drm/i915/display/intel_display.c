@@ -152,6 +152,10 @@ static void ilk_pch_clock_get(struct intel_crtc *crtc,
 static int intel_framebuffer_init(struct intel_framebuffer *ifb,
 				  struct drm_i915_gem_object *obj,
 				  struct drm_mode_fb_cmd2 *mode_cmd);
+static int intel_framebuffer_init_bo(struct intel_framebuffer *intel_fb,
+				     struct i915_ttm_bo *bo,
+				     struct drm_mode_fb_cmd2 *mode_cmd);
+
 static void intel_set_pipe_timings(const struct intel_crtc_state *crtc_state);
 static void intel_set_pipe_src_size(const struct intel_crtc_state *crtc_state);
 static void intel_cpu_transcoder_set_m_n(const struct intel_crtc_state *crtc_state,
@@ -11837,6 +11841,28 @@ err:
 	return ERR_PTR(ret);
 }
 
+struct drm_framebuffer *
+intel_framebuffer_create_ttm(struct i915_ttm_bo *bo,
+			     struct drm_mode_fb_cmd2 *mode_cmd)
+{
+	struct intel_framebuffer *intel_fb;
+	int ret;
+
+	intel_fb = kzalloc(sizeof(*intel_fb), GFP_KERNEL);
+	if (!intel_fb)
+		return ERR_PTR(-ENOMEM);
+
+	ret = intel_framebuffer_init_bo(intel_fb, bo, mode_cmd);
+	if (ret)
+		goto err;
+
+	return &intel_fb->base;
+
+err:
+	kfree(intel_fb);
+	return ERR_PTR(ret);
+}
+
 static int intel_modeset_disable_planes(struct drm_atomic_state *state,
 					struct drm_crtc *crtc)
 {
@@ -17122,25 +17148,31 @@ static const struct drm_framebuffer_funcs intel_fb_funcs = {
 	.dirty = intel_user_framebuffer_dirty,
 };
 
-static int intel_framebuffer_init(struct intel_framebuffer *intel_fb,
-				  struct drm_i915_gem_object *obj,
-				  struct drm_mode_fb_cmd2 *mode_cmd)
+static int intel_framebuffer_init_ttm(struct drm_i915_private *dev_priv,
+				      struct intel_framebuffer *intel_fb,
+				      struct i915_ttm_bo *bo,
+				      struct drm_i915_gem_object *obj,
+				      struct drm_mode_fb_cmd2 *mode_cmd)
 {
-	struct drm_i915_private *dev_priv = to_i915(obj->base.dev);
 	struct drm_framebuffer *fb = &intel_fb->base;
 	u32 max_stride;
 	unsigned int tiling, stride;
 	int ret = -EINVAL;
 	int i;
 
-	intel_fb->frontbuffer = intel_frontbuffer_get(obj);
+	if (bo)
+	  intel_fb->frontbuffer = intel_frontbuffer_get_ttm(bo);
+	else
+	  intel_fb->frontbuffer = intel_frontbuffer_get(obj);
 	if (!intel_fb->frontbuffer)
 		return -ENOMEM;
 
-	i915_gem_object_lock(obj);
-	tiling = i915_gem_object_get_tiling(obj);
-	stride = i915_gem_object_get_stride(obj);
-	i915_gem_object_unlock(obj);
+	if (obj) {
+		i915_gem_object_lock(obj);
+		tiling = i915_gem_object_get_tiling(obj);
+		stride = i915_gem_object_get_stride(obj);
+		i915_gem_object_unlock(obj);
+	}
 
 	if (mode_cmd->flags & DRM_MODE_FB_MODIFIERS) {
 		/*
@@ -17248,7 +17280,10 @@ static int intel_framebuffer_init(struct intel_framebuffer *intel_fb,
 			}
 		}
 
-		fb->obj[i] = &obj->base;
+		if (bo)
+			fb->obj[i] = &bo->tbo.base;
+		else
+			fb->obj[i] = &obj->base;
 	}
 
 	ret = intel_fill_fb_info(dev_priv, fb);
@@ -17266,6 +17301,22 @@ static int intel_framebuffer_init(struct intel_framebuffer *intel_fb,
 err:
 	intel_frontbuffer_put(intel_fb->frontbuffer);
 	return ret;
+}
+
+static int intel_framebuffer_init(struct intel_framebuffer *intel_fb,
+				  struct drm_i915_gem_object *obj,
+				  struct drm_mode_fb_cmd2 *mode_cmd)
+{
+	struct drm_i915_private *i915 = to_i915(obj->base.dev);
+	return intel_framebuffer_init_ttm(i915, intel_fb, NULL, obj, mode_cmd);
+}
+
+static int intel_framebuffer_init_bo(struct intel_framebuffer *intel_fb,
+				     struct i915_ttm_bo *bo,
+				     struct drm_mode_fb_cmd2 *mode_cmd)
+{
+	struct drm_i915_private *i915 = to_i915_ttm_dev(bo->tbo.bdev);
+	return intel_framebuffer_init_ttm(i915, intel_fb, bo, NULL, mode_cmd);
 }
 
 static struct drm_framebuffer *
