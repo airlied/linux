@@ -142,9 +142,21 @@ static void i915_ttm_vram_mgr_del(struct ttm_mem_type_manager *man,
 	struct drm_i915_private *i915 = to_i915_ttm_dev(man->bdev);
 	struct i915_ttm_vram_mgr *mgr = man->priv;
 	struct drm_mm_node *nodes = mem->mm_node;
-
+	unsigned pages = mem->num_pages;
+	uint64_t usage = 0;
 	if (!mem->mm_node)
 		return;
+
+	spin_lock(&mgr->lock);
+	while (pages) {
+		pages -= nodes->size;
+		drm_mm_remove_node(nodes);
+		usage += nodes->size << PAGE_SHIFT;
+		++nodes;
+	}
+	spin_unlock(&mgr->lock);
+	kvfree(mem->mm_node);
+	mem->mm_node = NULL;
 }
 				  
 const struct ttm_mem_type_manager_func i915_ttm_vram_mgr_func = {

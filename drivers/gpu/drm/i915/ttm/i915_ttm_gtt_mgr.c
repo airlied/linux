@@ -53,7 +53,7 @@ bool i915_ttm_gtt_mgr_has_gart_addr(struct ttm_mem_reg *mem)
 {
 	struct i915_ttm_gtt_node *node = mem->mm_node;
 
-	return (node->node.start != I915_BO_INVALID_OFFSET);
+	return (node->node.start != I915_TTM_BO_INVALID_OFFSET);
 }
 
 static int i915_ttm_gtt_mgr_alloc(struct ttm_mem_type_manager *man,
@@ -120,7 +120,7 @@ static int i915_ttm_gtt_mgr_new(struct ttm_mem_type_manager *man,
 		r = -ENOMEM;
 		goto err_out;
 	}
-	node->node.start = I915_BO_INVALID_OFFSET;
+	node->node.start = I915_TTM_BO_INVALID_OFFSET;
 	node->node.size = mem->num_pages;
 	node->tbo = tbo;
 	mem->mm_node = node;
@@ -153,7 +153,7 @@ static void i915_ttm_gtt_mgr_del(struct ttm_mem_type_manager *man,
 		return;
 
 	spin_lock(&mgr->lock);
-	if (node->node.start != I915_BO_INVALID_OFFSET)
+	if (node->node.start != I915_TTM_BO_INVALID_OFFSET)
 		drm_mm_remove_node(&node->node);
 	spin_unlock(&mgr->lock);
 	atomic64_add(mem->num_pages, &mgr->available);
