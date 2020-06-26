@@ -26,12 +26,205 @@
 static int i915_ttm_init_lmem(struct drm_i915_private *i915)
 {
 	struct ttm_mem_type_manager *man = &i915->ttm_mman.bdev.man[TTM_PL_VRAM];
-
+	uint64_t vram_size;
+	if (HAS_LMEM(i915))
+		vram_size = i915->mm.regions[INTEL_REGION_LMEM]->total;
+	else
+		vram_size = i915->mm.regions[INTEL_REGION_STOLEN]->total;
+	printk("creating VRAM in %s size %llu\n", HAS_LMEM(i915) ? "lmem" : "Stolen", vram_size);
 	man->func = &i915_ttm_vram_mgr_func;
 	man->available_caching = TTM_PL_FLAG_UNCACHED | TTM_PL_FLAG_WC;
 	man->default_caching = TTM_PL_FLAG_WC;
-	return ttm_bo_init_mm(&i915->ttm_mman.bdev, TTM_PL_VRAM,
-			      8);
+	return ttm_bo_init_mm(&i915->ttm_mman.bdev, TTM_PL_VRAM, vram_size >> PAGE_SHIFT);
+}
+
+static int i915_ttm_init_gtt(struct drm_i915_private *i915)
+{
+	struct ttm_mem_type_manager *man = &i915->ttm_mman.bdev.man[TTM_PL_TT];
+
+	printk("creating GTT size %llu\n", i915->ggtt.vm.total);
+	man->use_tt = true;
+	man->func = &i915_ttm_gtt_mgr_func;
+	man->available_caching = TTM_PL_MASK_CACHING;
+	man->default_caching = TTM_PL_FLAG_CACHED;
+	return ttm_bo_init_mm(&i915->ttm_mman.bdev, TTM_PL_TT, i915->ggtt.vm.total >> PAGE_SHIFT);
+}
+
+static void i915_ttm_evict_flags(struct ttm_buffer_object *tbo,
+				struct ttm_placement *placement)
+{
+	struct drm_i915_private *i915 = to_i915_ttm_dev(tbo->bdev);
+	struct i915_ttm_bo *bo;
+	static const struct ttm_place placements = {
+		.fpfn = 0,
+		.lpfn = 0,
+		.flags = TTM_PL_MASK_CACHING | TTM_PL_FLAG_SYSTEM
+	};
+
+	bo = ttm_to_i915_bo(tbo);
+	switch (tbo->mem.mem_type) {
+	case TTM_PL_VRAM:
+	default:
+		break;
+	}
+			
+	*placement = bo->placement;
+}
+
+/**
+ * i915_ttm_move_null - Register memory for a buffer object
+ *
+ * @bo: The bo to assign the memory to
+ * @new_mem: The memory to be assigned.
+ *
+ * Assign the memory from new_mem to the memory of the buffer object bo.
+ */
+static void i915_ttm_move_null(struct ttm_buffer_object *bo,
+			     struct ttm_mem_reg *new_mem)
+{
+	struct ttm_mem_reg *old_mem = &bo->mem;
+
+	BUG_ON(old_mem->mm_node != NULL);
+	*old_mem = *new_mem;
+	new_mem->mm_node = NULL;
+}
+
+/**
+ * i915_ttm_mm_node_addr - Compute the GPU relative offset of a GTT buffer.
+ *
+ * @bo: The bo to assign the memory to.
+ * @mm_node: Memory manager node for drm allocator.
+ * @mem: The region where the bo resides.
+ *
+ */
+static uint64_t i915_ttm_mm_node_addr(struct ttm_buffer_object *bo,
+				    struct drm_mm_node *mm_node,
+				    struct ttm_mem_reg *mem)
+{
+	uint64_t addr = 0;
+
+	if (mm_node->start != I915_TTM_BO_INVALID_OFFSET) {
+		addr = mm_node->start << PAGE_SHIFT;
+//		addr += bo->bdev->man[mem->mem_type].gpu_offset;
+	}
+	return addr;
+}
+
+/**
+ * i915_ttm_find_mm_node - Helper function finds the drm_mm_node corresponding to
+ * @offset. It also modifies the offset to be within the drm_mm_node returned
+ *
+ * @mem: The region where the bo resides.
+ * @offset: The offset that drm_mm_node is used for finding.
+ *
+ */
+static struct drm_mm_node *i915_ttm_find_mm_node(struct ttm_mem_reg *mem,
+					       uint64_t *offset)
+{
+	struct drm_mm_node *mm_node = mem->mm_node;
+
+	while (*offset >= (mm_node->size << PAGE_SHIFT)) {
+		*offset -= (mm_node->size << PAGE_SHIFT);
+		++mm_node;
+	}
+	return mm_node;
+}
+
+static int i915_ttm_bo_move(struct ttm_buffer_object *tbo, bool evict,
+			    struct ttm_operation_ctx *ctx,
+			    struct ttm_mem_reg *new_mem)
+{
+	struct ttm_mem_reg *old_mem = &tbo->mem;
+	struct i915_ttm_bo *bo;
+	struct drm_i915_private *i915;
+	int r;
+
+	bo = ttm_to_i915_bo(tbo);
+	if (WARN_ON_ONCE(bo->pin_count > 0))
+		return -EINVAL;
+
+	i915 = to_i915_ttm_dev(tbo->bdev);
+
+	if (old_mem->mem_type == TTM_PL_SYSTEM && tbo->ttm == NULL) {
+		i915_ttm_move_null(tbo, new_mem);
+		return 0;
+	}
+
+	if ((old_mem->mem_type == TTM_PL_TT &&
+	     new_mem->mem_type == TTM_PL_SYSTEM) ||
+	    (old_mem->mem_type == TTM_PL_SYSTEM &&
+	     new_mem->mem_type == TTM_PL_TT)) {
+		/* bind is enough */
+		i915_ttm_move_null(tbo, new_mem);
+		return 0;
+	}
+
+	r = ttm_bo_move_memcpy(tbo, ctx, new_mem);
+	if (r)
+		return r;
+
+	return 0;
+}
+
+/**
+ * i915_ttm_ttm_io_mem_reserve - Reserve a block of memory during a fault
+ *
+ * Called by ttm_mem_io_reserve() ultimately via ttm_bo_vm_fault()
+ */
+static int i915_ttm_io_mem_reserve(struct ttm_bo_device *bdev, struct ttm_mem_reg *mem)
+{
+	struct ttm_mem_type_manager *man = &bdev->man[mem->mem_type];
+	struct drm_i915_private *i915 = to_i915_ttm_dev(bdev);
+	struct drm_mm_node *mm_node = mem->mm_node;
+
+	mem->bus.addr = NULL;
+	mem->bus.offset = 0;
+	mem->bus.size = mem->num_pages << PAGE_SHIFT;
+	mem->bus.base = 0;
+	mem->bus.is_iomem = false;
+
+	switch (mem->mem_type) {
+	case TTM_PL_SYSTEM:
+		/* system memory */
+		return 0;
+	case TTM_PL_TT:
+		break;
+	case TTM_PL_VRAM:
+		mem->bus.offset = mem->start << PAGE_SHIFT;
+		/* check if it's visible */
+//		if ((mem->bus.offset + mem->bus.size) > adev->gmc.visible_vram_size)
+//			return -EINVAL;
+		/* Only physically contiguous buffers apply. In a contiguous
+		 * buffer, size of the first mm_node would match the number of
+		 * pages in ttm_mem_reg.
+		 */
+		if (i915->ttm_mman.aper_base_kaddr &&
+		    (mm_node->size == mem->num_pages))
+			mem->bus.addr = (u8 *)i915->ttm_mman.aper_base_kaddr +
+					mem->bus.offset;
+
+		mem->bus.base = i915->mm.regions[INTEL_MEMORY_LOCAL]->io_start;
+		mem->bus.is_iomem = true;
+		break;
+	default:
+		return -EINVAL;
+	}
+	return 0;
+}
+
+static void i915_ttm_io_mem_free(struct ttm_bo_device *bdev, struct ttm_mem_reg *mem)
+{
+}
+
+static unsigned long i915_ttm_io_mem_pfn(struct ttm_buffer_object *bo,
+					 unsigned long page_offset)
+{
+	uint64_t offset = (page_offset << PAGE_SHIFT);
+	struct drm_mm_node *mm;
+
+	mm = i915_ttm_find_mm_node(&bo->mem, &offset);
+	return (bo->mem.bus.base >> PAGE_SHIFT) + mm->start +
+		(offset >> PAGE_SHIFT);
 }
 
 struct i915_ttm_tt {
@@ -87,29 +280,44 @@ static struct ttm_tt *i915_ttm_tt_create(struct ttm_buffer_object *bo,
 static int i915_ttm_tt_populate(struct ttm_tt *ttm,
 				struct ttm_operation_ctx *ctx)
 {
-	return 0;
+	struct drm_i915_private *i915 = to_i915_ttm_dev(ttm->bdev);
+	struct i915_ttm_tt *gtt = (void *)ttm;
+
+	if (ttm->page_flags & TTM_PAGE_FLAG_SG) {
+		WARN_ON(1);
+		return 0;
+	}
+	/* TODO swiotlb */
+	printk(KERN_INFO "tt populate %p\n", ttm);
+	return ttm_populate_and_map_pages(i915->drm.dev, &gtt->ttm, ctx);
 }
 
 static void i915_ttm_tt_unpopulate(struct ttm_tt *ttm)
 {
-
+	struct drm_i915_private *i915 = to_i915_ttm_dev(ttm->bdev);
+	struct i915_ttm_tt *gtt = (void *)ttm;
+	printk(KERN_INFO "tt unpopulate %p\n", ttm);	
+	ttm_unmap_and_unpopulate_pages(i915->drm.dev, &gtt->ttm);
 }
 
 static struct ttm_bo_driver i915_ttm_bo_driver = {
 	.ttm_tt_create = &i915_ttm_tt_create,
 	.ttm_tt_populate = &i915_ttm_tt_populate,
 	.ttm_tt_unpopulate = &i915_ttm_tt_unpopulate,
+	.evict_flags = &i915_ttm_evict_flags,
+	.move = &i915_ttm_bo_move,
+
+	.io_mem_reserve = &i915_ttm_io_mem_reserve,
+	.io_mem_free = &i915_ttm_io_mem_free,
+	.io_mem_pfn = i915_ttm_io_mem_pfn,
 #if 0
 	.eviction_valuable = amdgpu_ttm_bo_eviction_valuable,
-	.evict_flags = &amdgpu_evict_flags,
-	.move = &amdgpu_bo_move,
+
 	.verify_access = &amdgpu_verify_access,
 	.move_notify = &amdgpu_bo_move_notify,
-	.release_notify = &amdgpu_bo_release_notify,
+	.release_notify = &amdgpu_vbo_release_notify,
 	.fault_reserve_notify = &amdgpu_bo_fault_reserve_notify,
-	.io_mem_reserve = &amdgpu_ttm_io_mem_reserve,
-	.io_mem_free = &amdgpu_ttm_io_mem_free,
-	.io_mem_pfn = amdgpu_ttm_io_mem_pfn,
+
 	.access_memory = &amdgpu_ttm_access_memory,
 	.del_from_lru_notify = &amdgpu_vm_del_from_lru_notify
 #endif
@@ -118,6 +326,8 @@ static struct ttm_bo_driver i915_ttm_bo_driver = {
 int i915_ttm_init(struct drm_i915_private *i915)
 {
 	int r;
+	uint64_t vram_size = 0;
+
 	r = ttm_bo_device_init(&i915->ttm_mman.bdev,
 			       &i915_ttm_bo_driver,
 			       i915->drm.anon_inode->i_mapping,
@@ -136,6 +346,14 @@ int i915_ttm_init(struct drm_i915_private *i915)
 		return r;
 	}
 
+#ifdef CONFIG_64BIT
+	i915->ttm_mman.aper_base_kaddr = ioremap_wc(i915->mm.regions[INTEL_MEMORY_LOCAL]->io_start,
+						    i915->mm.regions[INTEL_MEMORY_LOCAL]->total);
+#endif
+
+	printk("creating GTT size %llu\n", i915->ggtt.vm.total);
+	r = i915_ttm_init_gtt(i915);
+
 	return 0;
 }
 
@@ -144,6 +362,10 @@ void i915_ttm_fini(struct drm_i915_private *i915)
 	if (!i915->ttm_mman.initialized)
 		return;
 
+	if (i915->ttm_mman.aper_base_kaddr)
+		iounmap(i915->ttm_mman.aper_base_kaddr);
+	i915->ttm_mman.aper_base_kaddr = NULL;
+ 
 	ttm_bo_clean_mm(&i915->ttm_mman.bdev, TTM_PL_VRAM);
 	ttm_bo_clean_mm(&i915->ttm_mman.bdev, TTM_PL_TT);
 
@@ -230,11 +452,16 @@ static int i915_ttm_bo_do_create(struct drm_i915_private *i915,
 		return -ENOMEM;
 
 	drm_gem_private_object_init(&i915->drm, &bo->tbo.base, size);
-//if (bp->type != ttm_bo_type_kernel && bo->allowed_regions == REGION_LMEM)
-		
-	bo->tbo.bdev = &i915->ttm_mman.bdev;
+	bo->preferred_regions = bp->preferred_region ? bp->preferred_region : bp->region;
+	bo->allowed_regions = bo->preferred_regions;
 
-	/* placement */
+	if (bp->type != ttm_bo_type_kernel && bo->allowed_regions == REGION_LMEM)
+		bo->allowed_regions |= REGION_SMEM;
+
+	bo->flags = bp->flags;
+
+	i915_ttm_bo_placement_from_region(bo, bp->region);
+	bo->tbo.bdev = &i915->ttm_mman.bdev;
 
 	r = ttm_bo_init_reserved(&i915->ttm_mman.bdev, &bo->tbo, size, bp->type,
 				 &bo->placement, page_align, &ctx, acc_size,
@@ -242,6 +469,9 @@ static int i915_ttm_bo_do_create(struct drm_i915_private *i915,
 
 	if (unlikely(r != 0))
 		return r;
+
+	if (!bp->resv)
+		i915_ttm_bo_unreserve(bo);
 
 	*bo_ptr = bo;
 	return 0;
@@ -278,7 +508,7 @@ void i915_ttm_bo_placement_from_region(struct i915_ttm_bo *bo, u32 region)
 		places[c].flags = TTM_PL_FLAG_WC | TTM_PL_FLAG_UNCACHED |
 			TTM_PL_FLAG_VRAM;
 
-		places[c].flags |= TTM_PL_FLAG_TOPDOWN;
+//		places[c].flags |= TTM_PL_FLAG_TOPDOWN;
 
 		if (flags & I915_TTM_CREATE_VRAM_CONTIGUOUS)
 			places[c].flags |= TTM_PL_FLAG_CONTIGUOUS;
@@ -593,9 +823,9 @@ int i915_ttm_bo_pin_restricted(struct i915_ttm_bo *bo, u32 region,
 		bo->pin_count++;
 
 		if (max_offset != 0) {
-			u64 region_start = bo->tbo.bdev->man[mem_type].gpu_offset;
-			WARN_ON_ONCE(max_offset <
-				     (i915_ttm_bo_gpu_offset(bo) - region_start));
+//			u64 region_start = bo->tbo.bdev->man[mem_type].gpu_offset;
+//			WARN_ON_ONCE(max_offset <
+//				     (i915_ttm_bo_gpu_offset(bo) - region_start));
 		}
 
 		return 0;
@@ -717,7 +947,7 @@ u64 i915_ttm_bo_gpu_offset(struct i915_ttm_bo *bo)
 	WARN_ON_ONCE(bo->tbo.mem.mem_type == TTM_PL_VRAM &&
 		     !(bo->flags & I915_TTM_CREATE_VRAM_CONTIGUOUS));
 
-	return bo->tbo.offset;
+	return bo->tbo.mem.start >> PAGE_SHIFT;
 }
 
 /**

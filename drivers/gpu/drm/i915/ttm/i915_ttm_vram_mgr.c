@@ -6,6 +6,28 @@ struct i915_ttm_vram_mgr {
 	spinlock_t lock;
 	atomic64_t usage;
 };
+
+/**
+ * i915_ttm_vram_mgr_virt_start - update virtual start address
+ *
+ * @mem: ttm_mem_reg to update
+ * @node: just allocated node
+ *
+ * Calculate a virtual BO start address to easily check if everything is CPU
+ * accessible.
+ */
+static void i915_ttm_vram_mgr_virt_start(struct ttm_mem_reg *mem,
+					 struct drm_mm_node *node)
+{
+	unsigned long start;
+
+	start = node->start + node->size;
+	if (start > mem->num_pages)
+		start -= mem->num_pages;
+	else
+		start = 0;
+	mem->start = max(mem->start, start);
+}
 	
 static int i915_ttm_vram_mgr_init(struct ttm_mem_type_manager *man,
 				  unsigned long p_size)
@@ -94,8 +116,8 @@ static int i915_ttm_vram_mgr_new(struct ttm_mem_type_manager *man,
 		if (unlikely(r))
 			break;
 
-//		vis_usage += amdgpu_vram_mgr_vis_size(adev, &nodes[i]);
-//		amdgpu_vram_mgr_virt_start(mem, &nodes[i]);
+//		vis_usage += i915_ttm_vram_mgr_vis_size(adev, &nodes[i]);
+		i915_ttm_vram_mgr_virt_start(mem, &nodes[i]);
 		pages_left -= pages;
 	}
 	
@@ -113,8 +135,8 @@ static int i915_ttm_vram_mgr_new(struct ttm_mem_type_manager *man,
 		if (unlikely(r))
 			goto error;
 
-//		vis_usage += amdgpu_vram_mgr_vis_size(adev, &nodes[i]);
-//		amdgpu_vram_mgr_virt_start(mem, &nodes[i]);
+//		vis_usage += i915_ttm_vram_mgr_vis_size(adev, &nodes[i]);
+		i915_ttm_vram_mgr_virt_start(mem, &nodes[i]);
 		pages_left -= pages;
 	}
 	spin_unlock(&mgr->lock);

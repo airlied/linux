@@ -522,6 +522,7 @@ struct intel_plane_state {
 
 	struct i915_ggtt_view view;
 	struct i915_vma *vma;
+	uint64_t gpu_offset;
 	unsigned long flags;
 #define PLANE_HAS_FENCE BIT(0)
 
@@ -1697,7 +1698,7 @@ intel_wait_for_vblank_if_active(struct drm_i915_private *dev_priv, enum pipe pip
 
 static inline u32 intel_plane_ggtt_offset(const struct intel_plane_state *state)
 {
-	return i915_ggtt_offset(state->vma);
+	return state->vma ? i915_ggtt_offset(state->vma) : state->gpu_offset;
 }
 
 #endif /*  __INTEL_DISPLAY_TYPES_H__ */

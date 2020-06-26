@@ -83,7 +83,7 @@
 #include "intel_sprite.h"
 #include "intel_tc.h"
 #include "intel_vga.h"
-
+#include "ttm/i915_ttm.h"
 /* Primary plane formats for gen <= 3 */
 static const u32 i8xx_primary_formats[] = {
 	DRM_FORMAT_C8,
@@ -2224,7 +2224,7 @@ intel_pin_and_fence_fb_obj(struct drm_framebuffer *fb,
 			   unsigned long *out_flags)
 {
 	struct drm_device *dev = fb->dev;
-	struct drm_i915_private *dev_priv = to_i915(dev);
+	struct drm_i915_private *dev_priv = to_i915(dev);	
 	struct drm_i915_gem_object *obj = intel_fb_obj(fb);
 	intel_wakeref_t wakeref;
 	struct i915_vma *vma;
@@ -16007,18 +16007,27 @@ intel_prepare_plane_fb(struct drm_plane *_plane,
 	if (!obj)
 		return 0;
 
-	ret = i915_gem_object_pin_pages(obj);
-	if (ret)
-		return ret;
+	if (dev_priv->use_ttm) {
+		struct i915_ttm_bo *bo = intel_fb_bo(new_plane_state->hw.fb);
 
-	ret = intel_plane_pin_fb(new_plane_state);
+		ret = i915_ttm_bo_pin(bo, REGION_LMEM);
+		if (ret)
+			return ret;
+		new_plane_state->gpu_offset = i915_ttm_bo_gpu_offset(bo);
+	} else {
+		ret = i915_gem_object_pin_pages(obj);
+		if (ret)
+			return ret;
 
-	i915_gem_object_unpin_pages(obj);
-	if (ret)
-		return ret;
+		ret = intel_plane_pin_fb(new_plane_state);
 
-	fb_obj_bump_render_priority(obj);
-	i915_gem_object_flush_frontbuffer(obj, ORIGIN_DIRTYFB);
+		i915_gem_object_unpin_pages(obj);
+		if (ret)
+			return ret;
+		fb_obj_bump_render_priority(obj);
+		i915_gem_object_flush_frontbuffer(obj, ORIGIN_DIRTYFB);
+	}
+
 
 	if (!new_plane_state->uapi.fence) { /* implicit fencing */
 		struct dma_fence *fence;
@@ -16058,7 +16067,8 @@ intel_prepare_plane_fb(struct drm_plane *_plane,
 	return 0;
 
 unpin_fb:
-	intel_plane_unpin_fb(new_plane_state);
+	if (!dev_priv->use_ttm)
+		intel_plane_unpin_fb(new_plane_state);
 
 	return ret;
 }
@@ -17156,14 +17166,14 @@ static int intel_framebuffer_init_ttm(struct drm_i915_private *dev_priv,
 {
 	struct drm_framebuffer *fb = &intel_fb->base;
 	u32 max_stride;
-	unsigned int tiling, stride;
+	unsigned int tiling = 0, stride = 0;
 	int ret = -EINVAL;
 	int i;
 
 	if (bo)
-	  intel_fb->frontbuffer = intel_frontbuffer_get_ttm(bo);
+		intel_fb->frontbuffer = intel_frontbuffer_get_ttm(bo);
 	else
-	  intel_fb->frontbuffer = intel_frontbuffer_get(obj);
+		intel_fb->frontbuffer = intel_frontbuffer_get(obj);
 	if (!intel_fb->frontbuffer)
 		return -ENOMEM;
 

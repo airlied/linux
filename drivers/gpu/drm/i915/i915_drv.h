@@ -1186,6 +1186,7 @@ struct drm_i915_private {
 	/* Abstract the submission mechanism (legacy ringbuffer or execlists) away */
 	struct intel_gt gt;
 
+	bool use_ttm;
 	struct {
 		struct i915_gem_contexts {
 			spinlock_t lock; /* locks list */

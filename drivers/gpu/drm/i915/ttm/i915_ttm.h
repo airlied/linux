@@ -30,7 +30,7 @@ static inline int i915_ttm_bo_reserve(struct i915_ttm_bo *bo, bool no_intr)
 	struct drm_i915_private *i915 = to_i915_ttm_dev(bo->tbo.bdev);
 	int r;
 
-	r = __ttm_bo_reserve(&bo->tbo, !no_intr, false, NULL);
+	r = ttm_bo_reserve(&bo->tbo, !no_intr, false, NULL);
 	if (unlikely(r != 0)) {
 		if (r != -ERESTARTSYS)
 			dev_err(i915->drm.dev, "%p reserve failed\n", bo);

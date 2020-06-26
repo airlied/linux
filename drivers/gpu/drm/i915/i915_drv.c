@@ -268,7 +268,7 @@ static int i915_driver_modeset_probe(struct drm_i915_private *i915)
 	if (ret)
 		goto out;
 
-	if (i915_modparams.use_ttm)
+	if (i915->use_ttm)
 		ret = i915_ttm_init(i915);
 	else
 		ret = i915_gem_init(i915);
@@ -974,6 +974,9 @@ int i915_driver_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 			GEM_BUG_ON(!IS_DGFX(i915));
 		}
 	}
+
+	if (i915_modparams.use_ttm)
+		i915->use_ttm = true;
 
 	ret = pci_enable_device(pdev);
 	if (ret)

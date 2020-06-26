@@ -315,7 +315,7 @@ intel_frontbuffer_get_ttm(struct i915_ttm_bo *bo)
 		front = rcu_dereference_protected(bo->frontbuffer, true);
 		kref_get(&front->ref);
 	} else {
-		i915_ttm_bo_unref(&bo);
+		i915_ttm_bo_ref(bo);
 		rcu_assign_pointer(bo->frontbuffer, front);
 	}
 	spin_unlock(&i915->fb_tracking.lock);

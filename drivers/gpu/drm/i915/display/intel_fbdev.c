@@ -195,8 +195,7 @@ static int intelfb_alloc(struct drm_fb_helper *helper,
 	/* If the FB is too big, just don't use it since fbdev is not very
 	 * important and we should probably use that space with FBC or other
 	 * features. */
-	obj = ERR_PTR(-ENODEV);
-	if (i915_modparams.use_ttm) {
+	if (dev_priv->use_ttm) {
 		int r;
 		struct drm_gem_object *gobj;
 
@@ -208,25 +207,22 @@ static int intelfb_alloc(struct drm_fb_helper *helper,
 
 		bo = ttm_gem_to_i915_bo(gobj);
 		drm_info(&dev_priv->drm, "created TTM bo for fbdev %d\n", size);
+
+		fb = intel_framebuffer_create_ttm(bo, &mode_cmd);
+		i915_ttm_bo_unref(&bo);
 	} else {
+		obj = ERR_PTR(-ENODEV);
 		if (size * 2 < dev_priv->stolen_usable_size)
 			obj = i915_gem_object_create_stolen(dev_priv, size);
 		if (IS_ERR(obj))
 			obj = i915_gem_object_create_shmem(dev_priv, size);
-	}
-	if (IS_ERR(obj)) {
-		drm_err(&dev_priv->drm, "failed to allocate framebuffer\n");
-		return PTR_ERR(obj);
-	}
-
-	if (i915_modparams.use_ttm)
-		fb = intel_framebuffer_create_ttm(bo, &mode_cmd);
-	else
+		if (IS_ERR(obj)) {
+			drm_err(&dev_priv->drm, "failed to allocate framebuffer\n");
+			return PTR_ERR(obj);
+		}
 		fb = intel_framebuffer_create(obj, &mode_cmd);
-	if (obj)
 		i915_gem_object_put(obj);
-	else
-		i915_ttm_bo_unref(&bo);
+	}
 	if (IS_ERR(fb))
 		return PTR_ERR(fb);
 
@@ -249,12 +245,12 @@ static int intelfb_create(struct drm_fb_helper *helper,
 	};
 	intel_wakeref_t wakeref;
 	struct fb_info *info;
-	struct i915_vma *vma;
+	struct i915_vma *vma = NULL;
+	struct i915_ttm_bo *bo = NULL;	
 	unsigned long flags = 0;
 	bool prealloc = false;
 	void __iomem *vaddr;
 	int ret;
-	bool use_ttm = i915_modparams.use_ttm;
 
 	if (intel_fb &&
 	    (sizes->fb_width > intel_fb->base.width ||
@@ -283,7 +279,7 @@ static int intelfb_create(struct drm_fb_helper *helper,
 
 	wakeref = intel_runtime_pm_get(&dev_priv->runtime_pm);
 
-	if (!use_ttm) {
+	if (!dev_priv->use_ttm) {
 		/* Pin the GGTT vma for our access via info->screen_base.
 		 * This also validates that any existing fb inherited from the
 		 * BIOS is suitable for own access.
@@ -312,7 +308,8 @@ static int intelfb_create(struct drm_fb_helper *helper,
 	info->apertures->ranges[0].base = ggtt->gmadr.start;
 	info->apertures->ranges[0].size = ggtt->mappable_end;
 
-	if (!use_ttm) {
+
+	if (vma) {
 		/* Our framebuffer is the entirety of fbdev's system memory */
 		info->fix.smem_start =
 			(unsigned long)(ggtt->gmadr.start + vma->node.start);
@@ -330,7 +327,11 @@ static int intelfb_create(struct drm_fb_helper *helper,
 		ifbdev->vma = vma;
 		ifbdev->vma_flags = flags;
 	} else {
-		struct i915_ttm_bo *bo = intel_fb_bo(&ifbdev->fb->base);
+		bo = intel_fb_bo(&ifbdev->fb->base);
+
+		drm_dbg_kms(&dev_priv->drm, "yo yo 2");
+		info->fix.smem_start = ggtt->gmadr.start + i915_ttm_bo_gpu_offset(bo);
+		info->fix.smem_len = i915_ttm_bo_size(bo);
 		info->screen_base = i915_ttm_bo_kptr(bo);
 		info->screen_size = i915_ttm_bo_size(bo);
 	}
@@ -341,16 +342,14 @@ static int intelfb_create(struct drm_fb_helper *helper,
 	 * If the object is stolen however, it will be full of whatever
 	 * garbage was left in there.
 	 */
-	if (!use_ttm) {
-		if (vma->obj->stolen && !prealloc)
-			memset_io(info->screen_base, 0, info->screen_size);
-	}
+	if (vma && vma->obj->stolen && !prealloc)
+		memset_io(info->screen_base, 0, info->screen_size);
 
 	/* Use default scratch pixmap (info->pixmap.flags = FB_PIXMAP_SYSTEM) */
 
 	drm_dbg_kms(&dev_priv->drm, "allocated %dx%d fb: 0x%08x\n",
 		    ifbdev->fb->base.width, ifbdev->fb->base.height,
-		    i915_ggtt_offset(vma));
+		    vma ? i915_ggtt_offset(vma) : i915_ttm_bo_gpu_offset(bo));
 
 
 	intel_runtime_pm_put(&dev_priv->runtime_pm, wakeref);
@@ -358,7 +357,8 @@ static int intelfb_create(struct drm_fb_helper *helper,
 	return 0;
 
 out_unpin:
-	intel_unpin_fb_vma(vma, flags);
+	if (vma)
+		intel_unpin_fb_vma(vma, flags);
 out_unlock:
 	intel_runtime_pm_put(&dev_priv->runtime_pm, wakeref);
 	return ret;
