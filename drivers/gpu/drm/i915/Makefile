@@ -155,7 +155,9 @@ gem-y += \
 ttm-y += \
 	ttm/i915_ttm.o \
 	ttm/i915_ttm_vram_mgr.o \
-	ttm/i915_ttm_gtt_mgr.o
+	ttm/i915_ttm_gtt_mgr.o \
+	ttm/i915_ttm_bo_list.o \
+	ttm/i915_ttm_execbuffer.o
 
 i915-y += \
 	  $(gem-y) \

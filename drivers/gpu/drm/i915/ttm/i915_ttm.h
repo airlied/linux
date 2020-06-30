@@ -2,8 +2,10 @@
 #define I915_TTM_H
 
 #include "i915_ttm_object_types.h"
+#include "i915_ttm_bo_list.h"
 #define I915_TTM_BO_INVALID_OFFSET     LONG_MAX
 
+struct drm_syncobj;
 
 int i915_ttm_init(struct drm_i915_private *i915);
 void i915_ttm_fini(struct drm_i915_private *i915);
@@ -82,4 +84,11 @@ int i915_ttm_gem_object_create(struct drm_i915_private *i915, unsigned long size
 			       u64 flags, enum ttm_bo_type type,
 			       struct dma_resv *resv,
 			       struct drm_gem_object **obj);
+
+int
+i915_ttm_do_execbuffer(struct drm_device *dev,
+		       struct drm_file *file,
+		       struct drm_i915_gem_execbuffer2 *args,
+		       struct drm_i915_gem_exec_object2 *exec,
+		       struct drm_syncobj **fences);
 #endif
