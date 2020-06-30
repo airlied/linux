@@ -3613,8 +3613,7 @@ intel_find_initial_plane_obj(struct intel_crtc *intel_crtc,
 	struct drm_framebuffer *fb;
 	struct i915_vma *vma;
 
-	if (!plane_config->fb)
-		return;
+	return;
 
 	if (intel_alloc_initial_plane_obj(intel_crtc, plane_config)) {
 		fb = &plane_config->fb->base;

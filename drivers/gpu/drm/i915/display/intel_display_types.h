@@ -1698,7 +1698,10 @@ intel_wait_for_vblank_if_active(struct drm_i915_private *dev_priv, enum pipe pip
 
 static inline u32 intel_plane_ggtt_offset(const struct intel_plane_state *state)
 {
-	return state->vma ? i915_ggtt_offset(state->vma) : state->gpu_offset;
+	u32 val = state->vma ? i915_ggtt_offset(state->vma) : state->gpu_offset;
+	printk(KERN_ERR "ggtt offset 0x%08x\n", val);
+	return val;
+
 }
 
 #endif /*  __INTEL_DISPLAY_TYPES_H__ */
