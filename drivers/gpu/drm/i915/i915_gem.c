@@ -54,6 +54,7 @@
 #include "i915_trace.h"
 #include "i915_vgpu.h"
 
+#include "ttm/i915_ttm.h"
 #include "intel_pm.h"
 
 static int
@@ -243,6 +244,7 @@ i915_gem_dumb_create(struct drm_file *file,
 		     struct drm_device *dev,
 		     struct drm_mode_create_dumb *args)
 {
+	struct drm_i915_private *i915 = to_i915(dev);
 	enum intel_memory_type mem_type;
 	int cpp = DIV_ROUND_UP(args->bpp, 8);
 	u32 format;
@@ -278,6 +280,19 @@ i915_gem_dumb_create(struct drm_file *file,
 	if (HAS_LMEM(to_i915(dev)))
 		mem_type = INTEL_MEMORY_LOCAL;
 
+	if (i915->use_ttm) {
+		struct drm_gem_object *gobj;
+		int ret = i915_ttm_gem_object_create(i915, args->size, 0, (1 << mem_type), 0,
+						     ttm_bo_type_device, NULL, &gobj);
+		if (ret)
+			return -ENOMEM;
+		ret = drm_gem_handle_create(file, gobj, &args->handle);
+		drm_gem_object_put(gobj);
+		if (ret)
+			return ret;
+		return 0;
+	}
+
 	return i915_gem_create(file,
 			       intel_memory_region_by_type(to_i915(dev),
 							   mem_type),
@@ -295,7 +310,20 @@ i915_gem_create_ioctl(struct drm_device *dev, void *data,
 		      struct drm_file *file)
 {
 	struct drm_i915_private *i915 = to_i915(dev);
-	struct drm_i915_gem_create *args = data;
+	struct drm_i915_gem_create_ext *args = data;
+
+	if (i915->use_ttm) {
+		struct drm_gem_object *gobj;
+		int ret = i915_ttm_gem_object_create(i915, args->size, 0, 0, 0,
+						     ttm_bo_type_device, NULL, &gobj);
+		if (ret)
+			return -ENOMEM;
+		ret = drm_gem_handle_create(file, gobj, &args->handle);
+		drm_gem_object_put(gobj);
+		if (ret)
+			return ret;
+		return 0;
+	}
 
 	i915_gem_flush_free_objects(i915);
 
