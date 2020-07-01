@@ -7271,10 +7271,7 @@ bool intel_phy_is_combo(struct drm_i915_private *dev_priv, enum phy phy)
 {
 	if (phy == PHY_NONE)
 		return false;
-	else if (IS_DG1(dev_priv))
-		/* FIXME: Enable only two ports for now */
-		return phy <= PHY_B;
-	else if (IS_ROCKETLAKE(dev_priv))
+	else if (IS_DG1(dev_priv) || IS_ROCKETLAKE(dev_priv))
 		return phy <= PHY_D;
 	else if (IS_ELKHARTLAKE(dev_priv))
 		return phy <= PHY_C;
@@ -7298,7 +7295,7 @@ bool intel_phy_is_tc(struct drm_i915_private *dev_priv, enum phy phy)
 
 enum phy intel_port_to_phy(struct drm_i915_private *i915, enum port port)
 {
-	if (IS_ROCKETLAKE(i915) && port >= PORT_D)
+	if ((IS_DG1(i915) || IS_ROCKETLAKE(i915)) && port >= PORT_D)
 		return (enum phy)port - 1;
 	else if (IS_ELKHARTLAKE(i915) && port == PORT_D)
 		return PHY_A;
@@ -16916,9 +16913,18 @@ static void intel_setup_outputs(struct drm_i915_private *dev_priv)
 		return;
 
 	if (IS_DG1(dev_priv)) {
-		/* FIXME: Enable only two ports for now */
 		intel_ddi_init(dev_priv, PORT_A);
 		intel_ddi_init(dev_priv, PORT_B);
+
+		/*
+		 * Bspec lists the ports as A, B, C (USBC1) and D (USBC2).
+		 * However from the Display Engine perspective all registers are
+		 * actually wired to handle C and D as offsets of D/E. Instead
+		 * of fighting all our macros for handling them specially for
+		 * DG1, just call them D/E
+		 */
+		intel_ddi_init(dev_priv, PORT_D);
+		intel_ddi_init(dev_priv, PORT_E);
 	} else if (IS_ROCKETLAKE(dev_priv)) {
 		intel_ddi_init(dev_priv, PORT_A);
 		intel_ddi_init(dev_priv, PORT_B);
