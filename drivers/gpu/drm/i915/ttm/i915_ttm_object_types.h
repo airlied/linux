@@ -5,6 +5,8 @@
 #include <drm/ttm/ttm_bo_driver.h>
 #include <drm/ttm/ttm_placement.h>
 
+#include "i915_vma_types.h"
+
 #define I915_TTM_BO_MAX_PLACEMENTS	3
 
 #define I915_TTM_CREATE_VRAM_CONTIGUOUS (1 << 0)
@@ -41,6 +43,8 @@ struct i915_ttm_bo {
 	unsigned prime_shared_count;
 
 	struct intel_frontbuffer __rcu *frontbuffer;
+
+	struct i915_object_vmas vma;
 };
 
 static inline struct i915_ttm_bo *ttm_to_i915_bo(struct ttm_buffer_object *tbo)

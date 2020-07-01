@@ -44,6 +44,11 @@ i915_vma_instance(struct drm_i915_gem_object *obj,
 		  struct i915_address_space *vm,
 		  const struct i915_ggtt_view *view);
 
+struct i915_vma *
+i915_ttm_vma_instance(struct i915_ttm_bo *bo,
+		      struct i915_address_space *vm,
+		      const struct i915_ggtt_view *view);
+
 void i915_vma_unpin_and_release(struct i915_vma **p_vma, unsigned int flags);
 #define I915_VMA_RELEASE_MAP BIT(0)
 
@@ -126,12 +131,20 @@ static inline u32 i915_ggtt_pin_bias(struct i915_vma *vma)
 
 static inline struct i915_vma *i915_vma_get(struct i915_vma *vma)
 {
+	if (!vma->obj) {
+		WARN_ON_ONCE(1);
+		return NULL;
+	}
 	i915_gem_object_get(vma->obj);
 	return vma;
 }
 
 static inline struct i915_vma *i915_vma_tryget(struct i915_vma *vma)
 {
+	if (!vma->obj) {
+		WARN_ON_ONCE(1);
+		return NULL;
+	}
 	if (likely(kref_get_unless_zero(&vma->obj->base.refcount)))
 		return vma;
 
@@ -140,6 +153,8 @@ static inline struct i915_vma *i915_vma_tryget(struct i915_vma *vma)
 
 static inline void i915_vma_put(struct i915_vma *vma)
 {
+	if (!vma->obj)
+		return;
 	i915_gem_object_put(vma->obj);
 }
 

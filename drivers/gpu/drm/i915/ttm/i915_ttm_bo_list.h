@@ -7,6 +7,7 @@ struct drm_i915_gem_exec_object2;
 
 struct i915_ttm_bo_list_entry {
 	struct ttm_validate_buffer tv;
+	struct i915_vma *vma;
 };
 
 struct i915_ttm_bo_list {
