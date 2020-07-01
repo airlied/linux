@@ -27,6 +27,18 @@ static inline unsigned long i915_ttm_bo_size(struct i915_ttm_bo *bo)
 	return bo->tbo.num_pages << PAGE_SHIFT;
 }
 
+
+/**
+ * i915_ttm_bo_mmap_offset - return mmap offset of bo
+ * @bo:	i915_ttm object for which we query the offset
+ *
+ * Returns mmap offset of the object.
+ */
+static inline u64 i915_ttm_bo_mmap_offset(struct i915_ttm_bo *bo)
+{
+	return drm_vma_node_offset_addr(&bo->tbo.base.vma_node);
+}
+
 static inline int i915_ttm_bo_reserve(struct i915_ttm_bo *bo, bool no_intr)
 {
 	struct drm_i915_private *i915 = to_i915_ttm_dev(bo->tbo.bdev);
@@ -85,6 +97,15 @@ int i915_ttm_gem_object_create(struct drm_i915_private *i915, unsigned long size
 			       struct dma_resv *resv,
 			       struct drm_gem_object **obj);
 
+int
+i915_ttm_dumb_mmap_offset(struct drm_i915_private *i915,
+			  struct drm_file *file,
+			  u32 handle,
+			  u64 *offset);
+int
+i915_ttm_mmap_offset_ioctl(struct drm_i915_private *i915,
+			   struct drm_i915_gem_mmap_offset *args,
+			   struct drm_file *file);
 int
 i915_ttm_do_execbuffer(struct drm_device *dev,
 		       struct drm_file *file,

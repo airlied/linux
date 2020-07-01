@@ -21,6 +21,7 @@
 #include "i915_user_extensions.h"
 #include "i915_vma.h"
 
+#include "ttm/i915_ttm.h"
 static inline bool
 __vma_matches(struct vm_area_struct *vma, struct file *filp,
 	      unsigned long addr, unsigned long size)
@@ -678,7 +679,10 @@ i915_gem_dumb_mmap_offset(struct drm_file *file,
 			  u64 *offset)
 {
 	enum i915_mmap_type mmap_type;
+	struct drm_i915_private *i915 = to_i915(dev);
 
+	if (i915->use_ttm)
+		return i915_ttm_dumb_mmap_offset(i915, file, handle, offset);
 	if (boot_cpu_has(X86_FEATURE_PAT))
 		mmap_type = I915_MMAP_TYPE_WC;
 	else if (!i915_ggtt_has_aperture(&to_i915(dev)->ggtt))
@@ -713,6 +717,8 @@ i915_gem_mmap_offset_ioctl(struct drm_device *dev, void *data,
 	enum i915_mmap_type type;
 	int err;
 
+	if (i915->use_ttm)
+		return i915_ttm_mmap_offset_ioctl(i915, args, file);
 	/*
 	 * Historically we failed to check args.pad and args.offset
 	 * and so we cannot use those fields for user input and we cannot

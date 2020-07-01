@@ -1016,3 +1016,31 @@ retry:
 
 	return 0;
 }
+
+int
+i915_ttm_dumb_mmap_offset(struct drm_i915_private *i915,
+			  struct drm_file *file,
+			  u32 handle,
+			  u64 *offset)
+{
+	struct drm_gem_object *gobj;
+	struct i915_ttm_bo *bo;
+
+	gobj = drm_gem_object_lookup(file, handle);
+	if (gobj == NULL)
+		return -ENOENT;
+
+	bo = ttm_gem_to_i915_bo(gobj);
+
+	*offset = i915_ttm_bo_mmap_offset(bo);
+	drm_gem_object_put(gobj);
+	return 0;
+}
+
+int
+i915_ttm_mmap_offset_ioctl(struct drm_i915_private *i915,
+			   struct drm_i915_gem_mmap_offset *args,
+			   struct drm_file *file)
+{
+	return i915_ttm_dumb_mmap_offset(i915, file, args->handle, &args->offset);
+}
