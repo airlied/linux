@@ -3182,6 +3182,10 @@ static void jsp_hpd_irq_setup(struct drm_i915_private *dev_priv)
 
 static void dg1_hpd_irq_setup(struct drm_i915_private *dev_priv)
 {
+	intel_de_rmw(dev_priv, SOUTH_CHICKEN1, 0,
+		     INVERT_DDIA_HPD | INVERT_DDIB_HPD |
+		     INVERT_DDIC_HPD | INVERT_DDID_HPD);
+
 	icp_hpd_irq_setup(dev_priv,
 			  SDE_DDI_MASK_DG1, 0,
 			  DG1_DDI_HPD_ENABLE_MASK, 0);
