@@ -38,15 +38,19 @@
  * low-power state and comes back to normal.
  */
 
-#define GEN12_CSR_MAX_FW_SIZE		ICL_CSR_MAX_FW_SIZE
+#define DG1_CSR_PATH			"i915/dg1_dmc_ver2_02.bin"
+#define DG1_CSR_VERSION_REQUIRED	CSR_VERSION(2, 2)
+#define DG1_CSR_MAX_FW_SIZE		ICL_CSR_MAX_FW_SIZE
+MODULE_FIRMWARE(DG1_CSR_PATH);
 
 #define RKL_CSR_PATH			"i915/rkl_dmc_ver2_02.bin"
 #define RKL_CSR_VERSION_REQUIRED	CSR_VERSION(2, 2)
+#define RKL_CSR_MAX_FW_SIZE		ICL_CSR_MAX_FW_SIZE
 MODULE_FIRMWARE(RKL_CSR_PATH);
 
 #define TGL_CSR_PATH			"i915/tgl_dmc_ver2_08.bin"
 #define TGL_CSR_VERSION_REQUIRED	CSR_VERSION(2, 8)
-#define TGL_CSR_MAX_FW_SIZE		0x6000
+#define TGL_CSR_MAX_FW_SIZE		ICL_CSR_MAX_FW_SIZE
 MODULE_FIRMWARE(TGL_CSR_PATH);
 
 #define ICL_CSR_PATH			"i915/icl_dmc_ver1_09.bin"
@@ -686,15 +690,18 @@ void intel_csr_ucode_init(struct drm_i915_private *dev_priv)
 	 */
 	intel_csr_runtime_pm_get(dev_priv);
 
-	if (IS_ROCKETLAKE(dev_priv)) {
+	if (IS_DG1(dev_priv)) {
+		csr->fw_path = DG1_CSR_PATH;
+		csr->required_version = DG1_CSR_VERSION_REQUIRED;
+		csr->max_fw_size = DG1_CSR_MAX_FW_SIZE;
+	} else if (IS_ROCKETLAKE(dev_priv)) {
 		csr->fw_path = RKL_CSR_PATH;
 		csr->required_version = RKL_CSR_VERSION_REQUIRED;
-		csr->max_fw_size = GEN12_CSR_MAX_FW_SIZE;
+		csr->max_fw_size = RKL_CSR_MAX_FW_SIZE;
 	} else if (INTEL_GEN(dev_priv) >= 12) {
 		csr->fw_path = TGL_CSR_PATH;
 		csr->required_version = TGL_CSR_VERSION_REQUIRED;
-		/* Allow to load fw via parameter using the last known size */
-		csr->max_fw_size = GEN12_CSR_MAX_FW_SIZE;
+		csr->max_fw_size = TGL_CSR_MAX_FW_SIZE;
 	} else if (IS_GEN(dev_priv, 11)) {
 		csr->fw_path = ICL_CSR_PATH;
 		csr->required_version = ICL_CSR_VERSION_REQUIRED;
