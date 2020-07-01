@@ -3842,12 +3842,14 @@ static bool combo_pll_get_hw_state(struct drm_i915_private *dev_priv,
 				   struct intel_shared_dpll *pll,
 				   struct intel_dpll_hw_state *hw_state)
 {
-	i915_reg_t enable_reg = CNL_DPLL_ENABLE(pll->info->id);
+	i915_reg_t enable_reg;
 
-	if (IS_ELKHARTLAKE(dev_priv) &&
-	    pll->info->id == DPLL_ID_EHL_DPLL4) {
+	if (IS_DG1(dev_priv))
+		enable_reg = DG1_DPLL_ENABLE(pll->info->id);
+	else if (IS_ELKHARTLAKE(dev_priv) && pll->info->id == DPLL_ID_EHL_DPLL4)
 		enable_reg = MG_PLL_ENABLE(0);
-	}
+	else
+		enable_reg = CNL_DPLL_ENABLE(pll->info->id);
 
 	return icl_pll_get_hw_state(dev_priv, pll, hw_state, enable_reg);
 }
@@ -4045,10 +4047,12 @@ static void icl_pll_enable(struct drm_i915_private *dev_priv,
 static void combo_pll_enable(struct drm_i915_private *dev_priv,
 			     struct intel_shared_dpll *pll)
 {
-	i915_reg_t enable_reg = CNL_DPLL_ENABLE(pll->info->id);
+	i915_reg_t enable_reg;
 
-	if (IS_ELKHARTLAKE(dev_priv) &&
-	    pll->info->id == DPLL_ID_EHL_DPLL4) {
+	if (IS_DG1(dev_priv)) {
+		enable_reg = DG1_DPLL_ENABLE(pll->info->id);
+	} else if (IS_ELKHARTLAKE(dev_priv) &&
+		 pll->info->id == DPLL_ID_EHL_DPLL4) {
 		enable_reg = MG_PLL_ENABLE(0);
 
 		/*
@@ -4058,6 +4062,8 @@ static void combo_pll_enable(struct drm_i915_private *dev_priv,
 		 */
 		pll->wakeref = intel_display_power_get(dev_priv,
 						       POWER_DOMAIN_DPLL_DC_OFF);
+	} else {
+		enable_reg = CNL_DPLL_ENABLE(pll->info->id);
 	}
 
 	icl_pll_power_enable(dev_priv, pll, enable_reg);
@@ -4157,16 +4163,20 @@ static void icl_pll_disable(struct drm_i915_private *dev_priv,
 static void combo_pll_disable(struct drm_i915_private *dev_priv,
 			      struct intel_shared_dpll *pll)
 {
-	i915_reg_t enable_reg = CNL_DPLL_ENABLE(pll->info->id);
+	i915_reg_t enable_reg;
 
-	if (IS_ELKHARTLAKE(dev_priv) &&
-	    pll->info->id == DPLL_ID_EHL_DPLL4) {
+	if (IS_DG1(dev_priv)) {
+		enable_reg = DG1_DPLL_ENABLE(pll->info->id);
+	} else if (IS_ELKHARTLAKE(dev_priv) &&
+		   pll->info->id == DPLL_ID_EHL_DPLL4) {
 		enable_reg = MG_PLL_ENABLE(0);
 		icl_pll_disable(dev_priv, pll, enable_reg);
 
 		intel_display_power_put(dev_priv, POWER_DOMAIN_DPLL_DC_OFF,
 					pll->wakeref);
 		return;
+	} else {
+		enable_reg = CNL_DPLL_ENABLE(pll->info->id);
 	}
 
 	icl_pll_disable(dev_priv, pll, enable_reg);
