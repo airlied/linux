@@ -1103,10 +1103,6 @@ i915_gem_madvise_ioctl(struct drm_device *dev, void *data,
 	if (err)
 		goto out;
 
-	err = mutex_lock_interruptible(&obj->mm.lock);
-	if (err)
-		goto out_ww;
-
 	if (i915_gem_object_has_pages(obj) &&
 	    i915_gem_object_is_tiled(obj) &&
 	    i915->quirks & QUIRK_PIN_SWIZZLED_PAGES) {
@@ -1149,9 +1145,7 @@ i915_gem_madvise_ioctl(struct drm_device *dev, void *data,
 		i915_gem_object_truncate(obj);
 
 	args->retained = obj->mm.madv != __I915_MADV_PURGED;
-	mutex_unlock(&obj->mm.lock);
 
-out_ww:
 	i915_gem_object_unlock(obj);
 out:
 	i915_gem_object_put(obj);
@@ -1332,7 +1326,7 @@ int i915_gem_freeze_late(struct drm_i915_private *i915)
 
 	wakeref = intel_runtime_pm_get(&i915->runtime_pm);
 
-	i915_gem_shrink(i915, -1UL, NULL, ~0);
+	i915_gem_shrink(NULL, i915, -1UL, NULL, ~0);
 	i915_gem_drain_freed_objects(i915);
 
 	list_for_each_entry(obj, &i915->mm.shrink_list, mm.link) {
