@@ -15,6 +15,8 @@
 #include "gem/i915_gem_context.h"
 #include "ttm/i915_ttm.h"
 
+#include <drm/drm_syncobj.h>
+
 struct i915_ttm_execbuffer {
 	struct drm_i915_private *i915;
 	struct drm_file *file;
@@ -24,15 +26,26 @@ struct i915_ttm_execbuffer {
 	struct i915_gem_context *gem_context; /** caller's context */
 
 	struct drm_i915_gem_execbuffer2 *args;
+
 	struct i915_ttm_bo_list *bo_list;
 	struct list_head validated;
 	struct ww_acquire_ctx ticket;
+
+	struct i915_ttm_bo_list_entry *batch;
 
 	struct i915_request *request; /** our request to build */
 	u32 batch_start_offset; /** Location within object of batch */
 	u32 batch_len; /** Length of batch within object */
 	u32 batch_flags; /** Flags composed for emit_bb_start() */
 };
+
+static unsigned int eb_batch_index(const struct i915_ttm_execbuffer *eb)
+{
+	if (eb->args->flags & I915_EXEC_BATCH_FIRST)
+		return 0;
+	else
+		return eb->bo_list->num_entries - 1;
+}
 
 static struct i915_request *eb_throttle(struct intel_context *ce)
 {
@@ -332,7 +345,8 @@ i915_ttm_execbuffer_fini(struct i915_ttm_execbuffer *eb, int error,
 }
 
 static int
-eb_submit(struct i915_ttm_execbuffer *eb)
+eb_submit(struct i915_ttm_execbuffer *eb,
+	  struct i915_vma *batch)
 {
 	int err;
 	/*
@@ -348,7 +362,7 @@ eb_submit(struct i915_ttm_execbuffer *eb)
 	}
 
 	err = eb->engine->emit_bb_start(eb->request,
-//					batch->node.start +
+					batch->node.start +
 					eb->batch_start_offset,
 					eb->batch_len,
 					eb->batch_flags);
@@ -399,6 +413,56 @@ static void eb_request_add(struct i915_ttm_execbuffer *eb)
 	mutex_unlock(&tl->mutex);
 }
 
+static int
+await_fence_array(struct i915_ttm_execbuffer *eb,
+		  struct drm_syncobj **fences)
+{
+	const unsigned int nfences = eb->args->num_cliprects;
+	unsigned int n;
+	int err;
+
+	for (n = 0; n < nfences; n++) {
+		struct drm_syncobj *syncobj;
+		struct dma_fence *fence;
+		unsigned int flags;
+
+		syncobj = ptr_unpack_bits(fences[n], &flags, 2);
+		if (!(flags & I915_EXEC_FENCE_WAIT))
+			continue;
+
+		fence = drm_syncobj_fence_get(syncobj);
+		if (!fence)
+			return -EINVAL;
+
+		err = i915_request_await_dma_fence(eb->request, fence);
+		dma_fence_put(fence);
+		if (err < 0)
+			return err;
+	}
+	
+	return 0;
+}
+
+static void
+signal_fence_array(struct i915_ttm_execbuffer *eb,
+		   struct drm_syncobj **fences)
+{
+	const unsigned int nfences = eb->args->num_cliprects;
+	struct dma_fence * const fence = &eb->request->fence;
+	unsigned int n;
+
+	for (n = 0; n < nfences; n++) {
+		struct drm_syncobj *syncobj;
+		unsigned int flags;
+
+		syncobj = ptr_unpack_bits(fences[n], &flags, 2);
+		if (!(flags & I915_EXEC_FENCE_SIGNAL))
+			continue;
+
+		drm_syncobj_replace_fence(syncobj, fence);
+	}
+}
+
 int
 i915_ttm_do_execbuffer(struct drm_device *dev,
 		       struct drm_file *file,
@@ -428,7 +492,13 @@ i915_ttm_do_execbuffer(struct drm_device *dev,
 	r = eb_pin_engine(&eb, file, args);
 
 	eb.request = i915_request_create(eb.context);
-	
+
+	if (fences) {
+		r = await_fence_array(&eb, fences);
+		if (r)
+			goto out;
+	}
+
 	r = i915_ttm_bo_list_create(i915, file, exec, args->buffer_count, &eb.bo_list);
 	if (r)
 		return r;
@@ -469,10 +539,15 @@ i915_ttm_do_execbuffer(struct drm_device *dev,
 			DRM_ERROR("vma pinning failed %d\n", r);
 	}
 
-	r = eb_submit(&eb);
+	eb.batch = i915_ttm_bo_list_array_entry(eb.bo_list, eb_batch_index(&eb));
+
+	r = eb_submit(&eb, eb.batch->vma);
 
 	i915_request_get(eb.request);
 	eb_request_add(&eb);
+
+	if (fences)
+		signal_fence_array(&eb, fences);
 
 	i915_request_put(eb.request);
 
