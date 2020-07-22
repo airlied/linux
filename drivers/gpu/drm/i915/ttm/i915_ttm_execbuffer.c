@@ -463,6 +463,18 @@ signal_fence_array(struct i915_ttm_execbuffer *eb,
 	}
 }
 
+static void
+add_to_client(struct i915_request *rq, struct drm_file *file)
+{
+	struct drm_i915_file_private *file_priv = file->driver_priv;
+
+	rq->file_priv = file_priv;
+
+	spin_lock(&file_priv->mm.lock);
+	list_add_tail(&rq->client_link, &file_priv->mm.request_list);
+	spin_unlock(&file_priv->mm.lock);
+}
+
 int
 i915_ttm_do_execbuffer(struct drm_device *dev,
 		       struct drm_file *file,
@@ -541,8 +553,29 @@ i915_ttm_do_execbuffer(struct drm_device *dev,
 
 	eb.batch = i915_ttm_bo_list_array_entry(eb.bo_list, eb_batch_index(&eb));
 
+	if (unlikely(eb.batch->user_flags & EXEC_OBJECT_WRITE)) {
+		drm_dbg(&i915->drm,
+			"Attempting to use self-modifying batch buffer\n");
+		r = -EINVAL;
+		goto out;
+	}
+
+	if (range_overflows_t(u64,
+			      eb.batch_start_offset, eb.batch_len,
+			      eb.batch->vma->size)) {
+		drm_dbg(&i915->drm, "Attempting to use out-of-bounds batch\n");
+		r = -EINVAL;
+		goto out;
+	}
+
+	if (eb.batch_len == 0)
+		eb.batch_len = eb.batch->vma->size - eb.batch_start_offset;
+
+
+	eb.request->batch = eb.batch->vma;
 	r = eb_submit(&eb, eb.batch->vma);
 
+	add_to_client(eb.request, file);
 	i915_request_get(eb.request);
 	eb_request_add(&eb);
 
