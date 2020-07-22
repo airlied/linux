@@ -26,6 +26,33 @@ static void i915_ttm_bo_list_free(struct kref *ref)
 	call_rcu(&list->rhead, i915_ttm_bo_list_free_rcu);
 }
 
+static u64 eb_pin_flags(const struct drm_i915_gem_exec_object2 *entry,
+			unsigned int exec_flags)
+{
+	u64 pin_flags = 0;
+
+	if (exec_flags & EXEC_OBJECT_NEEDS_GTT)
+		pin_flags |= PIN_GLOBAL;
+
+	/*
+	 * Wa32bitGeneralStateOffset & Wa32bitInstructionBaseOffset,
+	 * limit address to the first 4GBs for unflagged objects.
+	 */
+	if (!(exec_flags & EXEC_OBJECT_SUPPORTS_48B_ADDRESS))
+		pin_flags |= PIN_ZONE_4G;
+
+//	if (exec_flags & __EXEC_OBJECT_NEEDS_MAP)
+//		pin_flags |= PIN_MAPPABLE;
+
+	if (exec_flags & EXEC_OBJECT_PINNED)
+		pin_flags |= entry->offset | PIN_OFFSET_FIXED;
+//	else if (exec_flags & __EXEC_OBJECT_NEEDS_BIAS)
+//		pin_flags |= BATCH_OFFSET_BIAS | PIN_OFFSET_BIAS;
+
+	return pin_flags;
+}
+
+
 
 int i915_ttm_bo_list_create(struct drm_i915_private *i915,
 			    struct drm_file *file,
@@ -33,7 +60,7 @@ int i915_ttm_bo_list_create(struct drm_i915_private *i915,
 			    unsigned num_entries,
 			    struct i915_ttm_bo_list **result)
 {
-	unsigned last_entry;
+	unsigned last_entry = 0;
 	struct i915_ttm_bo_list_entry *array;
 	struct i915_ttm_bo_list *list;
 	size_t size;
@@ -73,10 +100,13 @@ int i915_ttm_bo_list_create(struct drm_i915_private *i915,
 		
 		entry->tv.bo = &bo->tbo;
 
+		exec[i].offset = gen8_noncanonical_addr(exec[i].offset);
+		entry->pin_flags = eb_pin_flags(&exec[i], EXEC_OBJECT_PINNED | EXEC_OBJECT_SUPPORTS_48B_ADDRESS);
+
 		total_size += i915_ttm_bo_size(bo);
 	}
 	list->num_entries = num_entries;
-	*result = 0;
+	*result = list;
 	return 0;
 error_free:
 	for (i = 0; i < last_entry; ++i) {

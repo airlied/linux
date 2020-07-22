@@ -1,6 +1,12 @@
 #ifndef I915_TTM_H
 #define I915_TTM_H
 
+/* Some notes on i915 TTM implementation.
+ * This is meant for discrete GPU use only.
+ * No relocations are to be supported.
+ * EXEC_OBJECT_PINNED is assumed to be true.
+ */
+
 #include "i915_ttm_object_types.h"
 #include "i915_ttm_bo_list.h"
 #define I915_TTM_BO_INVALID_OFFSET     LONG_MAX
@@ -12,15 +18,7 @@ void i915_ttm_fini(struct drm_i915_private *i915);
 extern const struct ttm_mem_type_manager_func i915_ttm_gtt_mgr_func;
 extern const struct ttm_mem_type_manager_func i915_ttm_vram_mgr_func;
 
-struct i915_ttm_bo *i915_ttm_bo_ref(struct i915_ttm_bo *bo);
-void i915_ttm_bo_unref(struct i915_ttm_bo **bo);
-int i915_ttm_bo_kmap(struct i915_ttm_bo *bo, void **ptr);
-void *i915_ttm_bo_kptr(struct i915_ttm_bo *bo);
-void i915_ttm_bo_kunmap(struct i915_ttm_bo *bo);
-u64 i915_ttm_bo_gpu_offset(struct i915_ttm_bo *bo);
-void i915_ttm_bo_placement_from_region(struct i915_ttm_bo *bo, u32 region);
-int i915_ttm_bo_pin(struct i915_ttm_bo *bo, u32 region);
-int i915_ttm_bo_unpin(struct i915_ttm_bo *bo);
+#include "i915_ttm_object.h"
 
 static inline unsigned long i915_ttm_bo_size(struct i915_ttm_bo *bo)
 {
@@ -96,7 +94,8 @@ int i915_ttm_gem_object_create(struct drm_i915_private *i915, unsigned long size
 			       u64 flags, enum ttm_bo_type type,
 			       struct dma_resv *resv,
 			       struct drm_gem_object **obj);
-
+void i915_ttm_gem_object_close(struct drm_gem_object *gem, struct drm_file *file);
+void i915_ttm_gem_object_free(struct drm_gem_object *gobj);
 int
 i915_ttm_dumb_mmap_offset(struct drm_i915_private *i915,
 			  struct drm_file *file,
@@ -112,4 +111,5 @@ i915_ttm_do_execbuffer(struct drm_device *dev,
 		       struct drm_i915_gem_execbuffer2 *args,
 		       struct drm_i915_gem_exec_object2 *exec,
 		       struct drm_syncobj **fences);
+int i915_ttm_create_bo_pages(struct i915_ttm_bo *bo);
 #endif

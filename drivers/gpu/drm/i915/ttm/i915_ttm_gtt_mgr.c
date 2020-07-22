@@ -25,7 +25,9 @@ static int i915_ttm_gtt_mgr_init(struct ttm_mem_type_manager *man,
 
 	drm_mm_init(&mgr->mm, 0, p_size);
 	spin_lock_init(&mgr->lock);
+	atomic64_set(&mgr->available, p_size);	
 	man->priv = mgr;
+
 
 	return 0;
 }

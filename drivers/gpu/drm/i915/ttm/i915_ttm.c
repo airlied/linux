@@ -22,6 +22,8 @@
 
 #include "i915_drv.h"
 #include "i915_ttm.h"
+#include "intel_pm.h"
+#include "gt/intel_gt.h"
 
 static int i915_ttm_init_lmem(struct drm_i915_private *i915)
 {
@@ -61,6 +63,23 @@ static void i915_ttm_evict_flags(struct ttm_buffer_object *tbo,
 		.flags = TTM_PL_MASK_CACHING | TTM_PL_FLAG_SYSTEM
 	};
 
+	/* Don't handle scatter gather BOs */
+	if (tbo->type == ttm_bo_type_sg) {
+		placement->num_placement = 0;
+		placement->num_busy_placement = 0;
+		return;
+	}
+
+	/* Object isn't an I915_TTM object so ignore */
+	if (!i915_ttm_bo_is_i915_ttm_bo(tbo)) {
+		placement->placement = &placements;
+		placement->busy_placement = &placements;
+		placement->num_placement = 1;
+		placement->num_busy_placement = 1;
+		return;
+	}
+
+
 	bo = ttm_to_i915_bo(tbo);
 	switch (tbo->mem.mem_type) {
 	case TTM_PL_VRAM:
@@ -69,6 +88,26 @@ static void i915_ttm_evict_flags(struct ttm_buffer_object *tbo,
 	}
 			
 	*placement = bo->placement;
+}
+
+
+/**
+ * i915_ttm_verify_access - Verify access for a mmap call
+ *
+ * @bo:	The buffer object to map
+ * @filp: The file pointer from the process performing the mmap
+ *
+ * This is called by ttm_bo_mmap() to verify whether a process
+ * has the right to mmap a BO to their process space.
+ */
+static int i915_ttm_verify_access(struct ttm_buffer_object *tbo, struct file *filp)
+{
+	struct i915_ttm_bo *bo = ttm_to_i915_bo(tbo);
+
+//	if (amdgpu_ttm_tt_get_usermm(bo->ttm))
+//		return -EPERM;
+	return drm_vma_node_verify_access(&tbo->base.vma_node,
+					  filp->private_data);
 }
 
 /**
@@ -310,10 +349,12 @@ static struct ttm_bo_driver i915_ttm_bo_driver = {
 	.io_mem_reserve = &i915_ttm_io_mem_reserve,
 	.io_mem_free = &i915_ttm_io_mem_free,
 	.io_mem_pfn = i915_ttm_io_mem_pfn,
+
+	.verify_access = &i915_ttm_verify_access,
 #if 0
 	.eviction_valuable = amdgpu_ttm_bo_eviction_valuable,
 
-	.verify_access = &amdgpu_verify_access,
+
 	.move_notify = &amdgpu_bo_move_notify,
 	.release_notify = &amdgpu_vbo_release_notify,
 	.fault_reserve_notify = &amdgpu_bo_fault_reserve_notify,
@@ -354,7 +395,17 @@ int i915_ttm_init(struct drm_i915_private *i915)
 	printk("creating GTT size %llu\n", i915->ggtt.vm.total);
 	r = i915_ttm_init_gtt(i915);
 
+	intel_uc_fetch_firmwares(&i915->gt.uc);
+	intel_wopcm_init(&i915->wopcm);
+
+	intel_init_clock_gating(i915);
+
+	r = intel_gt_init(&i915->gt);
+	if (r)
+		goto err_unlock;
 	return 0;
+err_unlock:
+	return r;
 }
 
 void i915_ttm_fini(struct drm_i915_private *i915)
@@ -422,6 +473,23 @@ static void i915_ttm_bo_destroy(struct ttm_buffer_object *tbo)
 	kfree(bo);
 }
 
+/**
+ * i915_ttm_bo_is_i915_ttm_bo - check if the buffer object is an &i915_ttm_bo
+ * @bo: buffer object to be checked
+ *
+ * Uses destroy function associated with the object to determine if this is
+ * an &i915_ttm_bo.
+ *
+ * Returns:
+ * true if the object belongs to &i915_ttm_bo, false if not.
+ */
+bool i915_ttm_bo_is_i915_ttm_bo(struct ttm_buffer_object *bo)
+{
+	if (bo->destroy == &i915_ttm_bo_destroy)
+		return true;
+	return false;
+}
+
 static int i915_ttm_bo_do_create(struct drm_i915_private *i915,
 				 struct i915_ttm_bo_param *bp,
 				 struct i915_ttm_bo **bo_ptr)
@@ -429,6 +497,7 @@ static int i915_ttm_bo_do_create(struct drm_i915_private *i915,
 	struct ttm_operation_ctx ctx = {
 		.interruptible = (bp->type != ttm_bo_type_kernel),
 		.no_wait_gpu = bp->no_wait_gpu,
+		.resv = bp->resv,
 		.flags = bp->type != ttm_bo_type_kernel ? TTM_OPT_FLAG_ALLOW_RES_EVICT : 0
 	};
 	int r;
@@ -459,6 +528,10 @@ static int i915_ttm_bo_do_create(struct drm_i915_private *i915,
 		bo->allowed_regions |= REGION_SMEM;
 
 	bo->flags = bp->flags;
+
+	spin_lock_init(&bo->vma.lock);
+	INIT_LIST_HEAD(&bo->vma.list);
+
 
 	i915_ttm_bo_placement_from_region(bo, bp->region);
 	bo->tbo.bdev = &i915->ttm_mman.bdev;
@@ -979,6 +1052,11 @@ void i915_ttm_gem_object_free(struct drm_gem_object *gobj)
 	}
 }
 
+void i915_ttm_gem_object_close(struct drm_gem_object *gem, struct drm_file *file)
+{
+
+}
+
 int i915_ttm_gem_object_create(struct drm_i915_private *i915, unsigned long size,
 			       int alignment, u32 initial_region,
 			       u64 flags, enum ttm_bo_type type,
@@ -1043,4 +1121,55 @@ i915_ttm_mmap_offset_ioctl(struct drm_i915_private *i915,
 			   struct drm_file *file)
 {
 	return i915_ttm_dumb_mmap_offset(i915, file, args->handle, &args->offset);
+}
+
+
+int i915_ttm_create_bo_pages(struct i915_ttm_bo *bo)
+{
+	struct drm_i915_private *i915 = to_i915_ttm_dev(bo->tbo.bdev);
+	/* create pages for LMEM bindings here */
+	struct sg_table *st;
+	struct scatterlist *sg;
+	struct ttm_mem_reg *mem = &bo->tbo.mem;
+	struct drm_mm_node *nodes = mem->mm_node;
+	unsigned pages = mem->num_pages;
+	unsigned int sg_page_sizes;
+	int ret;
+	st = kmalloc(sizeof(*st), GFP_KERNEL);
+	if (!st)
+		return -ENOMEM;
+
+	if (mem->mem_type == TTM_PL_TT) {
+		struct ttm_dma_tt *ttm = container_of(bo->tbo.ttm, struct ttm_dma_tt, ttm);
+		dma_addr_t *pages_addr = ttm->dma_address;
+		sg_alloc_table_from_pages(st, ttm->ttm.pages, ttm->ttm.num_pages, 0,
+					  (unsigned long)ttm->ttm.num_pages << PAGE_SHIFT,
+					  GFP_KERNEL);
+	} else {
+		if (sg_alloc_table(st, (bo->tbo.num_pages * PAGE_SIZE) >> ilog2(2*1024*1024), GFP_KERNEL)) {
+			kfree(st);
+			return -ENOMEM;
+		}
+
+	
+		sg = st->sgl;
+		st->nents = 0;
+		sg_page_sizes = 0;
+		
+		while (pages) {
+			pages -= nodes->size;
+
+			sg_dma_address(sg) = i915->mm.regions[INTEL_MEMORY_LOCAL]->io_start + nodes->start;
+
+			sg_dma_len(sg) = nodes->size;
+			sg->length = nodes->size;
+			st->nents++;
+			++nodes;
+		}
+		sg_mark_end(sg);
+	}
+
+	bo->pages = st;
+	bo->page_sizes.sg = sg_page_sizes;
+	return 0;
 }

@@ -45,6 +45,11 @@ struct i915_ttm_bo {
 	struct intel_frontbuffer __rcu *frontbuffer;
 
 	struct i915_object_vmas vma;
+
+	/* VRAM objects need a fake sg list for fake LMEM for now */
+	/* bridge to i915 vma */
+	struct sg_table *pages;
+	struct i915_page_sizes page_sizes;
 };
 
 static inline struct i915_ttm_bo *ttm_to_i915_bo(struct ttm_buffer_object *tbo)

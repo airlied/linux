@@ -128,8 +128,10 @@ vma_create(struct drm_i915_gem_object *obj,
 		vma->resv = obj->base.resv;
 		vma->size = obj->base.size;
 		size = obj->base.size;
-	} else
+	} else {
 		size = i915_ttm_bo_size(bo);
+		vma->size = size;
+	}
 	vma->display_alignment = I915_GTT_MIN_ALIGNMENT;
 
 	i915_active_init(&vma->active, __i915_vma_active, __i915_vma_retire);

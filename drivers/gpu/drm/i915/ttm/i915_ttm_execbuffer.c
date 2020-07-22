@@ -433,6 +433,7 @@ i915_ttm_do_execbuffer(struct drm_device *dev,
 	if (r)
 		return r;
 
+	INIT_LIST_HEAD(&eb.validated);
 	i915_ttm_bo_list_get_list(eb.bo_list, &eb.validated);
 	r = ttm_eu_reserve_buffers(&eb.ticket, &eb.validated, true, NULL);
 	if (r != 0) {
@@ -447,10 +448,37 @@ i915_ttm_do_execbuffer(struct drm_device *dev,
 		struct i915_ttm_bo *bo = ttm_to_i915_bo(e->tv.bo);
 
 		/* find VMA */
+		e->vma = i915_ttm_vma_instance(bo, eb.context->vm, NULL);
+		if (IS_ERR(e->vma)) {
+			DRM_ERROR("vma creation failed\n");
+		}
+	
 	}
 
 	reserved_buffers = true;
-	
+
+	i915_ttm_bo_list_for_each_entry(e, eb.bo_list) {
+		u64 pin_flags;
+
+		pin_flags = e->pin_flags;
+
+		pin_flags |= PIN_USER | PIN_NOEVICT | PIN_OFFSET_FIXED;
+		
+		r = i915_vma_pin(e->vma, 0, 0, pin_flags);
+		if (r)
+			DRM_ERROR("vma pinning failed %d\n", r);
+	}
+
+	r = eb_submit(&eb);
+
+	i915_request_get(eb.request);
+	eb_request_add(&eb);
+
+	i915_request_put(eb.request);
+
+	eb_unpin_engine(&eb);
+
+	i915_gem_context_put(eb.gem_context);
 out:
 	i915_ttm_execbuffer_fini(&eb, r, reserved_buffers);
 	return r;
