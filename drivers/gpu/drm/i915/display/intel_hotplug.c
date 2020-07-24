@@ -95,7 +95,8 @@ enum hpd_pin intel_hpd_pin_default(struct drm_i915_private *dev_priv,
 	 * shold be HPD_PORT_{D,E} rather than {C,D}.  Note that this differs
 	 * from the behavior of both TGL+TGP and RKL+CMP.
 	 */
-	if (IS_ROCKETLAKE(dev_priv) && HAS_PCH_TGP(dev_priv))
+	if (IS_DG1(dev_priv) ||
+	    (IS_ROCKETLAKE(dev_priv) && HAS_PCH_TGP(dev_priv)))
 		return HPD_PORT_A + port - PORT_A;
 
 	switch (phy) {
