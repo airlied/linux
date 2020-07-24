@@ -97,12 +97,13 @@ int i915_ttm_bo_list_create(struct drm_i915_private *i915,
 		drm_gem_object_put(gobj);
 
 		entry = &array[last_entry++];
-		
+
+		entry->user_flags = exec[i].flags;
 		entry->tv.bo = &bo->tbo;
 
 		exec[i].offset = gen8_noncanonical_addr(exec[i].offset);
-		entry->pin_flags = eb_pin_flags(&exec[i], EXEC_OBJECT_PINNED | EXEC_OBJECT_SUPPORTS_48B_ADDRESS);
 
+		entry->pin_flags = eb_pin_flags(&exec[i], EXEC_OBJECT_PINNED | EXEC_OBJECT_SUPPORTS_48B_ADDRESS);
 		total_size += i915_ttm_bo_size(bo);
 	}
 	list->num_entries = num_entries;

@@ -1145,6 +1145,13 @@ int i915_ttm_create_bo_pages(struct i915_ttm_bo *bo)
 		sg_alloc_table_from_pages(st, ttm->ttm.pages, ttm->ttm.num_pages, 0,
 					  (unsigned long)ttm->ttm.num_pages << PAGE_SHIFT,
 					  GFP_KERNEL);
+
+		//TODO scatter list binding for real life
+		int i;
+		struct scatterlist *sgx;
+		for_each_sg(st->sgl, sgx, st->nents, i) {
+			sgx->dma_address = ttm->dma_address[i];
+		}
 	} else {
 		if (sg_alloc_table(st, (bo->tbo.num_pages * PAGE_SIZE) >> ilog2(2*1024*1024), GFP_KERNEL)) {
 			kfree(st);

@@ -12,6 +12,7 @@
 #include "i915_drv.h"
 #include "gt/intel_context.h"
 #include "gt/intel_ring.h"
+#include "gt/intel_gt.h"
 #include "gem/i915_gem_context.h"
 #include "ttm/i915_ttm.h"
 
@@ -344,11 +345,28 @@ i915_ttm_execbuffer_fini(struct i915_ttm_execbuffer *eb, int error,
 		i915_ttm_bo_list_put(eb->bo_list);
 }
 
+static int eb_move_to_gpu(struct i915_ttm_execbuffer *eb)
+{
+	struct i915_ttm_bo_list_entry *e;
+	int err = 0;
+	i915_ttm_bo_list_for_each_entry(e, eb->bo_list) {
+		unsigned int flags = 0;//e->flags;
+		struct i915_vma *vma = e->vma;
+		err = i915_vma_move_to_active(vma, eb->request, flags);
+	}
+
+	/* Unconditionally flush any chipset caches (for streaming writes). */
+	intel_gt_chipset_flush(eb->engine->gt);
+	return err;
+}
+
 static int
 eb_submit(struct i915_ttm_execbuffer *eb,
 	  struct i915_vma *batch)
 {
 	int err;
+
+	eb_move_to_gpu(eb);
 	/*
 	 * After we completed waiting for other engines (using HW semaphores)
 	 * then we can signal that this request/batch is ready to run. This

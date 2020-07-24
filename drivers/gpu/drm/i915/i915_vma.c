@@ -1247,16 +1247,27 @@ int i915_vma_move_to_active(struct i915_vma *vma,
 	struct drm_i915_gem_object *obj = vma->obj;
 	int err;
 
-	assert_object_held(obj);
+	if (obj)
+		assert_object_held(obj);
 
 	err = __i915_vma_move_to_active(vma, rq);
 	if (unlikely(err))
 		return err;
 
+	if (vma->bo) {
+		if (flags & EXEC_OBJECT_NEEDS_FENCE && vma->fence)
+			i915_active_add_request(&vma->fence->active, rq);
+		return err;
+	}
+
+
 	if (flags & EXEC_OBJECT_WRITE) {
 		struct intel_frontbuffer *front;
 
-		front = __intel_frontbuffer_get(obj);
+		if (obj)
+			front = __intel_frontbuffer_get(obj);
+		else
+			front = __intel_frontbuffer_get_ttm(vma->bo);
 		if (unlikely(front)) {
 			if (intel_frontbuffer_invalidate(front, ORIGIN_CS))
 				i915_active_add_request(&front->write, rq);
@@ -1264,22 +1275,27 @@ int i915_vma_move_to_active(struct i915_vma *vma,
 		}
 
 		dma_resv_add_excl_fence(vma->resv, &rq->fence);
-		obj->write_domain = I915_GEM_DOMAIN_RENDER;
-		obj->read_domains = 0;
+		if (obj) {
+			obj->write_domain = I915_GEM_DOMAIN_RENDER;
+			obj->read_domains = 0;
+		}
 	} else {
 		err = dma_resv_reserve_shared(vma->resv, 1);
 		if (unlikely(err))
 			return err;
 
 		dma_resv_add_shared_fence(vma->resv, &rq->fence);
-		obj->write_domain = 0;
+		if (obj)
+			obj->write_domain = 0;
 	}
 
 	if (flags & EXEC_OBJECT_NEEDS_FENCE && vma->fence)
 		i915_active_add_request(&vma->fence->active, rq);
 
-	obj->read_domains |= I915_GEM_GPU_DOMAINS;
-	obj->mm.dirty = true;
+	if (obj) {
+		obj->read_domains |= I915_GEM_GPU_DOMAINS;
+		obj->mm.dirty = true;
+	}
 
 	GEM_BUG_ON(!i915_vma_is_active(vma));
 	return 0;
