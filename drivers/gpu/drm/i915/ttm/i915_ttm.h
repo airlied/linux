@@ -17,6 +17,7 @@ int i915_ttm_init(struct drm_i915_private *i915);
 void i915_ttm_fini(struct drm_i915_private *i915);
 extern const struct ttm_mem_type_manager_func i915_ttm_gtt_mgr_func;
 extern const struct ttm_mem_type_manager_func i915_ttm_vram_mgr_func;
+extern const struct ttm_mem_type_manager_func i915_ttm_stolen_mgr_func;
 
 #include "i915_ttm_object.h"
 
@@ -71,6 +72,8 @@ static inline unsigned i915_ttm_mem_type_to_region(u32 mem_type)
 		return REGION_SMEM;
 	case TTM_PL_SYSTEM:
 		return 0;
+	case I915_TTM_PL_STOLEN:
+		return REGION_STOLEN;
 	default:
 		break;
 	}

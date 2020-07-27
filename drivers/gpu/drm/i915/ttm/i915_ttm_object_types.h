@@ -7,6 +7,10 @@
 
 #include "i915_vma_types.h"
 
+#define I915_TTM_PL_STOLEN (TTM_PL_PRIV + 0)
+
+#define I915_TTM_PL_FLAG_STOLEN (TTM_PL_FLAG_PRIV << 0)
+
 #define I915_TTM_BO_MAX_PLACEMENTS	3
 
 #define I915_TTM_CREATE_VRAM_CONTIGUOUS (1 << 0)

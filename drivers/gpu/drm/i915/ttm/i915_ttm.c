@@ -27,6 +27,7 @@
 
 static int i915_ttm_init_lmem(struct drm_i915_private *i915)
 {
+<<<<<<< HEAD
 	struct ttm_mem_type_manager *man = &i915->ttm_mman.bdev.man[TTM_PL_VRAM];
 	uint64_t vram_size;
 	if (HAS_LMEM(i915))
@@ -50,6 +51,16 @@ static int i915_ttm_init_gtt(struct drm_i915_private *i915)
 	man->available_caching = TTM_PL_MASK_CACHING;
 	man->default_caching = TTM_PL_FLAG_CACHED;
 	return ttm_bo_init_mm(&i915->ttm_mman.bdev, TTM_PL_TT, i915->ggtt.vm.total >> PAGE_SHIFT);
+}
+
+static int i915_ttm_init_stolen(struct drm_i915_private *i915)
+{
+	struct ttm_mem_type_manager *man = &i915->ttm_mman.bdev.man[I915_TTM_PL_STOLEN];
+	man->use_tt = true;
+	man->func = &i915_ttm_gtt_mgr_func;
+	man->available_caching = TTM_PL_MASK_CACHING;
+	man->default_caching = TTM_PL_FLAG_CACHED;
+	return ttm_bo_init_mm(&i915->ttm_mman.bdev, I915_TTM_PL_STOLEN, i915->ggtt.vm.total >> PAGE_SHIFT);
 }
 
 static void i915_ttm_evict_flags(struct ttm_buffer_object *tbo,
@@ -83,6 +94,7 @@ static void i915_ttm_evict_flags(struct ttm_buffer_object *tbo,
 	bo = ttm_to_i915_bo(tbo);
 	switch (tbo->mem.mem_type) {
 	case TTM_PL_VRAM:
+	case I915_TTM_PL_STOLEN:
 	default:
 		break;
 	}
@@ -227,6 +239,8 @@ static int i915_ttm_io_mem_reserve(struct ttm_bo_device *bdev, struct ttm_mem_re
 		/* system memory */
 		return 0;
 	case TTM_PL_TT:
+		break;
+	case I915_TTM_PL_STOLEN:
 		break;
 	case TTM_PL_VRAM:
 		mem->bus.offset = mem->start << PAGE_SHIFT;
@@ -575,6 +589,16 @@ void i915_ttm_bo_placement_from_region(struct i915_ttm_bo *bo, u32 region)
 	u64 flags = bo->flags;
 	u32 c = 0;
 
+	if (region & REGION_STOLEN) {
+		places[c].fpfn = 0;
+		places[c].lpfn = 0;
+		places[c].flags = TTM_PL_FLAG_WC | TTM_PL_FLAG_UNCACHED | I915_TTM_PL_FLAG_STOLEN;
+
+		if (flags & I915_TTM_CREATE_VRAM_CONTIGUOUS)
+			places[c].flags |= TTM_PL_FLAG_CONTIGUOUS;
+		c++;
+	}
+	
 	if (region & REGION_LMEM) {
 		places[c].fpfn = 0;
 		places[c].lpfn = 0;
