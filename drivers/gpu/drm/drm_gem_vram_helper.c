@@ -1127,6 +1127,7 @@ static int drm_vram_mm_init(struct drm_vram_mm *vmm, struct drm_device *dev,
 
 static void drm_vram_mm_cleanup(struct drm_vram_mm *vmm)
 {
+	ttm_bo_man_takedown(&vmm->bdev, &vmm->bdev.man[TTM_PL_VRAM]);
 	ttm_bo_device_release(&vmm->bdev);
 }
 
