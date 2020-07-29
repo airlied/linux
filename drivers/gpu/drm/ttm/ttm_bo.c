@@ -80,7 +80,7 @@ static inline int ttm_mem_type_from_place(const struct ttm_place *place,
 static void ttm_mem_type_debug(struct ttm_bo_device *bdev, struct drm_printer *p,
 			       int mem_type)
 {
-	struct ttm_mem_type_manager *man = &bdev->man[mem_type];
+	struct ttm_mem_type_manager *man = ttm_manager_type(bdev, mem_type);
 
 	drm_printf(p, "    has_type: %d\n", man->has_type);
 	drm_printf(p, "    use_type: %d\n", man->use_type);
@@ -156,7 +156,7 @@ static void ttm_bo_add_mem_to_lru(struct ttm_buffer_object *bo,
 	if (mem->placement & TTM_PL_FLAG_NO_EVICT)
 		return;
 
-	man = &bdev->man[mem->mem_type];
+	man = ttm_manager_type(bdev, mem->mem_type);
 	list_add_tail(&bo->lru, &man->lru[bo->priority]);
 
 	if (man->use_tt && bo->ttm &&
@@ -231,7 +231,7 @@ void ttm_bo_bulk_move_lru_tail(struct ttm_lru_bulk_move *bulk)
 		dma_resv_assert_held(pos->first->base.resv);
 		dma_resv_assert_held(pos->last->base.resv);
 
-		man = &pos->first->bdev->man[TTM_PL_TT];
+		man = ttm_manager_type(pos->first->bdev, TTM_PL_TT);
 		list_bulk_move_tail(&man->lru[i], &pos->first->lru,
 				    &pos->last->lru);
 	}
@@ -246,7 +246,7 @@ void ttm_bo_bulk_move_lru_tail(struct ttm_lru_bulk_move *bulk)
 		dma_resv_assert_held(pos->first->base.resv);
 		dma_resv_assert_held(pos->last->base.resv);
 
-		man = &pos->first->bdev->man[TTM_PL_VRAM];
+		man = ttm_manager_type(pos->first->bdev, TTM_PL_VRAM);
 		list_bulk_move_tail(&man->lru[i], &pos->first->lru,
 				    &pos->last->lru);
 	}
@@ -272,8 +272,8 @@ static int ttm_bo_handle_move_mem(struct ttm_buffer_object *bo,
 				  struct ttm_operation_ctx *ctx)
 {
 	struct ttm_bo_device *bdev = bo->bdev;
-	struct ttm_mem_type_manager *old_man = &bdev->man[bo->mem.mem_type];
-	struct ttm_mem_type_manager *new_man = &bdev->man[mem->mem_type];
+	struct ttm_mem_type_manager *old_man = ttm_manager_type(bdev, bo->mem.mem_type);
+	struct ttm_mem_type_manager *new_man = ttm_manager_type(bdev, mem->mem_type);
 	int ret;
 
 	ret = ttm_mem_io_lock(old_man, true);
@@ -338,7 +338,7 @@ moved:
 	return 0;
 
 out_err:
-	new_man = &bdev->man[bo->mem.mem_type];
+	new_man = ttm_manager_type(bdev, bo->mem.mem_type);
 	if (!new_man->use_tt) {
 		ttm_tt_destroy(bo->ttm);
 		bo->ttm = NULL;
@@ -550,7 +550,7 @@ static void ttm_bo_release(struct kref *kref)
 	struct ttm_buffer_object *bo =
 	    container_of(kref, struct ttm_buffer_object, kref);
 	struct ttm_bo_device *bdev = bo->bdev;
-	struct ttm_mem_type_manager *man = &bdev->man[bo->mem.mem_type];
+	struct ttm_mem_type_manager *man = ttm_manager_type(bdev, bo->mem.mem_type);
 	size_t acc_size = bo->acc_size;
 	int ret;
 
@@ -838,7 +838,7 @@ static int ttm_bo_mem_get(struct ttm_buffer_object *bo,
 			  const struct ttm_place *place,
 			  struct ttm_mem_reg *mem)
 {
-	struct ttm_mem_type_manager *man = &bo->bdev->man[mem->mem_type];
+	struct ttm_mem_type_manager *man = ttm_manager_type(bo->bdev, mem->mem_type);
 
 	mem->mm_node = NULL;
 	if (!man->func || !man->func->get_node)
@@ -849,7 +849,7 @@ static int ttm_bo_mem_get(struct ttm_buffer_object *bo,
 
 void ttm_bo_mem_put(struct ttm_buffer_object *bo, struct ttm_mem_reg *mem)
 {
-	struct ttm_mem_type_manager *man = &bo->bdev->man[mem->mem_type];
+	struct ttm_mem_type_manager *man = ttm_manager_type(bo->bdev, mem->mem_type);
 
 	if (!man->func || !man->func->put_node)
 		return;
@@ -906,7 +906,7 @@ static int ttm_bo_mem_force_space(struct ttm_buffer_object *bo,
 				  struct ttm_operation_ctx *ctx)
 {
 	struct ttm_bo_device *bdev = bo->bdev;
-	struct ttm_mem_type_manager *man = &bdev->man[mem->mem_type];
+	struct ttm_mem_type_manager *man = ttm_manager_type(bdev, mem->mem_type);
 	struct ww_acquire_ctx *ticket;
 	int ret;
 
@@ -996,7 +996,7 @@ static int ttm_bo_mem_placement(struct ttm_buffer_object *bo,
 	if (ret)
 		return ret;
 
-	man = &bdev->man[mem_type];
+	man = ttm_manager_type(bdev, mem_type);
 	if (!man->has_type || !man->use_type)
 		return -EBUSY;
 
@@ -1059,7 +1059,7 @@ int ttm_bo_mem_space(struct ttm_buffer_object *bo,
 		if (unlikely(ret))
 			goto error;
 
-		man = &bdev->man[mem->mem_type];
+		man = ttm_manager_type(bdev, mem->mem_type);
 		ret = ttm_bo_add_move_fence(bo, man, mem, ctx->no_wait_gpu);
 		if (unlikely(ret)) {
 			ttm_bo_mem_put(bo, mem);
@@ -1448,7 +1448,7 @@ EXPORT_SYMBOL(ttm_bo_force_list_clean);
 
 int ttm_bo_evict_mm(struct ttm_bo_device *bdev, unsigned mem_type)
 {
-	struct ttm_mem_type_manager *man = &bdev->man[mem_type];
+	struct ttm_mem_type_manager *man = ttm_manager_type(bdev, mem_type);
 
 	if (mem_type == 0 || mem_type >= TTM_NUM_MEM_TYPES) {
 		pr_err("Illegal memory manager memory type %u\n", mem_type);
@@ -1551,7 +1551,7 @@ int ttm_bo_device_release(struct ttm_bo_device *bdev)
 	unsigned i;
 	struct ttm_mem_type_manager *man;
 
-	man = &bdev->man[TTM_PL_SYSTEM];
+	man = ttm_manager_type(bdev, TTM_PL_SYSTEM);
 	ttm_bo_disable_mm(man);
 
 	mutex_lock(&ttm_global_mutex);
@@ -1578,7 +1578,7 @@ EXPORT_SYMBOL(ttm_bo_device_release);
 
 static void ttm_bo_init_sysman(struct ttm_bo_device *bdev)
 {
-	struct ttm_mem_type_manager *man = &bdev->man[TTM_PL_SYSTEM];
+	struct ttm_mem_type_manager *man = ttm_manager_type(bdev, TTM_PL_SYSTEM);
 
 	/*
 	 * Initialize the system memory buffer type.
@@ -1642,7 +1642,7 @@ void ttm_bo_unmap_virtual_locked(struct ttm_buffer_object *bo)
 void ttm_bo_unmap_virtual(struct ttm_buffer_object *bo)
 {
 	struct ttm_bo_device *bdev = bo->bdev;
-	struct ttm_mem_type_manager *man = &bdev->man[bo->mem.mem_type];
+	struct ttm_mem_type_manager *man = ttm_manager_type(bdev, bo->mem.mem_type);
 
 	ttm_mem_io_lock(man, false);
 	ttm_bo_unmap_virtual_locked(bo);
