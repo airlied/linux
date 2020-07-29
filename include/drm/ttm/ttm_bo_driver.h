@@ -678,6 +678,12 @@ static inline void ttm_bo_unreserve(struct ttm_buffer_object *bo)
 	dma_resv_unlock(bo->base.resv);
 }
 
+static inline void ttm_bo_use_mm(struct ttm_mem_type_manager *man)
+{
+	man->has_type = true;
+	man->use_type = true;
+}
+
 /*
  * ttm_bo_util.c
  */
