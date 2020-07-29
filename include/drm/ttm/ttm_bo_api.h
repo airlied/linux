@@ -546,6 +546,11 @@ int ttm_bo_create(struct ttm_bo_device *bdev, unsigned long size,
  * -ENOMEM: Not enough memory.
  * May also return driver-specified errors.
  */
+struct ttm_mem_type_manager;
+void ttm_bo_init_mm_base(struct ttm_bo_device *bdev,
+			 struct ttm_mem_type_manager *man,
+			 unsigned long p_size);
+void ttm_bo_use_mm(struct ttm_mem_type_manager *man);
 int ttm_bo_init_mm(struct ttm_bo_device *bdev, unsigned type,
 		   unsigned long p_size);
 
