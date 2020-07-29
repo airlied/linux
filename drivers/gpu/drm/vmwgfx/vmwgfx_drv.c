@@ -637,6 +637,17 @@ static int vmw_init_vram_manager(struct vmw_private *dev_priv)
 	dev_priv->bdev.man[TTM_PL_VRAM].use_type = false;
 	return ret;
 }
+
+static void vmw_takedown_vram_manager(struct vmw_private *dev_priv)
+{
+#ifdef CONFIG_TRANSPARENT_HUGEPAGE
+	vmw_thp_takedown(dev_priv);
+#else
+	ttm_bo_man_takedown(&dev_priv->bdev,
+			    &dev_priv->bdev.man[TTM_PL_VRAM]);
+#endif
+}
+
 static int vmw_driver_load(struct drm_device *dev, unsigned long chipset)
 {
 	struct vmw_private *dev_priv;
@@ -986,7 +997,7 @@ out_no_kms:
 		(void) ttm_bo_clean_mm(&dev_priv->bdev, VMW_PL_MOB);
 	if (dev_priv->has_gmr)
 		(void) ttm_bo_clean_mm(&dev_priv->bdev, VMW_PL_GMR);
-	(void)ttm_bo_clean_mm(&dev_priv->bdev, TTM_PL_VRAM);
+	vmw_takedown_vram_manager(dev_priv);
 out_no_vram:
 	(void)ttm_bo_device_release(&dev_priv->bdev);
 out_no_bdev:
