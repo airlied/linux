@@ -1523,25 +1523,6 @@ void ttm_bo_init_mm_base(struct ttm_bo_device *bdev,
 }
 EXPORT_SYMBOL(ttm_bo_init_mm_base);
 
-int ttm_bo_init_mm(struct ttm_bo_device *bdev, unsigned type,
-			unsigned long p_size)
-{
-	int ret;
-	struct ttm_mem_type_manager *man;
-
-	BUG_ON(type >= TTM_NUM_MEM_TYPES);
-	ttm_bo_init_mm_base(bdev, &bdev->man[type], p_size);
-
-	if (type != TTM_PL_SYSTEM) {
-		ret = (*man->func->init)(man, p_size);
-		if (ret)
-			return ret;
-	}
-	ttm_bo_use_mm(man);
-	return 0;
-}
-EXPORT_SYMBOL(ttm_bo_init_mm);
-
 static void ttm_bo_global_kobj_release(struct kobject *kobj)
 {
 	struct ttm_bo_global *glob =

@@ -550,8 +550,6 @@ struct ttm_mem_type_manager;
 void ttm_bo_init_mm_base(struct ttm_bo_device *bdev,
 			 struct ttm_mem_type_manager *man,
 			 unsigned long p_size);
-int ttm_bo_init_mm(struct ttm_bo_device *bdev, unsigned type,
-		   unsigned long p_size);
 
 /**
  * ttm_bo_clean_mm
