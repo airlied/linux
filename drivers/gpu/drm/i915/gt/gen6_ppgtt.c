@@ -105,7 +105,7 @@ static void gen6_ppgtt_clear_range(struct i915_address_space *vm,
 		 * entries back to scratch.
 		 */
 
-		vaddr = px_vaddr(pt);
+		vaddr = px_vaddr(pt, NULL);
 		memset32(vaddr + pte, scratch_pte, count);
 
 		pte = 0;
@@ -128,7 +128,7 @@ static void gen6_ppgtt_insert_entries(struct i915_address_space *vm,
 
 	GEM_BUG_ON(!pd->entry[act_pt]);
 
-	vaddr = px_vaddr(i915_pt_entry(pd, act_pt));
+	vaddr = px_vaddr(i915_pt_entry(pd, act_pt), NULL);
 	do {
 		GEM_BUG_ON(iter.sg->length < I915_GTT_PAGE_SIZE);
 		vaddr[act_pte] = pte_encode | GEN6_PTE_ADDR_ENCODE(iter.dma);
@@ -144,7 +144,7 @@ static void gen6_ppgtt_insert_entries(struct i915_address_space *vm,
 		}
 
 		if (++act_pte == GEN6_PTES) {
-			vaddr = px_vaddr(i915_pt_entry(pd, ++act_pt));
+			vaddr = px_vaddr(i915_pt_entry(pd, ++act_pt), NULL);
 			act_pte = 0;
 		}
 	} while (1);
