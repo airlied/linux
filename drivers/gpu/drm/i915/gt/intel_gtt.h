@@ -176,8 +176,8 @@ struct page *__px_page(struct drm_i915_gem_object *p);
 dma_addr_t __px_dma(struct drm_i915_gem_object *p);
 #define px_dma(px) (__px_dma(px_base(px)))
 
-void *__px_vaddr(struct drm_i915_gem_object *p);
-#define px_vaddr(px) (__px_vaddr(px_base(px)))
+void *__px_vaddr(struct drm_i915_gem_object *p, bool *needs_flush);
+#define px_vaddr(px, needs_flush) (__px_vaddr(px_base(px), needs_flush))
 
 #define px_pt(px) \
 	__px_choose_expr(px, struct i915_page_table *, __x, \
