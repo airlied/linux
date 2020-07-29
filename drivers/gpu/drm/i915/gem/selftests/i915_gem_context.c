@@ -1752,7 +1752,7 @@ static int check_scratch_page(struct i915_gem_context *ctx, u32 *out)
 		return -EINVAL;
 	}
 
-	vaddr = __px_vaddr(vm->scratch[0]);
+	vaddr = __px_vaddr(vm->scratch[0], NULL);
 
 	memcpy(out, vaddr, sizeof(*out));
 	if (memchr_inv(vaddr, *out, PAGE_SIZE)) {
