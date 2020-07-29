@@ -115,4 +115,6 @@ i915_ttm_do_execbuffer(struct drm_device *dev,
 		       struct drm_i915_gem_exec_object2 *exec,
 		       struct drm_syncobj **fences);
 int i915_ttm_create_bo_pages(struct i915_ttm_bo *bo);
+
+int i915_ttm_vram_mgr_init(struct ttm_mem_type_manager *man);
 #endif

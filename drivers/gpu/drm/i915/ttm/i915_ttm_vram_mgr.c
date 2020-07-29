@@ -29,8 +29,7 @@ static void i915_ttm_vram_mgr_virt_start(struct ttm_mem_reg *mem,
 	mem->start = max(mem->start, start);
 }
 	
-static int i915_ttm_vram_mgr_init(struct ttm_mem_type_manager *man,
-				  unsigned long p_size)
+int i915_ttm_vram_mgr_init(struct ttm_mem_type_manager *man)
 {
 	struct drm_i915_private *i915 = to_i915_ttm_dev(man->bdev);
 	struct i915_ttm_vram_mgr *mgr;
@@ -41,7 +40,7 @@ static int i915_ttm_vram_mgr_init(struct ttm_mem_type_manager *man,
 	if (!mgr)
 		return -ENOMEM;
 
-	drm_mm_init(&mgr->mm, 0, p_size);
+	drm_mm_init(&mgr->mm, 0, man->size);
 	spin_lock_init(&mgr->lock);
 	man->priv = mgr;
 
@@ -182,7 +181,6 @@ static void i915_ttm_vram_mgr_del(struct ttm_mem_type_manager *man,
 }
 				  
 const struct ttm_mem_type_manager_func i915_ttm_vram_mgr_func = {
-	.init = i915_ttm_vram_mgr_init,
 	.takedown = i915_ttm_vram_mgr_fini,
 	.get_node = i915_ttm_vram_mgr_new,
 	.put_node = i915_ttm_vram_mgr_del,

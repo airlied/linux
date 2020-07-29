@@ -29,6 +29,7 @@ static int i915_ttm_init_lmem(struct drm_i915_private *i915)
 {
 	struct ttm_mem_type_manager *man = &i915->ttm_mman.bdev.man[TTM_PL_VRAM];
 	uint64_t vram_size;
+	int r;
 	if (HAS_LMEM(i915))
 		vram_size = i915->mm.regions[INTEL_REGION_LMEM]->total;
 	else
@@ -37,7 +38,13 @@ static int i915_ttm_init_lmem(struct drm_i915_private *i915)
 	man->func = &i915_ttm_vram_mgr_func;
 	man->available_caching = TTM_PL_FLAG_UNCACHED | TTM_PL_FLAG_WC;
 	man->default_caching = TTM_PL_FLAG_WC;
-	return ttm_bo_init_mm(&i915->ttm_mman.bdev, TTM_PL_VRAM, vram_size >> PAGE_SHIFT);
+
+	ttm_bo_init_mm_base(&i915->ttm_mman.bdev, man, vram_size >> PAGE_SHIFT);
+	r = i915_ttm_vram_mgr_init(man);
+	if (!r)
+		return r;
+	ttm_bo_use_mm(man);
+	return 0;
 }
 
 static int i915_ttm_init_gtt(struct drm_i915_private *i915)
