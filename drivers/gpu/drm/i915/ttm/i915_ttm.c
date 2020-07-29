@@ -27,7 +27,6 @@
 
 static int i915_ttm_init_lmem(struct drm_i915_private *i915)
 {
-<<<<<<< HEAD
 	struct ttm_mem_type_manager *man = &i915->ttm_mman.bdev.man[TTM_PL_VRAM];
 	uint64_t vram_size;
 	if (HAS_LMEM(i915))
