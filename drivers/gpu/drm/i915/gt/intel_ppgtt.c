@@ -85,10 +85,12 @@ write_dma_entry(struct drm_i915_gem_object * const pdma,
 		const unsigned short idx,
 		const u64 encoded_entry)
 {
-	u64 * const vaddr = __px_vaddr(pdma);
+	bool needs_flush;
+	u64 * const vaddr = __px_vaddr(pdma, &needs_flush);
 
 	vaddr[idx] = encoded_entry;
-	clflush_cache_range(&vaddr[idx], sizeof(u64));
+	if (needs_flush)
+		clflush_cache_range(&vaddr[idx], sizeof(u64));
 }
 
 void
