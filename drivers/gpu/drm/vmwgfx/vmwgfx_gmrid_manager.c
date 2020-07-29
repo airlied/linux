@@ -94,22 +94,28 @@ static void vmw_gmrid_man_put_node(struct ttm_mem_type_manager *man,
 	}
 }
 
-static int vmw_gmrid_man_init(struct ttm_mem_type_manager *man,
-			      unsigned long p_size)
+static const struct ttm_mem_type_manager_func vmw_gmrid_manager_func;
+
+int vmw_gmrid_man_init(struct vmw_private *dev_priv, int type)
 {
-	struct vmw_private *dev_priv =
-		container_of(man->bdev, struct vmw_private, bdev);
+	struct ttm_mem_type_manager *man = &dev_priv->bdev.man[type];
 	struct vmwgfx_gmrid_man *gman =
 		kzalloc(sizeof(*gman), GFP_KERNEL);
 
 	if (unlikely(!gman))
 		return -ENOMEM;
 
+	man->func = &vmw_gmrid_manager_func;
+	man->available_caching = TTM_PL_FLAG_CACHED;
+	man->default_caching = TTM_PL_FLAG_CACHED;
+	/* TODO: This is most likely not correct */
+	man->use_tt = true;
+	ttm_bo_init_mm_base(&dev_priv->bdev, man, 0);
 	spin_lock_init(&gman->lock);
 	gman->used_gmr_pages = 0;
 	ida_init(&gman->gmr_ida);
 
-	switch (p_size) {
+	switch (type) {
 	case VMW_PL_GMR:
 		gman->max_gmr_ids = dev_priv->max_gmr_ids;
 		gman->max_gmr_pages = dev_priv->max_gmr_pages;
@@ -143,8 +149,7 @@ static void vmw_gmrid_man_debug(struct ttm_mem_type_manager *man,
 	drm_printf(printer, "No debug info available for the GMR id manager\n");
 }
 
-const struct ttm_mem_type_manager_func vmw_gmrid_manager_func = {
-	.init = vmw_gmrid_man_init,
+static const struct ttm_mem_type_manager_func vmw_gmrid_manager_func = {
 	.takedown = vmw_gmrid_man_takedown,
 	.get_node = vmw_gmrid_man_get_node,
 	.put_node = vmw_gmrid_man_put_node,
