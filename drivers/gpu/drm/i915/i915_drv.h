@@ -587,11 +587,6 @@ struct i915_gem_mm {
 	atomic_t free_count;
 
 	/**
-	 * Small stash of WC pages
-	 */
-	struct pagestash wc_stash;
-
-	/**
 	 * tmpfs instance used for shmem backed objects
 	 */
 	struct vfsmount *gemfs;
