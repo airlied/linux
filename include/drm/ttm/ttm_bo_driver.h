@@ -799,6 +799,9 @@ int ttm_bo_pipeline_gutting(struct ttm_buffer_object *bo);
  */
 pgprot_t ttm_io_prot(uint32_t caching_flags, pgprot_t tmp);
 
+int ttm_bo_man_init(struct ttm_bo_device *bdev,
+		    struct ttm_mem_type_manager *man,
+		    unsigned long p_size);
 extern const struct ttm_mem_type_manager_func ttm_bo_manager_func;
 
 #endif
