@@ -671,6 +671,18 @@ static inline void ttm_bo_use_mm(struct ttm_mem_type_manager *man)
 	man->use_type = true;
 }
 
+static inline void ttm_bo_disable_mm(struct ttm_mem_type_manager *man)
+{
+	man->has_type = false;
+	man->use_type = false;
+}
+
+static inline void ttm_bo_man_cleanup(struct ttm_mem_type_manager *man)
+{
+	dma_fence_put(man->move);
+	man->move = NULL;
+}
+
 /*
  * ttm_bo_util.c
  */
