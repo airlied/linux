@@ -683,6 +683,8 @@ static inline void ttm_bo_man_cleanup(struct ttm_mem_type_manager *man)
 	man->move = NULL;
 }
 
+int ttm_bo_force_list_clean(struct ttm_bo_device *bdev,
+			    struct ttm_mem_type_manager *man);
 /*
  * ttm_bo_util.c
  */
@@ -801,5 +803,6 @@ pgprot_t ttm_io_prot(uint32_t caching_flags, pgprot_t tmp);
 int ttm_bo_man_init(struct ttm_bo_device *bdev,
 		    struct ttm_mem_type_manager *man,
 		    unsigned long p_size);
-
+int ttm_bo_man_takedown(struct ttm_bo_device *bdev,
+			struct ttm_mem_type_manager *man);
 #endif
