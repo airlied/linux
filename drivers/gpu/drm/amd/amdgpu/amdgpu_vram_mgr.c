@@ -205,7 +205,7 @@ int amdgpu_vram_mgr_init(struct amdgpu_device *adev)
 		DRM_ERROR("Failed to register sysfs\n");
 
 	ttm_set_driver_manager(&adev->mman.bdev, TTM_PL_VRAM, &mgr->manager);
-	ttm_bo_use_mm(man);
+	ttm_mm_set_use(man, true);
 	return 0;
 }
 
@@ -223,7 +223,7 @@ void amdgpu_vram_mgr_fini(struct amdgpu_device *adev)
 	struct amdgpu_vram_mgr *mgr = to_vram_mgr(man);
 	int ret;
 
-	ttm_bo_disable_mm(man);
+	ttm_mm_set_use(man, false);
 
 	ret = ttm_bo_force_list_clean(&adev->mman.bdev, man);
 	if (ret)

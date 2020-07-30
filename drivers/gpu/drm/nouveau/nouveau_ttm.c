@@ -176,7 +176,7 @@ nouveau_ttm_init_vram(struct nouveau_drm *drm)
 		man->use_io_reserve_lru = true;
 		ttm_bo_init_mm_base(man, drm->gem.vram_available >> PAGE_SHIFT);
 		ttm_set_driver_manager(&drm->ttm.bdev, TTM_PL_VRAM, man);
-		ttm_bo_use_mm(man);
+		ttm_mm_set_use(man, true);
 		return 0;
 	} else {
 		return ttm_bo_man_init(&drm->ttm.bdev, TTM_PL_VRAM,
@@ -192,7 +192,7 @@ nouveau_ttm_fini_vram(struct nouveau_drm *drm)
 	struct ttm_mem_type_manager *man = ttm_manager_type(&drm->ttm.bdev, TTM_PL_VRAM);
 
 	if (drm->client.device.info.family >= NV_DEVICE_INFO_V0_TESLA) {
-		ttm_bo_disable_mm(man);
+		ttm_mm_set_use(man, false);
 		ttm_bo_force_list_clean(&drm->ttm.bdev, man);
 		ttm_bo_man_cleanup(man);
 		ttm_set_driver_manager(&drm->ttm.bdev, TTM_PL_VRAM, NULL);
@@ -237,7 +237,7 @@ nouveau_ttm_init_gtt(struct nouveau_drm *drm)
 	man->use_tt = true;
 	ttm_bo_init_mm_base(man, size_pages);
 	ttm_set_driver_manager(&drm->ttm.bdev, TTM_PL_TT, man);
-	ttm_bo_use_mm(man);
+	ttm_mm_set_use(man, true);
 	return 0;
 }
 
@@ -250,7 +250,7 @@ nouveau_ttm_fini_gtt(struct nouveau_drm *drm)
 	    drm->agp.bridge)
 		ttm_bo_man_takedown(&drm->ttm.bdev, TTM_PL_TT);
 	else {
-		ttm_bo_disable_mm(man);
+		ttm_mm_set_use(man, false);
 		ttm_bo_force_list_clean(&drm->ttm.bdev, man);
 		ttm_bo_man_cleanup(man);
 		ttm_set_driver_manager(&drm->ttm.bdev, TTM_PL_TT, NULL);

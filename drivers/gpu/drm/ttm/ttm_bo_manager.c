@@ -139,7 +139,7 @@ int ttm_bo_man_init(struct ttm_bo_device *bdev,
 	spin_lock_init(&rman->lock);
 
 	ttm_set_driver_manager(bdev, type, &rman->manager);
-	ttm_bo_use_mm(man);
+	ttm_mm_set_use(man, true);
 	return 0;
 }
 EXPORT_SYMBOL(ttm_bo_man_init);
@@ -152,7 +152,7 @@ int ttm_bo_man_takedown(struct ttm_bo_device *bdev,
 	struct drm_mm *mm = &rman->mm;
 	int ret;
 
-	ttm_bo_disable_mm(man);
+	ttm_mm_set_use(man, false);
 
 	ret = ttm_bo_force_list_clean(bdev, man);
 	if (ret)

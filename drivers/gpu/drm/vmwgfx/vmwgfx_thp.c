@@ -142,7 +142,7 @@ int vmw_thp_init(struct vmw_private *dev_priv)
 	spin_lock_init(&rman->lock);
 
 	ttm_set_driver_manager(&dev_priv->bdev, TTM_PL_VRAM, &rman->manager);
-	ttm_bo_use_mm(man);
+	ttm_mm_set_use(man, true);
 	return 0;
 }
 
@@ -153,7 +153,7 @@ void vmw_thp_takedown(struct vmw_private *dev_priv)
 	struct drm_mm *mm = &rman->mm;
 	int ret;
 
-	ttm_bo_disable_mm(man);
+	ttm_mm_set_use(man, false);
 
 	ret = ttm_bo_force_list_clean(&dev_priv->bdev, man);
 	if (ret)

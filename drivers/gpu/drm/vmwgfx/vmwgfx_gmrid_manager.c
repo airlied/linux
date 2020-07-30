@@ -135,7 +135,7 @@ int vmw_gmrid_man_init(struct vmw_private *dev_priv, int type)
 	}
 
 	ttm_set_driver_manager(&dev_priv->bdev, type, &gman->manager);
-	ttm_bo_use_mm(man);
+	ttm_mm_set_use(man, true);
 	return 0;
 }
 
@@ -144,7 +144,7 @@ void vmw_gmrid_man_takedown(struct vmw_private *dev_priv, int type)
 	struct ttm_mem_type_manager *man = ttm_manager_type(&dev_priv->bdev, type);
 	struct vmwgfx_gmrid_man *gman = to_gmrid_manager(man);
 
-	ttm_bo_disable_mm(man);
+	ttm_mm_set_use(man, false);
 
 	ttm_bo_force_list_clean(&dev_priv->bdev, man);
 

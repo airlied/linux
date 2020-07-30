@@ -668,14 +668,14 @@ static inline void ttm_bo_unreserve(struct ttm_buffer_object *bo)
 	dma_resv_unlock(bo->base.resv);
 }
 
-static inline void ttm_bo_use_mm(struct ttm_mem_type_manager *man)
+static inline void ttm_mm_set_use(struct ttm_mem_type_manager *man, bool use)
 {
-	man->use_type = true;
+	man->use_type = use;
 }
 
-static inline void ttm_bo_disable_mm(struct ttm_mem_type_manager *man)
+static inline bool ttm_mm_used(struct ttm_mem_type_manager *man)
 {
-	man->use_type = false;
+	return man->use_type;
 }
 
 static inline void ttm_bo_man_cleanup(struct ttm_mem_type_manager *man)

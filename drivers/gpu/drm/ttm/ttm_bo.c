@@ -996,7 +996,7 @@ static int ttm_bo_mem_placement(struct ttm_buffer_object *bo,
 		return ret;
 
 	man = ttm_manager_type(bdev, mem_type);
-	if (!man || !man->use_type)
+	if (!man || !ttm_mm_used(man))
 		return -EBUSY;
 
 	if (!ttm_bo_mt_compatible(man, mem_type, place, &cur_flags))
@@ -1548,7 +1548,7 @@ int ttm_bo_device_release(struct ttm_bo_device *bdev)
 	struct ttm_mem_type_manager *man;
 
 	man = ttm_manager_type(bdev, TTM_PL_SYSTEM);
-	ttm_bo_disable_mm(man);
+	ttm_mm_set_use(man, false);
 
 	mutex_lock(&ttm_global_mutex);
 	list_del(&bdev->device_list);
@@ -1585,7 +1585,7 @@ static void ttm_bo_init_sysman(struct ttm_bo_device *bdev)
 	man->default_caching = TTM_PL_FLAG_CACHED;
 
 	ttm_bo_init_mm_base(man, 0);
-	ttm_bo_use_mm(man);
+	ttm_mm_set_use(man, true);
 }
 
 int ttm_bo_device_init(struct ttm_bo_device *bdev,
