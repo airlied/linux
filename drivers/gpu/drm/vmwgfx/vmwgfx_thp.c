@@ -134,7 +134,7 @@ int vmw_thp_init(struct vmw_private *dev_priv)
 	man->available_caching = TTM_PL_FLAG_CACHED;
 	man->default_caching = TTM_PL_FLAG_CACHED;
 
-	ttm_bo_init_mm_base(&dev_priv->bdev, man,
+	ttm_bo_init_mm_base(man,
 			    dev_priv->vram_size >> PAGE_SHIFT);
 
 

@@ -547,8 +547,7 @@ int ttm_bo_create(struct ttm_bo_device *bdev, unsigned long size,
  * May also return driver-specified errors.
  */
 struct ttm_mem_type_manager;
-void ttm_bo_init_mm_base(struct ttm_bo_device *bdev,
-			 struct ttm_mem_type_manager *man,
+void ttm_bo_init_mm_base(struct ttm_mem_type_manager *man,
 			 unsigned long p_size);
 
 /**
