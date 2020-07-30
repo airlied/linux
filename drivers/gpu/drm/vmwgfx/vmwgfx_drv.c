@@ -626,13 +626,9 @@ static int vmw_init_vram_manager(struct vmw_private *dev_priv)
 #ifdef CONFIG_TRANSPARENT_HUGEPAGE
 	ret = vmw_thp_init(dev_priv);
 #else
-	struct ttm_mem_type_manager *man = &dev_priv->bdev.man[TTM_PL_VRAM];
-
-	man->available_caching = TTM_PL_FLAG_CACHED;
-	man->default_caching = TTM_PL_FLAG_CACHED;
-
-	ret = ttm_bo_man_init(&dev_priv->bdev, man,
-			      dev_priv->vram_size >> PAGE_SHIFT);
+	ret = ttm_bo_man_init(&dev_priv->bdev, TTM_PL_VRAM,
+			      TTM_PL_FLAG_CACHED, TTM_PL_FLAG_CACHED,
+			      false, dev_priv->vram_size >> PAGE_SHIFT);
 #endif
 	ttm_manager_type(&dev_priv->bdev, TTM_PL_VRAM)->use_type = false;
 	return ret;
@@ -643,8 +639,7 @@ static void vmw_takedown_vram_manager(struct vmw_private *dev_priv)
 #ifdef CONFIG_TRANSPARENT_HUGEPAGE
 	vmw_thp_takedown(dev_priv);
 #else
-	ttm_bo_man_takedown(&dev_priv->bdev,
-			    ttm_manager_type(&dev_priv->bdev, TTM_PL_VRAM));
+	ttm_bo_man_takedown(&dev_priv->bdev, TTM_PL_VRAM);
 #endif
 }
 

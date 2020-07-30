@@ -809,8 +809,11 @@ int ttm_bo_pipeline_gutting(struct ttm_buffer_object *bo);
 pgprot_t ttm_io_prot(uint32_t caching_flags, pgprot_t tmp);
 
 int ttm_bo_man_init(struct ttm_bo_device *bdev,
-		    struct ttm_mem_type_manager *man,
+		    unsigned type,
+		    uint32_t available_caching,
+		    uint32_t default_caching,
+		    bool use_tt,
 		    unsigned long p_size);
 int ttm_bo_man_takedown(struct ttm_bo_device *bdev,
-			struct ttm_mem_type_manager *man);
+			unsigned type);
 #endif

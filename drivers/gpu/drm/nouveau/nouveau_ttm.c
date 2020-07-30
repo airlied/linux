@@ -156,15 +156,16 @@ nouveau_ttm_init_host(struct nouveau_drm *drm, u8 kind)
 static int
 nouveau_ttm_init_vram(struct nouveau_drm *drm)
 {
-	struct ttm_mem_type_manager *man = ttm_manager_type(&drm->ttm.bdev, TTM_PL_VRAM);
 	struct nvif_mmu *mmu = &drm->client.mmu;
 
-	man->available_caching = TTM_PL_FLAG_UNCACHED | TTM_PL_FLAG_WC;
-	man->default_caching = TTM_PL_FLAG_WC;
-
 	if (drm->client.device.info.family >= NV_DEVICE_INFO_V0_TESLA) {
+		struct ttm_mem_type_manager *man = ttm_manager_type(&drm->ttm.bdev, TTM_PL_VRAM);
+
 		/* Some BARs do not support being ioremapped WC */
 		const u8 type = mmu->type[drm->ttm.type_vram].type;
+
+		man->available_caching = TTM_PL_FLAG_UNCACHED | TTM_PL_FLAG_WC;
+		man->default_caching = TTM_PL_FLAG_WC;
 
 		if (type & NVIF_MEM_UNCACHED) {
 			man->available_caching = TTM_PL_FLAG_UNCACHED;
@@ -178,7 +179,9 @@ nouveau_ttm_init_vram(struct nouveau_drm *drm)
 		ttm_bo_use_mm(man);
 		return 0;
 	} else {
-		return ttm_bo_man_init(&drm->ttm.bdev, man,
+		return ttm_bo_man_init(&drm->ttm.bdev, TTM_PL_VRAM,
+				       TTM_PL_FLAG_UNCACHED | TTM_PL_FLAG_WC,
+				       TTM_PL_FLAG_WC, false,
 				       drm->gem.vram_available >> PAGE_SHIFT);
 	}
 }
@@ -193,7 +196,7 @@ nouveau_ttm_fini_vram(struct nouveau_drm *drm)
 		ttm_bo_force_list_clean(&drm->ttm.bdev, man);
 		ttm_bo_man_cleanup(man);
 	} else
-		ttm_bo_man_takedown(&drm->ttm.bdev, man);
+		ttm_bo_man_takedown(&drm->ttm.bdev, TTM_PL_VRAM);
 }
 
 static int
@@ -216,7 +219,9 @@ nouveau_ttm_init_gtt(struct nouveau_drm *drm)
 	else if (!drm->agp.bridge)
 		man->func = &nv04_gart_manager;
 	else
-		return ttm_bo_man_init(&drm->ttm.bdev, man,
+		return ttm_bo_man_init(&drm->ttm.bdev, TTM_PL_TT,
+				       TTM_PL_FLAG_UNCACHED | TTM_PL_FLAG_WC,
+				       TTM_PL_FLAG_WC, true,
 				       size_pages);
 
 	ttm_bo_init_mm_base(&drm->ttm.bdev, man,
@@ -232,7 +237,7 @@ nouveau_ttm_fini_gtt(struct nouveau_drm *drm)
 
 	if (drm->client.device.info.family < NV_DEVICE_INFO_V0_TESLA &&
 	    drm->agp.bridge)
-		ttm_bo_man_takedown(&drm->ttm.bdev, man);
+		ttm_bo_man_takedown(&drm->ttm.bdev, TTM_PL_TT);
 	else {
 		ttm_bo_disable_mm(man);
 		ttm_bo_force_list_clean(&drm->ttm.bdev, man);
