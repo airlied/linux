@@ -82,7 +82,6 @@ static void ttm_mem_type_debug(struct ttm_bo_device *bdev, struct drm_printer *p
 {
 	struct ttm_mem_type_manager *man = ttm_manager_type(bdev, mem_type);
 
-	drm_printf(p, "    has_type: %d\n", man->has_type);
 	drm_printf(p, "    use_type: %d\n", man->use_type);
 	drm_printf(p, "    use_tt: %d\n", man->use_tt);
 	drm_printf(p, "    size: %llu\n", man->size);
@@ -997,7 +996,7 @@ static int ttm_bo_mem_placement(struct ttm_buffer_object *bo,
 		return ret;
 
 	man = ttm_manager_type(bdev, mem_type);
-	if (!man->has_type || !man->use_type)
+	if (!man || !man->use_type)
 		return -EBUSY;
 
 	if (!ttm_bo_mt_compatible(man, mem_type, place, &cur_flags))
@@ -1455,7 +1454,7 @@ int ttm_bo_evict_mm(struct ttm_bo_device *bdev, unsigned mem_type)
 		return -EINVAL;
 	}
 
-	if (!man->has_type) {
+	if (!man) {
 		pr_err("Memory type %u has not been initialized\n", mem_type);
 		return 0;
 	}
@@ -1469,7 +1468,6 @@ void ttm_bo_init_mm_base(struct ttm_mem_type_manager *man,
 {
 	unsigned i;
 
-	BUG_ON(man->has_type);
 	man->use_io_reserve_lru = false;
 	mutex_init(&man->io_reserve_mutex);
 	spin_lock_init(&man->move_lock);
