@@ -45,9 +45,6 @@
 
 #define TTM_MAX_BO_PRIORITY	4U
 
-#define TTM_MEMTYPE_FLAG_FIXED         (1 << 0)	/* Fixed (on-card) PCI memory */
-#define TTM_MEMTYPE_FLAG_MAPPABLE      (1 << 1)	/* Memory mappable */
-
 struct ttm_mem_type_manager;
 
 struct ttm_mem_type_manager_func {
@@ -160,7 +157,6 @@ struct ttm_mem_type_manager_func {
  * @move: The fence of the last pipelined move operation.
  *
  * This structure is used to identify and manage memory types for a device.
- * It's set up by the ttm_bo_driver::init_mem_type method.
  */
 
 
@@ -174,7 +170,7 @@ struct ttm_mem_type_manager {
 
 	bool has_type;
 	bool use_type;
-	uint32_t flags;
+	bool use_tt;
 	uint64_t size;
 	uint32_t available_caching;
 	uint32_t default_caching;
@@ -206,8 +202,6 @@ struct ttm_mem_type_manager {
  * struct ttm_bo_driver
  *
  * @create_ttm_backend_entry: Callback to create a struct ttm_backend.
- * @init_mem_type: Callback to initialize a struct ttm_mem_type_manager
- * structure.
  * @evict_flags: Callback to obtain placement flags when a buffer is evicted.
  * @move: Callback for a driver to hook in accelerated functions to
  * move a buffer.
@@ -249,9 +243,6 @@ struct ttm_bo_driver {
 	 * Free all backing page
 	 */
 	void (*ttm_tt_unpopulate)(struct ttm_tt *ttm);
-
-	int (*init_mem_type)(struct ttm_bo_device *bdev, uint32_t type,
-			     struct ttm_mem_type_manager *man);
 
 	/**
 	 * struct ttm_bo_driver member eviction_valuable

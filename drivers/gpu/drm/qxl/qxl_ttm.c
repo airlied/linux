@@ -48,31 +48,6 @@ static struct qxl_device *qxl_get_qdev(struct ttm_bo_device *bdev)
 	return qdev;
 }
 
-static int qxl_init_mem_type(struct ttm_bo_device *bdev, uint32_t type,
-			     struct ttm_mem_type_manager *man)
-{
-	switch (type) {
-	case TTM_PL_SYSTEM:
-		/* System memory */
-		man->flags = 0;
-		man->available_caching = TTM_PL_MASK_CACHING;
-		man->default_caching = TTM_PL_FLAG_CACHED;
-		break;
-	case TTM_PL_VRAM:
-	case TTM_PL_PRIV:
-		/* "On-card" video ram */
-		man->func = &ttm_bo_manager_func;
-		man->flags = TTM_MEMTYPE_FLAG_FIXED;
-		man->available_caching = TTM_PL_MASK_CACHING;
-		man->default_caching = TTM_PL_FLAG_CACHED;
-		break;
-	default:
-		DRM_ERROR("Unsupported memory type %u\n", (unsigned int)type);
-		return -EINVAL;
-	}
-	return 0;
-}
-
 static void qxl_evict_flags(struct ttm_buffer_object *bo,
 				struct ttm_placement *placement)
 {
@@ -233,13 +208,25 @@ static void qxl_bo_move_notify(struct ttm_buffer_object *bo,
 
 static struct ttm_bo_driver qxl_bo_driver = {
 	.ttm_tt_create = &qxl_ttm_tt_create,
-	.init_mem_type = &qxl_init_mem_type,
 	.eviction_valuable = ttm_bo_eviction_valuable,
 	.evict_flags = &qxl_evict_flags,
 	.move = &qxl_bo_move,
 	.io_mem_reserve = &qxl_ttm_io_mem_reserve,
 	.move_notify = &qxl_bo_move_notify,
 };
+
+static int qxl_ttm_init_mem_type(struct qxl_device *qdev,
+				 unsigned int type,
+				 uint64_t size)
+{
+	struct ttm_mem_type_manager *man = &qdev->mman.bdev.man[type];
+
+	man->func = &ttm_bo_manager_func;
+	man->available_caching = TTM_PL_MASK_CACHING;
+	man->default_caching = TTM_PL_FLAG_CACHED;
+
+	return ttm_bo_init_mm(&qdev->mman.bdev, type, size);
+}
 
 int qxl_ttm_init(struct qxl_device *qdev)
 {
@@ -258,14 +245,13 @@ int qxl_ttm_init(struct qxl_device *qdev)
 	}
 	/* NOTE: this includes the framebuffer (aka surface 0) */
 	num_io_pages = qdev->rom->ram_header_offset / PAGE_SIZE;
-	r = ttm_bo_init_mm(&qdev->mman.bdev, TTM_PL_VRAM,
-			   num_io_pages);
+	r = qxl_ttm_init_mem_type(qdev, TTM_PL_VRAM, num_io_pages);
 	if (r) {
 		DRM_ERROR("Failed initializing VRAM heap.\n");
 		return r;
 	}
-	r = ttm_bo_init_mm(&qdev->mman.bdev, TTM_PL_PRIV,
-			   qdev->surfaceram_size / PAGE_SIZE);
+	r = qxl_ttm_init_mem_type(qdev, TTM_PL_PRIV,
+				  qdev->surfaceram_size / PAGE_SIZE);
 	if (r) {
 		DRM_ERROR("Failed initializing Surfaces heap.\n");
 		return r;
