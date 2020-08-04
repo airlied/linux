@@ -419,11 +419,66 @@ static int query_perf_config(struct drm_i915_private *i915,
 	}
 }
 
+static int query_memory_regions(struct drm_i915_private *i915,
+				struct drm_i915_query_item *query_item)
+{
+	struct drm_i915_query_memory_regions __user *query_ptr =
+		u64_to_user_ptr(query_item->data_ptr);
+	struct drm_i915_memory_region_info __user *info_ptr;
+	struct drm_i915_query_memory_regions query;
+	struct intel_memory_region *mr;
+	struct drm_i915_memory_region_info info = {};
+	int len, ret;
+	int num_mr;
+	int id;
+	if (query_item->flags)
+		return -EINVAL;
+
+	for_each_memory_region(mr, i915, id)
+		num_mr++;
+
+	len = sizeof(struct drm_i915_query_memory_regions) +
+		num_mr * sizeof(struct drm_i915_memory_region_info);
+
+	ret = copy_query_item(&query, sizeof(query), len, query_item);
+	if (ret != 0)
+		return ret;
+
+	if (query.num_regions || query.rsvd[0] || query.rsvd[1] || query.rsvd[2])
+		return -EINVAL;
+
+	info_ptr = &query_ptr->regions[0];
+
+	for_each_memory_region(mr, i915, id) {
+
+		if (id == INTEL_REGION_SMEM)
+			info.region.memory_class = I915_MEMORY_CLASS_SYSTEM;
+		if (id == INTEL_REGION_LMEM)
+			info.region.memory_class = I915_MEMORY_CLASS_DEVICE;
+		if (id == INTEL_REGION_STOLEN)
+			info.region.memory_class = I915_MEMORY_CLASS_STOLEN_SYSTEM;
+		
+		info.probed_size = mr->total;
+		info.unallocated_size = mr->total;
+		
+		if (copy_to_user(info_ptr, &info, sizeof(info)))
+			return -EFAULT;
+		query.num_regions++;
+		info_ptr++;
+	}
+
+	if (copy_to_user(query_ptr, &query, sizeof(query)))
+		return -EFAULT;
+
+	return len;
+}
+
 static int (* const i915_query_funcs[])(struct drm_i915_private *dev_priv,
 					struct drm_i915_query_item *query_item) = {
 	query_topology_info,
 	query_engine_info,
 	query_perf_config,
+	query_memory_regions,
 };
 
 int i915_query_ioctl(struct drm_device *dev, void *data, struct drm_file *file)

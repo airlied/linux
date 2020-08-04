@@ -87,6 +87,7 @@
 #include "intel_pm.h"
 #include "vlv_suspend.h"
 
+#include "ttm/i915_ttm.h"
 static struct drm_driver driver;
 
 static int i915_get_bridge_dev(struct drm_i915_private *dev_priv)
@@ -267,7 +268,10 @@ static int i915_driver_modeset_probe(struct drm_i915_private *i915)
 	if (ret)
 		goto out;
 
-	ret = i915_gem_init(i915);
+	if (i915->use_ttm)
+		ret = i915_ttm_init(i915);
+	else
+		ret = i915_gem_init(i915);
 	if (ret)
 		goto cleanup_modeset;
 
@@ -955,10 +959,9 @@ int i915_driver_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	 * Check if we support fake LMEM -- for now we only unleash this for
 	 * the live selftests(test-and-exit).
 	 */
-#if IS_ENABLED(CONFIG_DRM_I915_SELFTEST)
 	if (IS_ENABLED(CONFIG_DRM_I915_UNSTABLE_FAKE_LMEM)) {
-		if (INTEL_GEN(i915) >= 9 && i915_selftest.live < 0 &&
-		    i915->params.fake_lmem_start) {
+		if (INTEL_GEN(i915) >= 9 &&
+		    i915_modparams.fake_lmem_start) {
 			mkwrite_device_info(i915)->memory_regions =
 				REGION_SMEM | REGION_LMEM | REGION_STOLEN;
 			mkwrite_device_info(i915)->is_dgfx = true;
@@ -966,7 +969,9 @@ int i915_driver_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 			GEM_BUG_ON(!IS_DGFX(i915));
 		}
 	}
-#endif
+
+	if (i915_modparams.use_ttm)
+		i915->use_ttm = true;
 
 	ret = pci_enable_device(pdev);
 	if (ret)

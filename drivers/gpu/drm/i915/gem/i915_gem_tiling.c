@@ -114,10 +114,9 @@ u32 i915_gem_fence_alignment(struct drm_i915_private *i915, u32 size,
 
 /* Check pitch constriants for all chips & tiling formats */
 static bool
-i915_tiling_ok(struct drm_i915_gem_object *obj,
+i915_tiling_ok(struct drm_i915_private *i915,
 	       unsigned int tiling, unsigned int stride)
 {
-	struct drm_i915_private *i915 = to_i915(obj->base.dev);
 	unsigned int tile_width;
 
 	/* Linear is always fine */
@@ -227,7 +226,7 @@ i915_gem_object_set_tiling(struct drm_i915_gem_object *obj,
 	/* Make sure we don't cross-contaminate obj->tiling_and_stride */
 	BUILD_BUG_ON(I915_TILING_LAST & STRIDE_MASK);
 
-	GEM_BUG_ON(!i915_tiling_ok(obj, tiling, stride));
+	GEM_BUG_ON(!i915_tiling_ok(i915, tiling, stride));
 	GEM_BUG_ON(!stride ^ (tiling == I915_TILING_NONE));
 
 	if ((tiling | stride) == obj->tiling_and_stride)
@@ -335,26 +334,13 @@ i915_gem_set_tiling_ioctl(struct drm_device *dev, void *data,
 {
 	struct drm_i915_private *dev_priv = to_i915(dev);
 	struct drm_i915_gem_set_tiling *args = data;
-	struct drm_i915_gem_object *obj;
+
 	int err;
 
 	if (!dev_priv->ggtt.num_fences)
 		return -EOPNOTSUPP;
 
-	obj = i915_gem_object_lookup(file, args->handle);
-	if (!obj)
-		return -ENOENT;
-
-	/*
-	 * The tiling mode of proxy objects is handled by its generator, and
-	 * not allowed to be changed by userspace.
-	 */
-	if (i915_gem_object_is_proxy(obj)) {
-		err = -ENXIO;
-		goto err;
-	}
-
-	if (!i915_tiling_ok(obj, args->tiling_mode, args->stride)) {
+	if (!i915_tiling_ok(dev_priv, args->tiling_mode, args->stride)) {
 		err = -EINVAL;
 		goto err;
 	}
@@ -388,14 +374,46 @@ i915_gem_set_tiling_ioctl(struct drm_device *dev, void *data,
 		}
 	}
 
-	err = i915_gem_object_set_tiling(obj, args->tiling_mode, args->stride);
+	if (!dev_priv->use_ttm) {
+		struct drm_i915_gem_object *obj;		
+		obj = i915_gem_object_lookup(file, args->handle);
+		if (!obj)
+			return -ENOENT;
 
-	/* We have to maintain this existing ABI... */
-	args->stride = i915_gem_object_get_stride(obj);
-	args->tiling_mode = i915_gem_object_get_tiling(obj);
+		/*
+		 * The tiling mode of proxy objects is handled by its generator, and
+		 * not allowed to be changed by userspace.
+		 */
+		if (i915_gem_object_is_proxy(obj)) {
+			err = -ENXIO;
+			goto err;
+		}
 
+
+		err = i915_gem_object_set_tiling(obj, args->tiling_mode, args->stride);
+
+		/* We have to maintain this existing ABI... */
+		args->stride = i915_gem_object_get_stride(obj);
+		args->tiling_mode = i915_gem_object_get_tiling(obj);
 err:
-	i915_gem_object_put(obj);
+		i915_gem_object_put(obj);		
+	} else {
+		struct drm_gem_object *gobj;
+		struct i915_ttm_bo *bo;
+		gobj = drm_gem_object_lookup(file, args->handle);
+		if (!gobj)
+			return -ENOENT;
+
+		bo = ttm_gem_to_i915_bo(gobj);
+
+		err = i915_ttm_set_tiling(bo, args->tiling_mode, args->stride);
+
+		args->stride = i915_ttm_get_stride(bo);
+		args->tiling_mode = i915_ttm_get_tiling(bo);
+		drm_gem_object_put(gobj);		
+	}
+
+
 	return err;
 }
 
@@ -424,16 +442,30 @@ i915_gem_get_tiling_ioctl(struct drm_device *dev, void *data,
 	if (!dev_priv->ggtt.num_fences)
 		return -EOPNOTSUPP;
 
-	rcu_read_lock();
-	obj = i915_gem_object_lookup_rcu(file, args->handle);
-	if (obj) {
-		args->tiling_mode =
-			READ_ONCE(obj->tiling_and_stride) & TILING_MASK;
-		err = 0;
+	if (dev_priv->use_ttm) {
+		struct drm_gem_object *gobj;
+		struct i915_ttm_bo *bo;
+		gobj = drm_gem_object_lookup(file, args->handle);
+		if (gobj) {
+			bo = ttm_gem_to_i915_bo(gobj);		
+			args->tiling_mode = bo->tiling_and_stride & TILING_MASK;
+			err = 0;
+			drm_gem_object_put(gobj);			
+		}
+		if (unlikely(err))
+			return err;
+	} else {
+		rcu_read_lock();
+		obj = i915_gem_object_lookup_rcu(file, args->handle);
+		if (obj) {
+			args->tiling_mode =
+				READ_ONCE(obj->tiling_and_stride) & TILING_MASK;
+			err = 0;
+		}
+		rcu_read_unlock();
+		if (unlikely(err))
+			return err;
 	}
-	rcu_read_unlock();
-	if (unlikely(err))
-		return err;
 
 	switch (args->tiling_mode) {
 	case I915_TILING_X:
