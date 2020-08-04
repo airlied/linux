@@ -55,6 +55,7 @@
 #include "i915_trace.h"
 #include "i915_vgpu.h"
 
+#include "ttm/i915_ttm.h"
 #include "intel_pm.h"
 
 static int
@@ -464,6 +465,7 @@ int
 i915_gem_pread_ioctl(struct drm_device *dev, void *data,
 		     struct drm_file *file)
 {
+	struct drm_i915_private *i915 = to_i915(dev);
 	struct drm_i915_gem_pread *args = data;
 	struct drm_i915_gem_object *obj;
 	int ret;
@@ -471,6 +473,8 @@ i915_gem_pread_ioctl(struct drm_device *dev, void *data,
 	if (args->size == 0)
 		return 0;
 
+	if (i915->use_ttm)
+		return -EINVAL;
 	if (!access_ok(u64_to_user_ptr(args->data_ptr),
 		       args->size))
 		return -EFAULT;
@@ -731,12 +735,16 @@ int
 i915_gem_pwrite_ioctl(struct drm_device *dev, void *data,
 		      struct drm_file *file)
 {
+	struct drm_i915_private *i915 = to_i915(dev);
 	struct drm_i915_gem_pwrite *args = data;
 	struct drm_i915_gem_object *obj;
 	int ret;
 
 	if (args->size == 0)
 		return 0;
+
+	if (i915->use_ttm)
+		return -EINVAL;
 
 	if (!access_ok(u64_to_user_ptr(args->data_ptr), args->size))
 		return -EFAULT;
@@ -934,6 +942,22 @@ new_vma:
 	if (IS_ERR(vma))
 		return vma;
 
+	if (i915_gem_object_is_ttm(vma->obj)) {
+
+		if (vma->obj->base.mem.mem_type == TTM_PL_VRAM) {
+			ret = i915_ttm_bo_pin(vma->obj, REGION_LMEM);
+			if (ret)
+				return ERR_PTR(ret);
+		}
+		i915_ttm_destroy_bo_pages(vma->obj);
+		ret = i915_ttm_create_bo_pages(vma->obj);
+		if (ret)
+			return ERR_PTR(ret);
+		ret = i915_ttm_alloc_gtt(&vma->obj->base);
+		if (ret)
+			return ERR_PTR(ret);
+		return vma;
+	}
 	if (i915_vma_misplaced(vma, size, alignment, flags)) {
 		if (flags & PIN_NONBLOCK) {
 			if (i915_vma_is_pinned(vma) || i915_vma_is_active(vma))
@@ -993,6 +1017,9 @@ i915_gem_madvise_ioctl(struct drm_device *dev, void *data,
 	default:
 	    return -EINVAL;
 	}
+
+	if (i915->use_ttm)
+		return 0;
 
 	obj = i915_gem_object_lookup(file_priv, args->handle);
 	if (!obj)
@@ -1329,6 +1356,7 @@ int __must_check i915_gem_ww_ctx_backoff(struct i915_gem_ww_ctx *ww)
 		ret = dma_resv_lock_slow_interruptible(i915_gem_object_resv(ww->contended), &ww->ctx);
 	else
 		dma_resv_lock_slow(i915_gem_object_resv(ww->contended), &ww->ctx);
+
 
 	if (!ret)
 		list_add_tail(&ww->contended->obj_link,

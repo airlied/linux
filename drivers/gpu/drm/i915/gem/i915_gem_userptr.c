@@ -45,7 +45,6 @@
 #include "i915_scatterlist.h"
 
 #ifdef CONFIG_MMU_NOTIFIER
-
 /**
  * i915_gem_userptr_invalidate - callback to notify about mm change
  *
@@ -526,7 +525,7 @@ i915_gem_userptr_ioctl(struct drm_device *dev,
 	if (obj == NULL)
 		return -ENOMEM;
 
-	drm_gem_private_object_init(dev, &obj->base, args->user_size);
+	drm_gem_private_object_init(dev, &obj->base.base, args->user_size);
 	i915_gem_object_init(obj, &i915_gem_userptr_ops, &lock_class,
 			     I915_BO_ALLOC_STRUCT_PAGE);
 	obj->read_domains = I915_GEM_DOMAIN_CPU;
@@ -544,7 +543,7 @@ i915_gem_userptr_ioctl(struct drm_device *dev,
 	 */
 	ret = i915_gem_userptr_init__mmu_notifier(obj);
 	if (ret == 0)
-		ret = drm_gem_handle_create(file, &obj->base, &handle);
+		ret = drm_gem_handle_create(file, &obj->base.base, &handle);
 
 	/* drop reference from allocate - handle holds it now */
 	i915_gem_object_put(obj);

@@ -578,6 +578,7 @@ int intel_bw_atomic_check(struct intel_atomic_state *state)
 	unsigned int num_qgv_points = dev_priv->max_bw[0].num_qgv_points;
 	u32 mask = (1 << num_qgv_points) - 1;
 
+	return 0;
 	/* FIXME earlier gens need some checks too */
 	if (INTEL_GEN(dev_priv) < 11)
 		return 0;

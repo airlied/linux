@@ -12,6 +12,8 @@
 #include <drm/drm_gem.h>
 #include <uapi/drm/i915_drm.h>
 
+#include <drm/ttm/ttm_bo_api.h>
+#include <drm/ttm/ttm_placement.h>
 #include "i915_active.h"
 #include "i915_selftest.h"
 
@@ -90,8 +92,10 @@ struct i915_gem_object_page_iter {
 	struct mutex lock; /* protects this cache */
 };
 
+#define I915_TTM_MAX_PLACEMENTS	3
+
 struct drm_i915_gem_object {
-	struct drm_gem_object base;
+	struct ttm_buffer_object base;
 
 	const struct drm_i915_gem_object_ops *ops;
 
@@ -149,6 +153,13 @@ struct drm_i915_gem_object {
 		struct llist_node freed;
 	};
 
+	struct {
+		struct ttm_place placements[I915_TTM_MAX_PLACEMENTS];
+		struct ttm_placement placement;
+		struct ttm_bo_kmap_obj kmap;
+		u32 prime_shared_count;
+		u32 pin_count;
+	} ttm;
 	/**
 	 * Whether the object is currently in the GGTT mmap.
 	 */
@@ -322,9 +333,9 @@ static inline struct drm_i915_gem_object *
 to_intel_bo(struct drm_gem_object *gem)
 {
 	/* Assert that to_intel_bo(NULL) == NULL */
-	BUILD_BUG_ON(offsetof(struct drm_i915_gem_object, base));
+	BUILD_BUG_ON(offsetof(struct drm_i915_gem_object, base.base));
 
-	return container_of(gem, struct drm_i915_gem_object, base);
+	return container_of(gem, struct drm_i915_gem_object, base.base);
 }
 
 #endif

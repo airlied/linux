@@ -3664,8 +3664,7 @@ intel_find_initial_plane_obj(struct intel_crtc *intel_crtc,
 	struct drm_framebuffer *fb;
 	struct i915_vma *vma;
 
-	if (!plane_config->fb)
-		return;
+	return;
 
 	if (intel_alloc_initial_plane_obj(intel_crtc, plane_config)) {
 		fb = &plane_config->fb->base;
@@ -16397,7 +16396,6 @@ intel_prepare_plane_fb(struct drm_plane *_plane,
 	ret = intel_plane_pin_fb(new_plane_state);
 	if (ret)
 		return ret;
-
 	fb_obj_bump_render_priority(obj);
 	i915_gem_object_flush_frontbuffer(obj, ORIGIN_DIRTYFB);
 
@@ -17525,7 +17523,7 @@ static int intel_user_framebuffer_create_handle(struct drm_framebuffer *fb,
 		return -EINVAL;
 	}
 
-	return drm_gem_handle_create(file, &obj->base, handle);
+	return drm_gem_handle_create(file, &obj->base.base, handle);
 }
 
 static int intel_user_framebuffer_dirty(struct drm_framebuffer *fb,
@@ -17555,7 +17553,7 @@ static int intel_framebuffer_init(struct intel_framebuffer *intel_fb,
 	struct drm_i915_private *dev_priv = to_i915(obj_to_dev(obj));
 	struct drm_framebuffer *fb = &intel_fb->base;
 	u32 max_stride;
-	unsigned int tiling, stride;
+	unsigned int tiling = 0, stride = 0;
 	int ret = -EINVAL;
 	int i;
 
@@ -17674,7 +17672,7 @@ static int intel_framebuffer_init(struct intel_framebuffer *intel_fb,
 			}
 		}
 
-		fb->obj[i] = &obj->base;
+		fb->obj[i] = &obj->base.base;
 	}
 
 	ret = intel_fill_fb_info(dev_priv, fb);

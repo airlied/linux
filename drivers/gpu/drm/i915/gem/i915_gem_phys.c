@@ -19,7 +19,7 @@
 
 static int i915_gem_object_get_pages_phys(struct drm_i915_gem_object *obj)
 {
-	struct address_space *mapping = obj->base.filp->f_mapping;
+	struct address_space *mapping = obj->base.base.filp->f_mapping;
 	struct scatterlist *sg;
 	struct sg_table *st;
 	dma_addr_t dma;
@@ -101,7 +101,7 @@ i915_gem_object_put_pages_phys(struct drm_i915_gem_object *obj,
 	__i915_gem_object_release_shmem(obj, pages, false);
 
 	if (obj->mm.dirty) {
-		struct address_space *mapping = obj->base.filp->f_mapping;
+		struct address_space *mapping = obj->base.base.filp->f_mapping;
 		void *src = vaddr;
 		int i;
 
@@ -194,7 +194,7 @@ int i915_gem_object_attach_phys(struct drm_i915_gem_object *obj, int align)
 		return -EBUSY;
 
 	if (unlikely(obj->mm.madv != I915_MADV_WILLNEED)) {
-		drm_dbg(obj->base.dev,
+		drm_dbg(obj->base.base.dev,
 			"Attempting to obtain a purgeable object\n");
 		return -EFAULT;
 	}
