@@ -42,6 +42,14 @@ config DRM_I915
 
 	  If "M" is selected, the module will be called i915.
 
+config DRM_I915_TTM
+       bool "use TTM"
+       depends on DRM_I915
+       select DRM_TTM
+       default n
+       help
+	  enable ttm
+
 config DRM_I915_FORCE_PROBE
 	string "Force probe driver for selected new Intel hardware"
 	depends on DRM_I915

@@ -16,6 +16,8 @@
 #include "i915_gem_gtt.h"
 #include "i915_vma_types.h"
 
+#include "ttm/i915_ttm_object.h"
+
 void i915_gem_init__objects(struct drm_i915_private *i915);
 
 struct drm_i915_gem_object *i915_gem_object_alloc(void);
@@ -70,7 +72,7 @@ i915_gem_object_lookup_rcu(struct drm_file *file, u32 handle)
 static inline struct drm_i915_gem_object *
 i915_gem_object_get_rcu(struct drm_i915_gem_object *obj)
 {
-	if (obj && !kref_get_unless_zero(&obj->base.refcount))
+	if (obj && !kref_get_unless_zero(&obj->base.base.refcount))
 		obj = NULL;
 
 	return obj;
@@ -92,17 +94,22 @@ i915_gem_object_lookup(struct drm_file *file, u32 handle)
 static inline size_t
 i915_gem_object_size(const struct drm_i915_gem_object *obj)
 {
-	return obj->base.size;
+	return obj->base.base.size;
 }
 
 static inline struct drm_device *obj_to_dev(const struct drm_i915_gem_object *obj)
 {
-	return obj->base.dev;
+	return obj->base.base.dev;
 }
 
 static inline struct dma_resv *i915_gem_object_resv(const struct drm_i915_gem_object *obj)
 {
-	return obj->base.resv;
+	return obj->base.base.resv;
+}
+
+static inline bool i915_gem_object_is_ttm(const struct drm_i915_gem_object *obj)
+{
+	return obj->base.bdev != NULL;
 }
 
 __deprecated
@@ -113,7 +120,7 @@ __attribute__((nonnull))
 static inline struct drm_i915_gem_object *
 i915_gem_object_get(struct drm_i915_gem_object *obj)
 {
-	drm_gem_object_get(&obj->base);
+	drm_gem_object_get(&obj->base.base);
 	return obj;
 }
 
@@ -121,10 +128,10 @@ __attribute__((nonnull))
 static inline void
 i915_gem_object_put(struct drm_i915_gem_object *obj)
 {
-	__drm_gem_object_put(&obj->base);
+	__drm_gem_object_put(&obj->base.base);
 }
 
-#define assert_object_held(obj) dma_resv_assert_held((obj)->base.resv)
+#define assert_object_held(obj) dma_resv_assert_held((obj)->base.base.resv)
 
 static inline int __i915_gem_object_lock(struct drm_i915_gem_object *obj,
 					 struct i915_gem_ww_ctx *ww,
@@ -417,7 +424,7 @@ void __i915_gem_object_flush_map(struct drm_i915_gem_object *obj,
 				 unsigned long size);
 static inline void i915_gem_object_flush_map(struct drm_i915_gem_object *obj)
 {
-	__i915_gem_object_flush_map(obj, 0, obj->base.size);
+	__i915_gem_object_flush_map(obj, 0, obj->base.base.size);
 }
 
 /**
@@ -431,7 +438,11 @@ static inline void i915_gem_object_flush_map(struct drm_i915_gem_object *obj)
  */
 static inline void i915_gem_object_unpin_map(struct drm_i915_gem_object *obj)
 {
-	i915_gem_object_unpin_pages(obj);
+	if (i915_gem_object_is_ttm(obj)) {
+		i915_ttm_bo_kunmap(obj);
+		i915_ttm_bo_unpin(obj);
+	} else
+		i915_gem_object_unpin_pages(obj);
 }
 
 void __i915_gem_object_release_map(struct drm_i915_gem_object *obj);

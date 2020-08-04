@@ -46,7 +46,7 @@
 #include "intel_display_types.h"
 #include "intel_fbdev.h"
 #include "intel_frontbuffer.h"
-
+#include "ttm/i915_ttm.h"
 static struct intel_frontbuffer *to_frontbuffer(struct intel_fbdev *ifbdev)
 {
 	return ifbdev->fb->frontbuffer;
@@ -158,7 +158,6 @@ static int intelfb_alloc(struct drm_fb_helper *helper,
 		drm_err(&dev_priv->drm, "failed to allocate framebuffer\n");
 		return PTR_ERR(obj);
 	}
-
 	fb = intel_framebuffer_create(obj, &mode_cmd);
 	i915_gem_object_put(obj);
 	if (IS_ERR(fb))
@@ -226,7 +225,6 @@ static int intelfb_create(struct drm_fb_helper *helper,
 		ret = PTR_ERR(vma);
 		goto out_unlock;
 	}
-
 	intel_frontbuffer_flush(to_frontbuffer(ifbdev), ORIGIN_DIRTYFB);
 
 	info = drm_fb_helper_alloc_fbi(helper);
@@ -244,9 +242,13 @@ static int intelfb_create(struct drm_fb_helper *helper,
 	info->apertures->ranges[0].base = ggtt->gmadr.start;
 	info->apertures->ranges[0].size = ggtt->mappable_end;
 
+
 	/* Our framebuffer is the entirety of fbdev's system memory */
-	info->fix.smem_start =
-		(unsigned long)(ggtt->gmadr.start + vma->node.start);
+	if (vma->obj->base.mem.mem_type == TTM_PL_VRAM)
+		info->fix.smem_start = dev_priv->mm.regions[INTEL_MEMORY_LOCAL]->io_start + (vma->obj->base.mem.start << PAGE_SHIFT);
+	else
+		info->fix.smem_start =
+			(unsigned long)(ggtt->gmadr.start + vma->node.start);
 	info->fix.smem_len = vma->node.size;
 
 	vaddr = i915_vma_pin_iomap(vma);

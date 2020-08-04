@@ -15,6 +15,8 @@
 #include "i915_gem_lmem.h"
 #include "i915_gem_mman.h"
 
+#include "ttm/i915_ttm_object.h"
+
 static void __i915_gem_object_flush_for_display(struct drm_i915_gem_object *obj)
 {
 	/*
@@ -218,9 +220,13 @@ int i915_gem_object_set_cache_level(struct drm_i915_gem_object *obj,
 int i915_gem_get_caching_ioctl(struct drm_device *dev, void *data,
 			       struct drm_file *file)
 {
+	struct drm_i915_private *i915 = to_i915(dev);
 	struct drm_i915_gem_caching *args = data;
 	struct drm_i915_gem_object *obj;
 	int err = 0;
+
+	if (i915->use_ttm)
+		return 0;
 
 	rcu_read_lock();
 	obj = i915_gem_object_lookup_rcu(file, args->handle);
@@ -257,6 +263,8 @@ int i915_gem_set_caching_ioctl(struct drm_device *dev, void *data,
 	enum i915_cache_level level;
 	int ret = 0;
 
+	if (i915->use_ttm)
+		return 0;
 	switch (args->caching) {
 	case I915_CACHING_NONE:
 		level = I915_CACHE_NONE;
@@ -423,6 +431,11 @@ static void i915_gem_object_bump_inactive_ggtt(struct drm_i915_gem_object *obj)
 void
 i915_gem_object_unpin_from_display_plane(struct i915_vma *vma)
 {
+
+	if (i915_gem_object_is_ttm(vma->obj)) {
+		i915_ttm_bo_unpin(vma->obj);
+		return;
+	}
 	/* Bump the LRU to try and avoid premature eviction whilst flipping  */
 	i915_gem_object_bump_inactive_ggtt(vma->obj);
 
@@ -484,6 +497,7 @@ int
 i915_gem_set_domain_ioctl(struct drm_device *dev, void *data,
 			  struct drm_file *file)
 {
+	struct drm_i915_private *i915 = to_i915(dev);
 	struct drm_i915_gem_set_domain *args = data;
 	struct drm_i915_gem_object *obj;
 	u32 read_domains = args->read_domains;
@@ -502,6 +516,9 @@ i915_gem_set_domain_ioctl(struct drm_device *dev, void *data,
 		return -EINVAL;
 
 	if (!read_domains)
+		return 0;
+
+	if (i915->use_ttm)
 		return 0;
 
 	obj = i915_gem_object_lookup(file, args->handle);

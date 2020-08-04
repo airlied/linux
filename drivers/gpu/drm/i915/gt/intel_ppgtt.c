@@ -11,6 +11,7 @@
 #include "gem/i915_gem_region.h"
 #include "gen6_ppgtt.h"
 #include "gen8_ppgtt.h"
+#include "ttm/i915_ttm.h"
 
 struct i915_page_table *alloc_pt(struct i915_address_space *vm)
 {
@@ -294,6 +295,8 @@ int ppgtt_set_pages(struct i915_vma *vma)
 {
 	GEM_BUG_ON(vma->pages);
 
+	if (i915_gem_object_is_ttm(vma->obj))
+		i915_ttm_create_bo_pages(vma->obj);
 	vma->pages = vma->obj->mm.pages;
 	vma->page_sizes = vma->obj->mm.page_sizes;
 

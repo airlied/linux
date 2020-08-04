@@ -38,6 +38,7 @@
 #include "i915_sw_fence_work.h"
 #include "i915_trace.h"
 #include "i915_vma.h"
+#include "ttm/i915_ttm.h"
 
 static struct i915_global_vma {
 	struct i915_global base;
@@ -180,7 +181,6 @@ vma_create(struct drm_i915_gem_object *obj,
 								i915_gem_object_get_tiling(obj),
 								i915_gem_object_get_stride(obj));
 		GEM_BUG_ON(!is_power_of_2(vma->fence_alignment));
-
 		__set_bit(I915_VMA_GGTT_BIT, __i915_vma_flags(vma));
 	}
 
@@ -448,6 +448,9 @@ void __iomem *i915_vma_pin_iomap(struct i915_vma *vma)
 	void __iomem *ptr;
 	int err;
 
+	if (i915_gem_object_is_ttm(vma->obj)) {
+		return i915_ttm_pin_iomap(vma->obj);
+	}
 	if (!i915_gem_object_is_devmem(vma->obj)) {
 		if (GEM_WARN_ON(!i915_vma_is_map_and_fenceable(vma))) {
 			err = -ENODEV;
@@ -1023,24 +1026,28 @@ int i915_ggtt_pin(struct i915_vma *vma, struct i915_gem_ww_ctx *ww,
 
 	GEM_BUG_ON(!i915_vma_is_ggtt(vma));
 
-	do {
-		err = i915_vma_pin_ww(vma, ww, 0, align, flags | PIN_GLOBAL);
-		if (err != -ENOSPC) {
-			if (!err) {
-				err = i915_vma_wait_for_bind(vma);
-				if (err)
-					i915_vma_unpin(vma);
+	if (i915_gem_object_is_ttm(vma->obj)) {
+		return i915_ttm_alloc_gtt(&vma->obj->base);
+	} else {
+		do {
+			err = i915_vma_pin_ww(vma, ww, 0, align, flags | PIN_GLOBAL);
+			if (err != -ENOSPC) {
+				if (!err) {
+					err = i915_vma_wait_for_bind(vma);
+					if (err)
+						i915_vma_unpin(vma);
+				}
+				return err;
 			}
-			return err;
-		}
 
-		/* Unlike i915_vma_pin, we don't take no for an answer! */
-		flush_idle_contexts(vm->gt);
-		if (mutex_lock_interruptible(&vm->mutex) == 0) {
-			i915_gem_evict_vm(vm);
-			mutex_unlock(&vm->mutex);
-		}
-	} while (1);
+			/* Unlike i915_vma_pin, we don't take no for an answer! */
+			flush_idle_contexts(vm->gt);
+			if (mutex_lock_interruptible(&vm->mutex) == 0) {
+				i915_gem_evict_vm(vm);
+				mutex_unlock(&vm->mutex);
+			}
+		} while (1);
+	}
 }
 
 static void __vma_close(struct i915_vma *vma, struct intel_gt *gt)
@@ -1135,7 +1142,7 @@ void i915_vma_parked(struct intel_gt *gt)
 
 		/* XXX All to avoid keeping a reference on i915_vma itself */
 
-		if (!kref_get_unless_zero(&obj->base.refcount))
+		if (!kref_get_unless_zero(&obj->base.base.refcount))
 			continue;
 
 		if (!i915_vm_tryopen(vm)) {
