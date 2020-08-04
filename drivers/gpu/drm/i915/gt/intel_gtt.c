@@ -11,6 +11,7 @@
 #include "i915_trace.h"
 #include "intel_gt.h"
 #include "intel_gtt.h"
+#include "ttm/i915_ttm.h"
 
 struct drm_i915_gem_object *alloc_pt_lmem(struct i915_address_space *vm, int sz)
 {
@@ -22,6 +23,9 @@ struct drm_i915_gem_object *alloc_pt_dma(struct i915_address_space *vm, int sz)
 	if (I915_SELFTEST_ONLY(should_fail(&vm->fault_attr, 1)))
 		i915_gem_shrink_all(vm->i915);
 
+	if (vm->i915->use_ttm) {
+		return i915_ttm_object_create_internal(vm->i915, sz);
+	}
 	return i915_gem_object_create_internal(vm->i915, sz);
 }
 
@@ -53,7 +57,7 @@ void __i915_vm_close(struct i915_address_space *vm)
 		struct drm_i915_gem_object *obj = vma->obj;
 
 		/* Keep the obj (and hence the vma) alive as _we_ destroy it */
-		if (!kref_get_unless_zero(&obj->base.refcount))
+		if (!kref_get_unless_zero(&obj->base.base.refcount))
 			continue;
 
 		atomic_and(~I915_VMA_PIN_MASK, &vma->flags);
@@ -119,9 +123,12 @@ void i915_address_space_init(struct i915_address_space *vm, int subclass)
 
 void clear_pages(struct i915_vma *vma)
 {
+	bool free_table = false;
 	GEM_BUG_ON(!vma->pages);
 
-	if (vma->pages != vma->obj->mm.pages) {
+	if (vma->pages != vma->obj->mm.pages)
+		free_table = true;
+	if (free_table) {
 		sg_free_table(vma->pages);
 		kfree(vma->pages);
 	}
@@ -135,6 +142,9 @@ void *__px_vaddr(struct drm_i915_gem_object *p, bool *needs_flush)
 	enum i915_map_type type;
 	void *vaddr;
 
+	if (i915_gem_object_is_ttm(p)) {
+		return i915_ttm_bo_kptr(p);
+	}
 	GEM_BUG_ON(!i915_gem_object_has_pages(p));
 
 	vaddr = page_unpack_bits(p->mm.mapping, &type);
@@ -178,7 +188,7 @@ static void poison_scratch_page(struct drm_i915_gem_object *scratch)
 	if (IS_ENABLED(CONFIG_DRM_I915_DEBUG_GEM))
 		val = POISON_FREE;
 
-	memset(vaddr, val, scratch->base.size);
+	memset(vaddr, val, i915_gem_object_size(scratch));
 }
 
 int setup_scratch_page(struct i915_address_space *vm)

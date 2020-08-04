@@ -19,7 +19,7 @@
 
 static int i915_gem_object_get_pages_phys(struct drm_i915_gem_object *obj)
 {
-	struct address_space *mapping = obj->base.filp->f_mapping;
+	struct address_space *mapping = obj->base.base.filp->f_mapping;
 	struct scatterlist *sg;
 	struct sg_table *st;
 	dma_addr_t dma;
@@ -99,7 +99,7 @@ i915_gem_object_put_pages_phys(struct drm_i915_gem_object *obj,
 	__i915_gem_object_release_shmem(obj, pages, false);
 
 	if (obj->mm.dirty) {
-		struct address_space *mapping = obj->base.filp->f_mapping;
+		struct address_space *mapping = obj->base.base.filp->f_mapping;
 		void *src = vaddr;
 		int i;
 
@@ -136,7 +136,7 @@ i915_gem_object_put_pages_phys(struct drm_i915_gem_object *obj,
 
 static void phys_release(struct drm_i915_gem_object *obj)
 {
-	fput(obj->base.filp);
+	fput(obj->base.base.filp);
 }
 
 static const struct drm_i915_gem_object_ops i915_gem_phys_ops = {

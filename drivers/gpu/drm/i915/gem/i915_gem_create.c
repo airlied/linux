@@ -13,6 +13,8 @@
 #include "i915_drv.h"
 #include "i915_user_extensions.h"
 
+#include "ttm/i915_ttm.h"
+
 static u32 max_page_size(struct intel_memory_region **placements,
 			 int n_placements)
 {
@@ -35,6 +37,7 @@ i915_gem_create(struct drm_file *file,
 		u64 *size_p,
 		u32 *handle_p)
 {
+	struct drm_i915_private *i915 = placements[0]->i915;
 	struct drm_i915_gem_object *obj;
 	u32 handle;
 	u64 size;
@@ -47,10 +50,18 @@ i915_gem_create(struct drm_file *file,
 	/* For most of the ABI (e.g. mmap) we think in system pages */
 	GEM_BUG_ON(!IS_ALIGNED(size, PAGE_SIZE));
 
-	/* Allocate the new object */
-	obj = i915_gem_object_create_region(placements[0], size, 0);
-	if (IS_ERR(obj))
-		return PTR_ERR(obj);
+
+	if (i915->use_ttm) {
+		obj = i915_ttm_object_create_region(placements, n_placements, ttm_bo_type_device, size, 0);
+		if (IS_ERR(obj))
+			return PTR_ERR(obj);
+		goto handle_create;
+	} else {
+		/* Allocate the new object */
+		obj = i915_gem_object_create_region(placements[0], size, 0);
+		if (IS_ERR(obj))
+			return PTR_ERR(obj);
+	}
 
 	if (!i915_gem_object_has_struct_page(obj)) {
 		struct drm_i915_private *i915 = to_i915(obj_to_dev(obj));
@@ -100,7 +111,7 @@ i915_gem_create(struct drm_file *file,
 	}
 
 handle_create:
-	ret = drm_gem_handle_create(file, &obj->base, &handle);
+	ret = drm_gem_handle_create(file, &obj->base.base, &handle);
 out_put:
 	/* drop reference from allocate - handle holds it now */
 	i915_gem_object_put(obj);

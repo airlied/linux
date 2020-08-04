@@ -132,9 +132,8 @@ static inline struct i915_vma *i915_vma_get(struct i915_vma *vma)
 
 static inline struct i915_vma *i915_vma_tryget(struct i915_vma *vma)
 {
-	if (likely(kref_get_unless_zero(&vma->obj->base.refcount)))
+	if (likely(kref_get_unless_zero(&vma->obj->base.base.refcount)))
 		return vma;
-
 	return NULL;
 }
 

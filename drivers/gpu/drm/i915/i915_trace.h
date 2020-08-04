@@ -487,7 +487,7 @@ TRACE_EVENT(i915_gem_object_create,
 
 	    TP_fast_assign(
 			   __entry->obj = obj;
-			   __entry->size = obj->base.size;
+			   __entry->size = obj->base.base.size;
 			   ),
 
 	    TP_printk("obj=%p, size=0x%llx", __entry->obj, __entry->size)

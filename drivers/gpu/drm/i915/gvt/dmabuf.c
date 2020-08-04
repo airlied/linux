@@ -123,7 +123,7 @@ static void vgpu_gem_put_pages(struct drm_i915_gem_object *obj,
 {
 	struct scatterlist *sg;
 
-	if (obj->base.dma_buf) {
+	if (obj->base.base.dma_buf) {
 		struct intel_vgpu_fb_info *fb_info = obj->gvt_info;
 		struct intel_vgpu_dmabuf_obj *obj = fb_info->obj;
 		struct intel_vgpu *vgpu = obj->vgpu;
@@ -187,12 +187,12 @@ static void vgpu_gem_release(struct drm_i915_gem_object *gem_obj)
 
 	if (vgpu) {
 		mutex_lock(&vgpu->dmabuf_lock);
-		gem_obj->base.dma_buf = NULL;
+		gem_obj->base.base.dma_buf = NULL;
 		dmabuf_obj_put(obj);
 		mutex_unlock(&vgpu->dmabuf_lock);
 	} else {
 		/* vgpu is NULL, as it has been removed already */
-		gem_obj->base.dma_buf = NULL;
+		gem_obj->base.base.dma_buf = NULL;
 		dmabuf_obj_put(obj);
 	}
 }
@@ -216,7 +216,7 @@ static struct drm_i915_gem_object *vgpu_create_gem(struct drm_device *dev,
 	if (obj == NULL)
 		return NULL;
 
-	drm_gem_private_object_init(dev, &obj->base,
+	drm_gem_private_object_init(dev, &obj->base.base,
 		roundup(info->size, PAGE_SIZE));
 	i915_gem_object_init(obj, &intel_vgpu_gem_ops, &lock_class);
 	i915_gem_object_set_readonly(obj);
@@ -549,7 +549,7 @@ int intel_vgpu_get_dmabuf(struct intel_vgpu *vgpu, unsigned int dmabuf_id)
 
 	obj->gvt_info = dmabuf_obj->info;
 
-	dmabuf = i915_gem_prime_export(&obj->base, DRM_CLOEXEC | DRM_RDWR);
+	dmabuf = i915_gem_prime_export(&obj->base.base, DRM_CLOEXEC | DRM_RDWR);
 	if (IS_ERR(dmabuf)) {
 		gvt_vgpu_err("export dma-buf failed\n");
 		ret = PTR_ERR(dmabuf);
@@ -578,7 +578,7 @@ int intel_vgpu_get_dmabuf(struct intel_vgpu *vgpu, unsigned int dmabuf_id)
 		    kref_read(&dmabuf_obj->kref),
 		    dmabuf_fd,
 		    file_count(dmabuf->file),
-		    kref_read(&obj->base.refcount));
+		    kref_read(&obj->base.base.refcount));
 
 	i915_gem_object_put(obj);
 

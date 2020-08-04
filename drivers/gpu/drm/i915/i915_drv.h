@@ -103,6 +103,12 @@
 
 #include "intel_region_lmem.h"
 
+#include <drm/ttm/ttm_bo_api.h>
+#include <drm/ttm/ttm_bo_driver.h>
+#include <drm/ttm/ttm_placement.h>
+#include <drm/ttm/ttm_module.h>
+#include <drm/ttm/ttm_execbuf_util.h>
+
 /* General customization:
  */
 
@@ -111,6 +117,7 @@
 #define DRIVER_DATE		"20200824"
 #define DRIVER_TIMESTAMP	1598293597
 
+#include "ttm/i915_ttm_object_types.h"
 struct drm_i915_gem_object;
 
 /*
@@ -978,6 +985,7 @@ struct drm_i915_private {
 
 	struct i915_ggtt ggtt; /* VM representing the global address space */
 
+	struct i915_ttm_mman ttm_mman;
 	struct i915_gem_mm mm;
 	DECLARE_HASHTABLE(mm_structs, 7);
 	spinlock_t mm_lock;
@@ -1172,6 +1180,7 @@ struct drm_i915_private {
 	/* Abstract the submission mechanism (legacy ringbuffer or execlists) away */
 	struct intel_gt gt;
 
+	bool use_ttm;
 	struct {
 		struct i915_gem_contexts {
 			spinlock_t lock; /* locks list */
@@ -1232,6 +1241,11 @@ static inline struct drm_i915_private *to_i915(const struct drm_device *dev)
 	return container_of(dev, struct drm_i915_private, drm);
 }
 
+static inline struct drm_i915_private *obj_to_i915(const struct drm_i915_gem_object *obj)
+{
+	return container_of(obj->base.base.dev, struct drm_i915_private, drm);
+}
+
 static inline struct drm_i915_private *kdev_to_i915(struct device *kdev)
 {
 	return dev_get_drvdata(kdev);
@@ -1240,6 +1254,11 @@ static inline struct drm_i915_private *kdev_to_i915(struct device *kdev)
 static inline struct drm_i915_private *pdev_to_i915(struct pci_dev *pdev)
 {
 	return pci_get_drvdata(pdev);
+}
+
+static inline struct drm_i915_private *to_i915_ttm_dev(struct ttm_bo_device *bdev)
+{
+	return container_of(bdev, struct drm_i915_private, ttm_mman.bdev);
 }
 
 /* Simple iterator over all initialised engines */

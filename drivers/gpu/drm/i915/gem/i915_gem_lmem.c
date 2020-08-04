@@ -7,7 +7,7 @@
 #include "gem/i915_gem_region.h"
 #include "gem/i915_gem_lmem.h"
 #include "i915_drv.h"
-
+#include "ttm/i915_ttm.h"
 int i915_gem_object_lmem_pread(struct drm_i915_gem_object *obj,
 			       const struct drm_i915_gem_pread *arg)
 {
@@ -234,6 +234,12 @@ bool i915_gem_object_is_lmem(struct drm_i915_gem_object *obj)
 {
 	struct intel_memory_region *region = obj->mm.region;
 
+
+	if (!obj)
+		return false;
+	if (i915_gem_object_is_ttm(obj)) {
+		return obj->base.mem.mem_type == TTM_PL_VRAM;
+	}
 	return region && (region->is_devmem || region->type == INTEL_MEMORY_LOCAL);
 }
 
@@ -241,6 +247,9 @@ bool i915_gem_object_is_devmem(struct drm_i915_gem_object *obj)
 {
 	struct intel_memory_region *region = obj->mm.region;
 
+	if (i915_gem_object_is_ttm(obj)) {
+		return obj->base.mem.mem_type == TTM_PL_VRAM;
+	}
 	return region && region->is_devmem;
 }
 
@@ -275,6 +284,10 @@ i915_gem_object_create_lmem(struct drm_i915_private *i915,
 			    resource_size_t size,
 			    unsigned int flags)
 {
+	if (i915->use_ttm) {
+		return i915_ttm_object_create_region(&i915->mm.regions[INTEL_REGION_LMEM], 1, ttm_bo_type_kernel,
+						     size, flags);
+	}
 	return i915_gem_object_create_region(i915->mm.regions[INTEL_REGION_LMEM],
 					     size, flags);
 }
@@ -292,7 +305,7 @@ __i915_gem_lmem_object_create(struct intel_memory_region *mem,
 	if (!obj)
 		return ERR_PTR(-ENOMEM);
 
-	drm_gem_private_object_init(&i915->drm, &obj->base, size);
+	drm_gem_private_object_init(&i915->drm, &obj->base.base, size);
 	i915_gem_object_init(obj, &i915_gem_lmem_obj_ops, &lock_class);
 
 	obj->read_domains = I915_GEM_DOMAIN_WC | I915_GEM_DOMAIN_GTT;

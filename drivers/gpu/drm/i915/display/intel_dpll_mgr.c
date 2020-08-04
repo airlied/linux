@@ -4354,6 +4354,7 @@ static const struct intel_dpll_mgr dg1_pll_mgr = {
 	.dpll_info = dg1_plls,
 	.get_dplls = icl_get_dplls,
 	.put_dplls = icl_put_dplls,
+	.update_ref_clks = icl_update_dpll_ref_clks,
 	.dump_hw_state = icl_dump_hw_state,
 };
 

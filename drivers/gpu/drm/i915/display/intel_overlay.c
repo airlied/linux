@@ -1045,7 +1045,7 @@ static int check_overlay_src(struct drm_i915_private *dev_priv,
 			return -EINVAL;
 
 		tmp = rec->stride_Y*rec->src_height;
-		if (rec->offset_Y + tmp > new_bo->base.size)
+		if (rec->offset_Y + tmp > i915_gem_object_size(new_bo))
 			return -EINVAL;
 		break;
 
@@ -1056,12 +1056,12 @@ static int check_overlay_src(struct drm_i915_private *dev_priv,
 			return -EINVAL;
 
 		tmp = rec->stride_Y * rec->src_height;
-		if (rec->offset_Y + tmp > new_bo->base.size)
+		if (rec->offset_Y + tmp > i915_gem_object_size(new_bo))
 			return -EINVAL;
 
 		tmp = rec->stride_UV * (rec->src_height / uv_vscale);
-		if (rec->offset_U + tmp > new_bo->base.size ||
-		    rec->offset_V + tmp > new_bo->base.size)
+		if (rec->offset_U + tmp > i915_gem_object_size(new_bo) ||
+		    rec->offset_V + tmp > i915_gem_object_size(new_bo))
 			return -EINVAL;
 		break;
 	}

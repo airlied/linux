@@ -177,7 +177,7 @@ i915_gem_object_create_internal(struct drm_i915_private *i915,
 	if (!obj)
 		return ERR_PTR(-ENOMEM);
 
-	drm_gem_private_object_init(&i915->drm, &obj->base, size);
+	drm_gem_private_object_init(&i915->drm, &obj->base.base, size);
 	i915_gem_object_init(obj, &i915_gem_object_internal_ops, &lock_class);
 
 	/*

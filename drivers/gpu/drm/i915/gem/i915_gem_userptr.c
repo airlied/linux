@@ -120,7 +120,7 @@ userptr_mn_invalidate_range_start(struct mmu_notifier *_mn,
 		 * object if it is not in the process of being destroyed.
 		 */
 		obj = container_of(it, struct i915_mmu_object, it)->obj;
-		if (!kref_get_unless_zero(&obj->base.refcount)) {
+		if (!kref_get_unless_zero(&obj->base.base.refcount)) {
 			it = interval_tree_iter_next(it, range->start, end);
 			continue;
 		}
@@ -809,7 +809,7 @@ i915_gem_userptr_ioctl(struct drm_device *dev,
 	if (obj == NULL)
 		return -ENOMEM;
 
-	drm_gem_private_object_init(dev, &obj->base, args->user_size);
+	drm_gem_private_object_init(dev, &obj->base.base, args->user_size);
 	i915_gem_object_init(obj, &i915_gem_userptr_ops, &lock_class);
 	obj->read_domains = I915_GEM_DOMAIN_CPU;
 	obj->write_domain = I915_GEM_DOMAIN_CPU;
@@ -827,7 +827,7 @@ i915_gem_userptr_ioctl(struct drm_device *dev,
 	if (ret == 0)
 		ret = i915_gem_userptr_init__mmu_notifier(obj, args->flags);
 	if (ret == 0)
-		ret = drm_gem_handle_create(file, &obj->base, &handle);
+		ret = drm_gem_handle_create(file, &obj->base.base, &handle);
 
 	/* drop reference from allocate - handle holds it now */
 	i915_gem_object_put(obj);
