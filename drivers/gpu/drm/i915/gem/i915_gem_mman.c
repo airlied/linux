@@ -21,6 +21,7 @@
 #include "i915_user_extensions.h"
 #include "i915_vma.h"
 
+#include "ttm/i915_ttm.h"
 static inline bool
 __vma_matches(struct vm_area_struct *vma, struct file *filp,
 	      unsigned long addr, unsigned long size)
@@ -73,7 +74,7 @@ i915_gem_mmap_ioctl(struct drm_device *dev, void *data,
 	/* prime objects have no backing filp to GEM mmap
 	 * pages from.
 	 */
-	if (!obj->base.filp) {
+	if (!obj->base.base.filp) {
 		addr = -ENXIO;
 		goto err;
 	}
@@ -83,7 +84,7 @@ i915_gem_mmap_ioctl(struct drm_device *dev, void *data,
 		goto err;
 	}
 
-	addr = vm_mmap(obj->base.filp, 0, args->size,
+	addr = vm_mmap(obj->base.base.filp, 0, args->size,
 		       PROT_READ | PROT_WRITE, MAP_SHARED,
 		       args->offset);
 	if (IS_ERR_VALUE(addr))
@@ -98,7 +99,7 @@ i915_gem_mmap_ioctl(struct drm_device *dev, void *data,
 			goto err;
 		}
 		vma = find_vma(mm, addr);
-		if (vma && __vma_matches(vma, obj->base.filp, addr, args->size))
+		if (vma && __vma_matches(vma, obj->base.base.filp, addr, args->size))
 			vma->vm_page_prot =
 				pgprot_writecombine(vm_get_page_prot(vma->vm_flags));
 		else
@@ -647,6 +648,11 @@ __assign_mmap_offset(struct drm_file *file,
 	if (!obj)
 		return -ENOENT;
 
+	if (i915_gem_object_is_ttm(obj)) {
+		err = i915_ttm_assign_mmap_offset(obj, offset);
+		goto out;
+	}
+
 	if (i915_gem_object_never_mmap(obj)) {
 		err = -ENODEV;
 		goto out;
@@ -907,6 +913,9 @@ int i915_gem_mmap(struct file *filp, struct vm_area_struct *vma)
 
 	if (drm_dev_is_unplugged(dev))
 		return -ENODEV;
+
+	if (to_i915(dev)->use_ttm)
+		return ttm_bo_mmap(filp, vma, &to_i915(dev)->ttm_mman.bdev);
 
 	rcu_read_lock();
 	drm_vma_offset_lock_lookup(dev->vma_offset_manager);

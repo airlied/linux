@@ -142,12 +142,12 @@ static int i915_gem_dmabuf_mmap(struct dma_buf *dma_buf,
 		return -EINVAL;
 
 	/* shmem */
-	if (obj->base.filp) {
-		ret = call_mmap(obj->base.filp, vma);
+	if (obj->base.base.filp) {
+		ret = call_mmap(obj->base.base.filp, vma);
 		if (ret)
 			return ret;
 		fput(vma->vm_file);
-		vma->vm_file = get_file(obj->base.filp);
+		vma->vm_file = get_file(obj->base.base.filp);
 
 		return 0;
 	}
@@ -237,7 +237,7 @@ static int i915_gem_object_get_pages_dmabuf(struct drm_i915_gem_object *obj)
 	struct sg_table *pages;
 	unsigned int sg_page_sizes;
 
-	pages = dma_buf_map_attachment(obj->base.import_attach,
+	pages = dma_buf_map_attachment(obj->base.base.import_attach,
 				       DMA_BIDIRECTIONAL);
 	if (IS_ERR(pages))
 		return PTR_ERR(pages);
@@ -252,7 +252,7 @@ static int i915_gem_object_get_pages_dmabuf(struct drm_i915_gem_object *obj)
 static void i915_gem_object_put_pages_dmabuf(struct drm_i915_gem_object *obj,
 					     struct sg_table *pages)
 {
-	dma_buf_unmap_attachment(obj->base.import_attach, pages,
+	dma_buf_unmap_attachment(obj->base.base.import_attach, pages,
 				 DMA_BIDIRECTIONAL);
 }
 
@@ -279,7 +279,7 @@ struct drm_gem_object *i915_gem_prime_import(struct drm_device *dev,
 			 * Importing dmabuf exported from out own gem increases
 			 * refcount on gem itself instead of f_count of dmabuf.
 			 */
-			return &i915_gem_object_get(obj)->base;
+			return &i915_gem_object_get(obj)->base.base;
 		}
 	}
 
@@ -296,10 +296,10 @@ struct drm_gem_object *i915_gem_prime_import(struct drm_device *dev,
 		goto fail_detach;
 	}
 
-	drm_gem_private_object_init(dev, &obj->base, dma_buf->size);
+	drm_gem_private_object_init(dev, &obj->base.base, dma_buf->size);
 	i915_gem_object_init(obj, &i915_gem_object_dmabuf_ops, &lock_class);
-	obj->base.import_attach = attach;
-	obj->base.resv = dma_buf->resv;
+	obj->base.base.import_attach = attach;
+	obj->base.base.resv = dma_buf->resv;
 
 	/* We use GTT as shorthand for a coherent domain, one that is
 	 * neither in the GPU cache nor in the CPU cache, where all
@@ -311,7 +311,7 @@ struct drm_gem_object *i915_gem_prime_import(struct drm_device *dev,
 	obj->read_domains = I915_GEM_DOMAIN_GTT;
 	obj->write_domain = 0;
 
-	return &obj->base;
+	return &obj->base.base;
 
 fail_detach:
 	dma_buf_detach(dma_buf, attach);

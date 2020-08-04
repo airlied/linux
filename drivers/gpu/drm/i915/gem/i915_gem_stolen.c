@@ -15,7 +15,7 @@
 #include "i915_drv.h"
 #include "i915_gem_stolen.h"
 #include "i915_vgpu.h"
-
+#include "ttm/i915_ttm.h"
 /*
  * The BIOS typically reserves some of the system's memory for the exclusive
  * use of the integrated graphics. This memory is no longer available for
@@ -593,7 +593,7 @@ __i915_gem_object_create_stolen(struct intel_memory_region *mem,
 	if (!obj)
 		return ERR_PTR(-ENOMEM);
 
-	drm_gem_private_object_init(&i915->drm, &obj->base, size);
+	drm_gem_private_object_init(&i915->drm, &obj->base.base, size);
 	i915_gem_object_init(obj, &i915_gem_object_stolen_ops, &lock_class);
 
 	obj->read_domains = I915_GEM_DOMAIN_CPU | I915_GEM_DOMAIN_GTT;
@@ -664,6 +664,12 @@ struct drm_i915_gem_object *
 i915_gem_object_create_stolen(struct drm_i915_private *i915,
 			      resource_size_t size)
 {
+	if (i915->use_ttm) {
+		struct intel_memory_region *ptr = i915_stolen_region(i915);
+		return i915_ttm_object_create_region(&ptr, 1, ttm_bo_type_kernel,
+						     size, I915_BO_ALLOC_CONTIGUOUS);
+	}
+
 	return i915_gem_object_create_region(i915_stolen_region(i915),
 					     size, I915_BO_ALLOC_CONTIGUOUS);
 }

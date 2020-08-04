@@ -153,6 +153,7 @@ static void ilk_pch_clock_get(struct intel_crtc *crtc,
 static int intel_framebuffer_init(struct intel_framebuffer *ifb,
 				  struct drm_i915_gem_object *obj,
 				  struct drm_mode_fb_cmd2 *mode_cmd);
+
 static void intel_set_pipe_timings(const struct intel_crtc_state *crtc_state);
 static void intel_set_pipe_src_size(const struct intel_crtc_state *crtc_state);
 static void intel_cpu_transcoder_set_m_n(const struct intel_crtc_state *crtc_state,
@@ -3610,8 +3611,7 @@ intel_find_initial_plane_obj(struct intel_crtc *intel_crtc,
 	struct drm_framebuffer *fb;
 	struct i915_vma *vma;
 
-	if (!plane_config->fb)
-		return;
+	return;
 
 	if (intel_alloc_initial_plane_obj(intel_crtc, plane_config)) {
 		fb = &plane_config->fb->base;
@@ -16061,7 +16061,6 @@ intel_prepare_plane_fb(struct drm_plane *_plane,
 	i915_gem_object_unpin_pages(obj);
 	if (ret)
 		return ret;
-
 	fb_obj_bump_render_priority(obj);
 	i915_gem_object_flush_frontbuffer(obj, ORIGIN_DIRTYFB);
 
@@ -17184,7 +17183,7 @@ static int intel_user_framebuffer_create_handle(struct drm_framebuffer *fb,
 		return -EINVAL;
 	}
 
-	return drm_gem_handle_create(file, &obj->base, handle);
+	return drm_gem_handle_create(file, &obj->base.base, handle);
 }
 
 static int intel_user_framebuffer_dirty(struct drm_framebuffer *fb,
@@ -17214,7 +17213,7 @@ static int intel_framebuffer_init(struct intel_framebuffer *intel_fb,
 	struct drm_i915_private *dev_priv = to_i915(obj_to_dev(obj));
 	struct drm_framebuffer *fb = &intel_fb->base;
 	u32 max_stride;
-	unsigned int tiling, stride;
+	unsigned int tiling = 0, stride = 0;
 	int ret = -EINVAL;
 	int i;
 
@@ -17333,7 +17332,7 @@ static int intel_framebuffer_init(struct intel_framebuffer *intel_fb,
 			}
 		}
 
-		fb->obj[i] = &obj->base;
+		fb->obj[i] = &obj->base.base;
 	}
 
 	ret = intel_fill_fb_info(dev_priv, fb);

@@ -88,6 +88,7 @@
 #include "intel_sideband.h"
 #include "vlv_suspend.h"
 
+#include "ttm/i915_ttm.h"
 static struct drm_driver driver;
 
 static int i915_get_bridge_dev(struct drm_i915_private *dev_priv)
@@ -268,7 +269,10 @@ static int i915_driver_modeset_probe(struct drm_i915_private *i915)
 	if (ret)
 		goto out;
 
-	ret = i915_gem_init(i915);
+	if (i915->use_ttm)
+		ret = i915_ttm_init(i915);
+	else
+		ret = i915_gem_init(i915);
 	if (ret)
 		goto cleanup_modeset;
 
@@ -667,6 +671,11 @@ static int i915_driver_hw_probe(struct drm_i915_private *dev_priv)
 	/* needs to be done before ggtt probe */
 	intel_dram_edram_detect(dev_priv);
 
+	if (dev_priv->use_ttm) {
+		ret = i915_ttm_early_init(dev_priv);
+		if (ret)
+			return ret;
+	}
 	ret = i915_set_dma_info(dev_priv);
 	if (ret)
 		return ret;
@@ -953,6 +962,9 @@ int i915_driver_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	/* Disable nuclear pageflip by default on pre-ILK */
 	if (!i915->params.nuclear_pageflip && match_info->gen < 5)
 		i915->drm.driver_features &= ~DRIVER_ATOMIC;
+
+	if (i915_modparams.use_ttm)
+		i915->use_ttm = true;
 
 	ret = pci_enable_device(pdev);
 	if (ret)

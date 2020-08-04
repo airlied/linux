@@ -194,7 +194,7 @@ i915_gem_shrink(struct drm_i915_private *i915,
 			if (!can_release_pages(obj))
 				continue;
 
-			if (!kref_get_unless_zero(&obj->base.refcount))
+			if (!kref_get_unless_zero(&obj->base.base.refcount))
 				continue;
 
 			spin_unlock_irqrestore(&i915->mm.obj_lock, flags);
@@ -426,7 +426,7 @@ void i915_gem_shrinker_taints_mutex(struct drm_i915_private *i915,
 	fs_reclaim_release(GFP_KERNEL);
 }
 
-#define obj_to_i915(obj__) to_i915((obj__)->base.dev)
+#define obj_to_i915(obj__) to_i915((obj__)->base.base.dev)
 
 void i915_gem_object_make_unshrinkable(struct drm_i915_gem_object *obj)
 {
@@ -466,7 +466,7 @@ static void __i915_gem_object_make_shrinkable(struct drm_i915_gem_object *obj,
 		return;
 
 	spin_lock_irqsave(&i915->mm.obj_lock, flags);
-	GEM_BUG_ON(!kref_read(&obj->base.refcount));
+	GEM_BUG_ON(!kref_read(&obj->base.base.refcount));
 	if (atomic_dec_and_test(&obj->mm.shrink_pin)) {
 		GEM_BUG_ON(!list_empty(&obj->mm.link));
 

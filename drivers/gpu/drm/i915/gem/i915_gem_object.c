@@ -33,6 +33,7 @@
 #include "i915_gem_object.h"
 #include "i915_globals.h"
 #include "i915_trace.h"
+#include "ttm/i915_ttm.h"
 
 static struct i915_global_object {
 	struct i915_global base;
@@ -134,6 +135,13 @@ void i915_gem_close_object(struct drm_gem_object *gem, struct drm_file *file)
 		drm_vma_node_revoke(&mmo->vma_node, file);
 	spin_unlock(&obj->mmo.lock);
 
+	if (i915_gem_object_is_ttm(obj)) {
+		struct i915_vma *vma, *temp;
+		list_for_each_entry_safe(vma, temp, &obj->vma.list, obj_link) {
+			i915_vma_close(vma);
+		}
+		return;
+	}
 	list_for_each_entry_safe(lut, ln, &close, obj_link) {
 		struct i915_gem_context *ctx = lut->ctx;
 		struct i915_vma *vma;
@@ -164,7 +172,7 @@ static void __i915_gem_free_object_rcu(struct rcu_head *head)
 		container_of(head, typeof(*obj), rcu);
 	struct drm_i915_private *i915 = to_i915(obj_to_dev(obj));
 
-	dma_resv_fini(&obj->base._resv);
+	dma_resv_fini(&obj->base.base._resv);
 	i915_gem_object_free(obj);
 
 	GEM_BUG_ON(!atomic_read(&i915->mm.free_count));
@@ -234,10 +242,10 @@ static void __i915_gem_free_objects(struct drm_i915_private *i915,
 		GEM_BUG_ON(i915_gem_object_has_pages(obj));
 		bitmap_free(obj->bit_17);
 
-		if (obj->base.import_attach)
-			drm_prime_gem_destroy(&obj->base, NULL);
+		if (obj->base.base.import_attach)
+			drm_prime_gem_destroy(&obj->base.base, NULL);
 
-		drm_gem_free_mmap_offset(&obj->base);
+		drm_gem_free_mmap_offset(&obj->base.base);
 
 		if (obj->ops->release)
 			obj->ops->release(obj);
@@ -270,6 +278,11 @@ void i915_gem_free_object(struct drm_gem_object *gem_obj)
 {
 	struct drm_i915_gem_object *obj = to_intel_bo(gem_obj);
 	struct drm_i915_private *i915 = to_i915(obj_to_dev(obj));
+
+	if (i915_gem_object_is_ttm(obj)) {
+		ttm_bo_put(&obj->base);
+		return;
+	}
 
 	GEM_BUG_ON(i915_gem_object_is_framebuffer(obj));
 

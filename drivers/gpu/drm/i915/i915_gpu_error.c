@@ -993,7 +993,10 @@ i915_vma_coredump_create(const struct intel_gt *gt,
 
 	might_sleep();
 
-	if (!vma || !vma->pages || !compress)
+	if (!vma || !vma->pages || !compress || !vma->obj)
+		return NULL;
+
+	if (i915_gem_object_is_ttm(vma->obj))
 		return NULL;
 
 	num_pages = min_t(u64, vma->size, i915_gem_object_size(vma->obj)) >> PAGE_SHIFT;
