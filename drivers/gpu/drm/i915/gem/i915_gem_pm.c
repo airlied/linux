@@ -79,7 +79,7 @@ void i915_gem_suspend_late(struct drm_i915_private *i915)
 			list_move_tail(&obj->mm.link, &keep);
 
 			/* Beware the background _i915_gem_free_objects */
-			if (!kref_get_unless_zero(&obj->base.refcount))
+			if (!kref_get_unless_zero(&obj->base.base.refcount))
 				continue;
 
 			spin_unlock_irqrestore(&i915->mm.obj_lock, flags);

@@ -108,7 +108,7 @@ static void lut_close(struct i915_gem_context *ctx)
 		struct drm_i915_gem_object *obj = vma->obj;
 		struct i915_lut_handle *lut;
 
-		if (!kref_get_unless_zero(&obj->base.refcount))
+		if (!kref_get_unless_zero(&obj->base.base.refcount))
 			continue;
 
 		spin_lock(&obj->lut_lock);

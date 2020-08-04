@@ -14,6 +14,7 @@
 #include "i915_scatterlist.h"
 #include "i915_utils.h"
 
+#include "ttm/i915_ttm.h"
 #define QUIET (__GFP_NORETRY | __GFP_NOWARN)
 #define MAYFAIL (__GFP_RETRY_MAYFAIL | __GFP_NOWARN)
 
@@ -172,11 +173,15 @@ i915_gem_object_create_internal(struct drm_i915_private *i915,
 	if (overflows_type(size, i915_gem_object_size(obj)))
 		return ERR_PTR(-E2BIG);
 
+	if (i915->use_ttm) {
+		return i915_ttm_object_create_internal(i915, size);
+	}
+
 	obj = i915_gem_object_alloc();
 	if (!obj)
 		return ERR_PTR(-ENOMEM);
 
-	drm_gem_private_object_init(&i915->drm, &obj->base, size);
+	drm_gem_private_object_init(&i915->drm, &obj->base.base, size);
 	i915_gem_object_init(obj, &i915_gem_object_internal_ops, &lock_class,
 			     I915_BO_ALLOC_STRUCT_PAGE);
 

@@ -11,6 +11,7 @@
 #include "intel_ring.h"
 #include "intel_workarounds.h"
 
+#include "ttm/i915_ttm.h"
 /**
  * DOC: Hardware workarounds
  *

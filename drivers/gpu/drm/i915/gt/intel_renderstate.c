@@ -29,7 +29,7 @@
 #include "intel_renderstate.h"
 #include "gt/intel_context.h"
 #include "intel_ring.h"
-
+#include "ttm/i915_ttm.h"
 static const struct intel_renderstate_rodata *
 render_state_get_rodata(const struct intel_engine_cs *engine)
 {
@@ -196,7 +196,11 @@ retry:
 	if (err)
 		goto err_context;
 
-	err = i915_vma_pin_ww(so->vma, &so->ww, 0, 0, PIN_GLOBAL | PIN_HIGH);
+	if (i915_gem_object_is_ttm(so->vma->obj)) {
+		err = i915_ttm_ggtt_pin(so->vma, &so->ww, 0, PIN_GLOBAL | PIN_HIGH);
+	} else {
+		err = i915_vma_pin_ww(so->vma, &so->ww, 0, 0, PIN_GLOBAL | PIN_HIGH);
+	}
 	if (err)
 		goto err_context;
 

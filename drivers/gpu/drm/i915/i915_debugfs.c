@@ -142,8 +142,8 @@ i915_debugfs_describe_obj(struct seq_file *m, struct drm_i915_gem_object *obj)
 		   i915_cache_level_str(dev_priv, obj->cache_level),
 		   obj->mm.dirty ? " dirty" : "",
 		   obj->mm.madv == I915_MADV_DONTNEED ? " purgeable" : "");
-	if (obj->base.name)
-		seq_printf(m, " (name: %d)", obj->base.name);
+	if (obj->base.base.name)
+		seq_printf(m, " (name: %d)", obj->base.base.name);
 
 	spin_lock(&obj->vma.lock);
 	list_for_each_entry(vma, &obj->vma.list, obj_link) {
@@ -233,7 +233,7 @@ static int per_file_stats(int id, void *ptr, void *data)
 	struct file_stats *stats = data;
 	struct i915_vma *vma;
 
-	if (IS_ERR_OR_NULL(obj) || !kref_get_unless_zero(&obj->base.refcount))
+	if (IS_ERR_OR_NULL(obj) || !kref_get_unless_zero(&obj->base.base.refcount))
 		return 0;
 
 	stats->count++;
