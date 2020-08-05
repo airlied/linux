@@ -178,7 +178,7 @@ static int igt_ppgtt_alloc(void *arg)
 		if (err)
 			goto err_ppgtt_cleanup;
 
-		err = i915_vm_pin_pt_stash(&ppgtt->vm, &stash);
+		err = i915_vm_map_pt_stash(&ppgtt->vm, &stash);
 		if (err) {
 			i915_vm_free_pt_stash(&ppgtt->vm, &stash);
 			goto err_ppgtt_cleanup;
@@ -200,7 +200,7 @@ static int igt_ppgtt_alloc(void *arg)
 		if (err)
 			goto err_ppgtt_cleanup;
 
-		err = i915_vm_pin_pt_stash(&ppgtt->vm, &stash);
+		err = i915_vm_map_pt_stash(&ppgtt->vm, &stash);
 		if (err) {
 			i915_vm_free_pt_stash(&ppgtt->vm, &stash);
 			goto err_ppgtt_cleanup;
@@ -301,7 +301,7 @@ static int lowlevel_hole(struct i915_address_space *vm,
 							   BIT_ULL(size)))
 					break;
 
-				if (i915_vm_pin_pt_stash(vm, &stash)) {
+				if (i915_vm_map_pt_stash(vm, &stash)) {
 					i915_vm_free_pt_stash(vm, &stash);
 					break;
 				}
@@ -1929,7 +1929,7 @@ static int igt_cs_tlb(void *arg)
 			if (err)
 				goto end;
 
-			err = i915_vm_pin_pt_stash(vm, &stash);
+			err = i915_vm_map_pt_stash(vm, &stash);
 			if (err) {
 				i915_vm_free_pt_stash(vm, &stash);
 				goto end;
