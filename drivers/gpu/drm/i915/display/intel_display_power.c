@@ -5240,10 +5240,10 @@ struct buddy_page_mask {
 };
 
 static const struct buddy_page_mask tgl_buddy_page_masks[] = {
-	{ .num_channels = 1, .type = INTEL_DRAM_LPDDR4, .page_mask = 0xE },
 	{ .num_channels = 1, .type = INTEL_DRAM_DDR4,   .page_mask = 0xF },
 	{ .num_channels = 2, .type = INTEL_DRAM_LPDDR4, .page_mask = 0x1C },
 	{ .num_channels = 2, .type = INTEL_DRAM_DDR4,   .page_mask = 0x1F },
+	{ .num_channels = 4, .type = INTEL_DRAM_LPDDR4, .page_mask = 0x38 },
 	{}
 };
 
@@ -5301,6 +5301,12 @@ static void icl_display_core_init(struct drm_i915_private *dev_priv,
 	u32 val;
 
 	gen9_set_dc_state(dev_priv, DC_STATE_DISABLE);
+
+	/* Wa_14011294188:ehl,jsl,tgl,rkl */
+	if (INTEL_PCH_TYPE(dev_priv) >= PCH_JSP &&
+	    INTEL_PCH_TYPE(dev_priv) < PCH_DG1)
+		intel_de_rmw(dev_priv, SOUTH_DSPCLK_GATE_D, 0,
+			     PCH_DPMGUNIT_CLOCK_GATE_DISABLE);
 
 	/* 1. Enable PCH reset handshake. */
 	intel_pch_reset_handshake(dev_priv, !HAS_PCH_NOP(dev_priv));
