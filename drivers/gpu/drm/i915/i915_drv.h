@@ -203,11 +203,6 @@ struct drm_i915_file_private {
 		struct rcu_head rcu;
 	};
 
-	struct {
-		spinlock_t lock;
-		struct list_head request_list;
-	} mm;
-
 	struct xarray context_xa;
 	struct xarray vm_xa;
 
@@ -590,11 +585,6 @@ struct i915_gem_mm {
 	 * waiting on an RCU barrier if no objects are waiting to be freed.
 	 */
 	atomic_t free_count;
-
-	/**
-	 * Small stash of WC pages
-	 */
-	struct pagestash wc_stash;
 
 	/**
 	 * tmpfs instance used for shmem backed objects
@@ -1045,6 +1035,14 @@ struct drm_i915_private {
 	struct intel_l3_parity l3_parity;
 
 	/*
+	 * HTI (aka HDPORT) state read during initial hw readout.  Most
+	 * platforms don't have HTI, so this will just stay 0.  Those that do
+	 * will use this later to figure out which PLLs and PHYs are unavailable
+	 * for driver usage.
+	 */
+	u32 hti_state;
+
+	/*
 	 * edram size in MB.
 	 * Cannot be determined by PCIID. You must always read a register.
 	 */
@@ -1489,6 +1487,12 @@ IS_SUBPLATFORM(const struct drm_i915_private *i915,
 #define IS_ICL_WITH_PORT_F(dev_priv) \
 	IS_SUBPLATFORM(dev_priv, INTEL_ICELAKE, INTEL_SUBPLATFORM_PORTF)
 
+#define IS_TGL_U(dev_priv) \
+	IS_SUBPLATFORM(dev_priv, INTEL_TIGERLAKE, INTEL_SUBPLATFORM_ULT)
+
+#define IS_TGL_Y(dev_priv) \
+	IS_SUBPLATFORM(dev_priv, INTEL_TIGERLAKE, INTEL_SUBPLATFORM_ULX)
+
 #define SKL_REVID_A0		0x0
 #define SKL_REVID_B0		0x1
 #define SKL_REVID_C0		0x2
@@ -1831,7 +1835,6 @@ void i915_gem_suspend_late(struct drm_i915_private *dev_priv);
 void i915_gem_resume(struct drm_i915_private *dev_priv);
 
 int i915_gem_open(struct drm_i915_private *i915, struct drm_file *file);
-void i915_gem_release(struct drm_device *dev, struct drm_file *file);
 
 int i915_gem_object_set_cache_level(struct drm_i915_gem_object *obj,
 				    enum i915_cache_level cache_level);
