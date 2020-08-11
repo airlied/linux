@@ -510,6 +510,7 @@ i915_ttm_do_execbuffer(struct drm_device *dev,
 	struct drm_i915_private *i915 = to_i915(dev);
 	struct drm_i915_gem_exec_object2 *exec2_list;
 	struct i915_ttm_execbuffer eb = {};
+	struct dma_fence *in_fence = NULL;
 	struct list_head duplicates;
 	unsigned int i;
 	int r;
@@ -528,6 +529,17 @@ i915_ttm_do_execbuffer(struct drm_device *dev,
 	eb.batch_len = args->batch_len;
 	eb.batch_flags = 0;
 
+#define IN_FENCES (I915_EXEC_FENCE_IN | I915_EXEC_FENCE_SUBMIT)
+	if (args->flags & IN_FENCES) {
+		if ((args->flags & IN_FENCES) == IN_FENCES)
+			return -EINVAL;
+
+		in_fence = sync_file_get_fence(lower_32_bits(args->rsvd2));
+		if (!in_fence)
+			return -EINVAL;
+	}
+#undef IN_FENCES
+
 	r = eb_select_context(&eb);
 	if (unlikely(r))
 		return -EINVAL;
@@ -535,6 +547,18 @@ i915_ttm_do_execbuffer(struct drm_device *dev,
 	r = eb_pin_engine(&eb, file, args);
 
 	eb.request = i915_request_create(eb.context);
+
+	if (in_fence) {
+		if (args->flags & I915_EXEC_FENCE_SUBMIT)
+			r = i915_request_await_execution(eb.request,
+							   in_fence,
+							   eb.engine->bond_execute);
+		else
+			r = i915_request_await_dma_fence(eb.request,
+							   in_fence);
+		if (r < 0)
+			goto err_request;
+	}
 
 	if (fences) {
 		r = await_fence_array(&eb, fences);
@@ -607,7 +631,7 @@ i915_ttm_do_execbuffer(struct drm_device *dev,
 
 	eb.request->batch = eb.batch->vma;
 	r = eb_submit(&eb, eb.batch->vma);
-
+err_request:
 	add_to_client(eb.request, file);
 	i915_request_get(eb.request);
 	eb_request_add(&eb);
