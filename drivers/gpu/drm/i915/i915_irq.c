@@ -3182,14 +3182,9 @@ static void jsp_hpd_irq_setup(struct drm_i915_private *dev_priv)
 
 static void dg1_hpd_irq_setup(struct drm_i915_private *dev_priv)
 {
-	u32 val;
-
-	val = I915_READ(SOUTH_CHICKEN1);
-	val |= (INVERT_DDIA_HPD |
-		INVERT_DDIB_HPD |
-		INVERT_DDIC_HPD |
-		INVERT_DDID_HPD);
-	I915_WRITE(SOUTH_CHICKEN1, val);
+	intel_de_rmw(dev_priv, SOUTH_CHICKEN1, 0,
+		     INVERT_DDIA_HPD | INVERT_DDIB_HPD |
+		     INVERT_DDIC_HPD | INVERT_DDID_HPD);
 
 	icp_hpd_irq_setup(dev_priv,
 			  SDE_DDI_MASK_DG1, 0,

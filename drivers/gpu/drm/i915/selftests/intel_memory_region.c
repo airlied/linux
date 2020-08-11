@@ -129,6 +129,94 @@ static void igt_object_release(struct drm_i915_gem_object *obj)
 	i915_gem_object_put(obj);
 }
 
+static int igt_reserve_range(struct intel_memory_region *mem,
+			     struct list_head *reserved,
+			     u64 offset,
+			     u64 size)
+{
+	int ret;
+	LIST_HEAD(blocks);
+
+	ret = i915_buddy_alloc_range(&mem->mm, &blocks, offset, size);
+	if (!ret)
+		list_splice_tail(&blocks, reserved);
+
+	return ret;
+}
+
+static int igt_mock_reserve(void *arg)
+{
+	struct drm_i915_gem_object *obj;
+	struct intel_memory_region *mem = arg;
+	resource_size_t avail = resource_size(&mem->region);
+	I915_RND_STATE(prng);
+	LIST_HEAD(objects);
+	LIST_HEAD(reserved);
+	u32 i, offset, count, *order;
+	u64 allocated, cur_avail;
+	const u32 chunk_size = SZ_32M;
+	int err = 0;
+
+	count = avail / chunk_size;
+	order = i915_random_order(count, &prng);
+	if (!order)
+		return 0;
+
+	/* Reserve a bunch of ranges within the region */
+	for (i = 0; i < count; ++i) {
+		u64 start = order[i] * chunk_size;
+		u64 size = i915_prandom_u32_max_state(chunk_size, &prng);
+
+		/* Allow for some really big holes */
+		if (!size)
+			continue;
+
+		size = round_up(size, PAGE_SIZE);
+		offset = igt_random_offset(&prng, 0, chunk_size, size,
+					   PAGE_SIZE);
+
+		err = igt_reserve_range(mem, &reserved, start + offset, size);
+		if (err) {
+			pr_err("%s failed to reserve range", __func__);
+			goto out_close;
+		}
+
+		/* XXX: maybe sanity check the block range here? */
+		avail -= size;
+	}
+
+	/* Try to see if we can allocate from the remaining space */
+	allocated = 0;
+	cur_avail = avail;
+	do {
+		u64 size = i915_prandom_u32_max_state(cur_avail, &prng);
+
+		size = max_t(u64, round_up(size, PAGE_SIZE), (u64)PAGE_SIZE);
+		obj = igt_object_create(mem, &objects, size, 0);
+
+		if (IS_ERR(obj)) {
+			if (PTR_ERR(obj) == -ENXIO)
+				break;
+
+			err = PTR_ERR(obj);
+			goto out_close;
+		}
+		cur_avail -= size;
+		allocated += size;
+	} while (1);
+
+	if (allocated != avail) {
+		pr_err("%s mismatch between allocation and free space", __func__);
+		err = -EINVAL;
+	}
+
+out_close:
+	kfree(order);
+	close_objects(mem, &objects);
+	i915_buddy_free_list(&mem->mm, &reserved);
+	return err;
+}
+
 static int igt_mock_contiguous(void *arg)
 {
 	struct intel_memory_region *mem = arg;
@@ -396,6 +484,88 @@ out_put:
 	return err;
 }
 
+static int igt_lmem_create_cleared_cpu(void *arg)
+{
+	struct drm_i915_private *i915 = arg;
+	I915_RND_STATE(prng);
+	IGT_TIMEOUT(end_time);
+	u32 size, val, i;
+	int err;
+
+	i915_gem_drain_freed_objects(i915);
+
+	size = max_t(u32, PAGE_SIZE, i915_prandom_u32_max_state(SZ_32M, &prng));
+	size = round_up(size, PAGE_SIZE);
+	i = 0;
+
+	do {
+		struct drm_i915_gem_object *obj;
+		void __iomem *vaddr;
+		unsigned int flags;
+		unsigned long n;
+		u32 dword;
+
+		/*
+		 * Alternate between cleared and uncleared allocations, while
+		 * also dirtying the pages each time to check that they either
+		 * remain dirty or are indeed cleared. Allocations should be
+		 * deterministic.
+		 */
+
+		flags = I915_BO_ALLOC_CPU_CLEAR;
+		if (i & 1)
+			flags = 0;
+		else
+			val = 0;
+
+		obj = i915_gem_object_create_lmem(i915, size, flags);
+		if (IS_ERR(obj))
+			return PTR_ERR(obj);
+
+		err = i915_gem_object_pin_pages(obj);
+		if (err)
+			goto out_put;
+
+		dword = i915_prandom_u32_max_state(PAGE_SIZE / sizeof(u32),
+						   &prng);
+
+		err = igt_cpu_check(obj, dword, val);
+		if (err) {
+			pr_err("%s failed with size=%u, flags=%u\n",
+			       __func__, size, flags);
+			goto out_unpin;
+		}
+
+		vaddr = i915_gem_object_pin_map(obj, I915_MAP_WC);
+		if (IS_ERR(vaddr)) {
+			err = PTR_ERR(vaddr);
+			goto out_unpin;
+		}
+
+		val = prandom_u32_state(&prng);
+
+		for (n = 0; n < obj->base.size >> PAGE_SHIFT; ++n) {
+			memset32(vaddr + n * PAGE_SIZE, val,
+				 PAGE_SIZE / sizeof(u32));
+		}
+
+		i915_gem_object_unpin_map(obj);
+out_unpin:
+		i915_gem_object_unpin_pages(obj);
+		__i915_gem_object_put_pages(obj);
+out_put:
+		i915_gem_object_put(obj);
+
+		if (err)
+			break;
+		++i;
+	} while (!__igt_timeout(end_time, NULL));
+
+	pr_info("%s completed (%u) iterations\n", __func__, i);
+
+	return err;
+}
+
 static int igt_lmem_write_gpu(void *arg)
 {
 	struct drm_i915_private *i915 = arg;
@@ -522,9 +692,9 @@ static int igt_lmem_write_cpu(void *arg)
 		goto out_unpin;
 	}
 
-	/* We want to throw in a random width/align */
-	bytes[0] = igt_random_offset(&prng, 0, PAGE_SIZE, sizeof(u32),
-				     sizeof(u32));
+	/* A random multiple of u32, picked between [64, PAGE_SIZE - 64] */
+	bytes[0] = igt_random_offset(&prng, 64, PAGE_SIZE - 64, 0, sizeof(u32));
+	GEM_BUG_ON(!IS_ALIGNED(bytes[0], sizeof(u32)));
 
 	i = 0;
 	do {
@@ -769,6 +939,7 @@ static int perf_memcpy(void *arg)
 int intel_memory_region_mock_selftests(void)
 {
 	static const struct i915_subtest tests[] = {
+		SUBTEST(igt_mock_reserve),
 		SUBTEST(igt_mock_fill),
 		SUBTEST(igt_mock_contiguous),
 	};
@@ -799,6 +970,7 @@ int intel_memory_region_live_selftests(struct drm_i915_private *i915)
 {
 	static const struct i915_subtest tests[] = {
 		SUBTEST(igt_lmem_create),
+		SUBTEST(igt_lmem_create_cleared_cpu),
 		SUBTEST(igt_lmem_write_cpu),
 		SUBTEST(igt_lmem_write_gpu),
 	};

@@ -7152,7 +7152,7 @@ static void dg1_init_clock_gating(struct drm_i915_private *dev_priv)
 	 * gating
 	 */
 
-	/* Wa_1409836686 :dg1[a0] */
+	/* Wa_14010096844:dg1[a0] */
 	if (IS_DG1_REVID(dev_priv, DG1_REVID_A0, DG1_REVID_A0))
 		I915_WRITE(GEN9_CLKGATE_DIS_3, I915_READ(GEN9_CLKGATE_DIS_3) |
 			   DPT_GATING_DIS);

@@ -591,7 +591,6 @@ xfer:
 	 * master execute_cb may refire.
 	 */
 	__notify_execute_cb_irq(request);
-
 	if (test_bit(DMA_FENCE_FLAG_ENABLE_SIGNAL_BIT, &request->fence.flags))
 		i915_request_enable_breadcrumb(request);
 

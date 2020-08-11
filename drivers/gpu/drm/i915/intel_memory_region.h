@@ -6,11 +6,13 @@
 #ifndef __INTEL_MEMORY_REGION_H__
 #define __INTEL_MEMORY_REGION_H__
 
+#include <drm/drm_mm.h>
 #include <linux/kref.h>
 #include <linux/ioport.h>
 #include <linux/mutex.h>
 #include <linux/io-mapping.h>
 #include <drm/drm_mm.h>
+#include <drm/i915_drm.h>
 
 #include "i915_buddy.h"
 
@@ -19,30 +21,25 @@ struct drm_i915_gem_object;
 struct intel_memory_region;
 struct sg_table;
 
-/**
- *  Base memory type
- */
 enum intel_memory_type {
-	INTEL_MEMORY_SYSTEM = 0,
-	INTEL_MEMORY_LOCAL,
-	INTEL_MEMORY_STOLEN,
+	INTEL_MEMORY_SYSTEM = I915_MEMORY_CLASS_SYSTEM,
+	INTEL_MEMORY_LOCAL = I915_MEMORY_CLASS_DEVICE,
+	INTEL_MEMORY_STOLEN_SYSTEM = I915_MEMORY_CLASS_STOLEN_SYSTEM,
+	INTEL_MEMORY_STOLEN_LOCAL = I915_MEMORY_CLASS_STOLEN_DEVICE,
 };
 
 enum intel_region_id {
 	INTEL_REGION_SMEM = 0,
 	INTEL_REGION_LMEM,
-	INTEL_REGION_STOLEN,
+	INTEL_REGION_STOLEN_SMEM,
+	INTEL_REGION_STOLEN_LMEM,
 	INTEL_REGION_UNKNOWN, /* Should be last */
 };
 
 #define REGION_SMEM     BIT(INTEL_REGION_SMEM)
 #define REGION_LMEM     BIT(INTEL_REGION_LMEM)
-#define REGION_STOLEN   BIT(INTEL_REGION_STOLEN)
-
-#define INTEL_MEMORY_TYPE_SHIFT 16
-
-#define MEMORY_TYPE_FROM_REGION(r) (ilog2((r) >> INTEL_MEMORY_TYPE_SHIFT))
-#define MEMORY_INSTANCE_FROM_REGION(r) (ilog2((r) & 0xffff))
+#define REGION_STOLEN_SMEM   BIT(INTEL_REGION_STOLEN_SMEM)
+#define REGION_STOLEN_LMEM   BIT(INTEL_REGION_STOLEN_LMEM)
 
 #define I915_ALLOC_MIN_PAGE_SIZE  BIT(0)
 #define I915_ALLOC_CONTIGUOUS     BIT(1)
@@ -51,10 +48,12 @@ enum intel_region_id {
 	for (id = 0; id < ARRAY_SIZE((i915)->mm.regions); id++) \
 		for_each_if((mr) = (i915)->mm.regions[id])
 
-/**
- * Memory regions encoded as type | instance
- */
-extern const u32 intel_region_map[];
+struct intel_memory_region_info {
+       u16 class;
+       u16 instance;
+};
+
+extern const struct intel_memory_region_info intel_region_map[];
 
 struct intel_memory_region_ops {
 	unsigned int flags;
@@ -79,6 +78,8 @@ struct intel_memory_region {
 	/* For fake LMEM */
 	struct drm_mm_node fake_mappable;
 
+	struct drm_mm stolen;
+
 	struct i915_buddy_mm mm;
 	struct mutex mm_lock;
 
@@ -89,10 +90,13 @@ struct intel_memory_region {
 	resource_size_t total;
 	resource_size_t avail;
 
-	unsigned int type;
-	unsigned int instance;
-	unsigned int id;
-	char name[8];
+	u16 type;
+	u16 instance;
+	enum intel_region_id id;
+	char name[16];
+	bool is_devmem;	/* true for device memory */
+
+	struct list_head reserved;
 
 	dma_addr_t remap_addr;
 
@@ -102,6 +106,10 @@ struct intel_memory_region {
 		struct list_head purgeable;
 	} objects;
 };
+
+struct intel_memory_region *
+intel_memory_region_lookup(struct drm_i915_private *i915,
+			   u16 class, u16 instance);
 
 int intel_memory_region_init_buddy(struct intel_memory_region *mem);
 void intel_memory_region_release_buddy(struct intel_memory_region *mem);

@@ -7,9 +7,15 @@
 
 #include <linux/fault-inject.h>
 
+#include "gem/i915_gem_lmem.h"
 #include "i915_trace.h"
 #include "intel_gt.h"
 #include "intel_gtt.h"
+
+struct drm_i915_gem_object *alloc_pt_lmem(struct i915_address_space *vm, int sz)
+{
+	return i915_gem_object_create_lmem(vm->i915, sz, 0);
+}
 
 struct drm_i915_gem_object *alloc_pt_dma(struct i915_address_space *vm, int sz)
 {
@@ -19,13 +25,18 @@ struct drm_i915_gem_object *alloc_pt_dma(struct i915_address_space *vm, int sz)
 	return i915_gem_object_create_internal(vm->i915, sz);
 }
 
-int pin_pt_dma(struct i915_address_space *vm, struct drm_i915_gem_object *obj)
+int map_pt_dma(struct i915_address_space *vm, struct drm_i915_gem_object *obj)
 {
-	int err;
+	enum i915_map_type type;
+	void *vaddr;
 
-	err = i915_gem_object_pin_pages(obj);
-	if (err)
-		return err;
+	type = I915_MAP_WB;
+	if (i915_gem_object_is_lmem(obj))
+		type = I915_MAP_WC;
+
+	vaddr = i915_gem_object_pin_map(obj, type);
+	if (IS_ERR(vaddr))
+		return PTR_ERR(vaddr);
 
 	i915_gem_object_make_unshrinkable(obj);
 	return 0;
@@ -119,6 +130,21 @@ void clear_pages(struct i915_vma *vma)
 	memset(&vma->page_sizes, 0, sizeof(vma->page_sizes));
 }
 
+void *__px_vaddr(struct drm_i915_gem_object *p, bool *needs_flush)
+{
+	enum i915_map_type type;
+	void *vaddr;
+
+	GEM_BUG_ON(!i915_gem_object_has_pages(p));
+
+	vaddr = page_unpack_bits(p->mm.mapping, &type);
+
+	if (needs_flush)
+		*needs_flush = type != I915_MAP_WC;
+
+	return vaddr;
+}
+
 dma_addr_t __px_dma(struct drm_i915_gem_object *p)
 {
 	GEM_BUG_ON(!i915_gem_object_has_pages(p));
@@ -134,32 +160,25 @@ struct page *__px_page(struct drm_i915_gem_object *p)
 void
 fill_page_dma(struct drm_i915_gem_object *p, const u64 val, unsigned int count)
 {
-	struct page *page = __px_page(p);
+	bool needs_flush;
 	void *vaddr;
 
-	vaddr = kmap(page);
+	vaddr = __px_vaddr(p, &needs_flush);
 	memset64(vaddr, val, count);
-	clflush_cache_range(vaddr, PAGE_SIZE);
-	kunmap(page);
+	if (needs_flush)
+		clflush_cache_range(vaddr, PAGE_SIZE);
 }
 
 static void poison_scratch_page(struct drm_i915_gem_object *scratch)
 {
-	struct sgt_iter sgt;
-	struct page *page;
+	void *vaddr = __px_vaddr(scratch, NULL);
 	u8 val;
 
 	val = 0;
 	if (IS_ENABLED(CONFIG_DRM_I915_DEBUG_GEM))
 		val = POISON_FREE;
 
-	for_each_sgt_page(page, sgt, scratch->mm.pages) {
-		void *vaddr;
-
-		vaddr = kmap(page);
-		memset(vaddr, val, PAGE_SIZE);
-		kunmap(page);
-	}
+	memset(vaddr, val, scratch->base.size);
 }
 
 int setup_scratch_page(struct i915_address_space *vm)
@@ -189,7 +208,7 @@ int setup_scratch_page(struct i915_address_space *vm)
 		if (IS_ERR(obj))
 			goto skip;
 
-		if (pin_pt_dma(vm, obj))
+		if (map_pt_dma(vm, obj))
 			goto skip_obj;
 
 		/* We need a single contiguous page for our scratch */

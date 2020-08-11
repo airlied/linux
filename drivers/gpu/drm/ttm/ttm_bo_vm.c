@@ -281,8 +281,8 @@ vm_fault_t ttm_bo_vm_fault_reserved(struct vm_fault *vmf,
 	pgoff_t i;
 	vm_fault_t ret = VM_FAULT_NOPAGE;
 	unsigned long address = vmf->address;
-	struct ttm_mem_type_manager *man =
-		&bdev->man[bo->mem.mem_type];
+	struct ttm_resource_manager *man =
+		ttm_manager_type(bdev, bo->mem.mem_type);
 
 	/*
 	 * Refuse to fault imported pages. This should be handled
@@ -308,9 +308,7 @@ vm_fault_t ttm_bo_vm_fault_reserved(struct vm_fault *vmf,
 		}
 
 		if (bo->moving != moving) {
-			spin_lock(&ttm_bo_glob.lru_lock);
-			ttm_bo_move_to_lru_tail(bo, NULL);
-			spin_unlock(&ttm_bo_glob.lru_lock);
+			ttm_bo_move_to_lru_tail_unlocked(bo);
 		}
 		dma_fence_put(moving);
 	}
@@ -510,8 +508,10 @@ static int ttm_bo_vm_access_kmap(struct ttm_buffer_object *bo,
 int ttm_bo_vm_access(struct vm_area_struct *vma, unsigned long addr,
 		     void *buf, int len, int write)
 {
-	unsigned long offset = (addr) - vma->vm_start;
 	struct ttm_buffer_object *bo = vma->vm_private_data;
+	unsigned long offset = (addr) - vma->vm_start +
+		((vma->vm_pgoff - drm_vma_node_start(&bo->base.vma_node))
+		 << PAGE_SHIFT);
 	int ret;
 
 	if (len < 1 || (offset + len) >> PAGE_SHIFT > bo->num_pages)

@@ -56,6 +56,8 @@ struct drm_i915_gem_object_ops {
 	void (*truncate)(struct drm_i915_gem_object *obj);
 	void (*writeback)(struct drm_i915_gem_object *obj);
 
+	int (*pread)(struct drm_i915_gem_object *,
+		     const struct drm_i915_gem_pread *arg);
 	int (*pwrite)(struct drm_i915_gem_object *obj,
 		      const struct drm_i915_gem_pwrite *arg);
 
@@ -146,9 +148,11 @@ struct drm_i915_gem_object {
 	unsigned long flags;
 #define I915_BO_ALLOC_CONTIGUOUS BIT(0)
 #define I915_BO_ALLOC_VOLATILE   BIT(1)
-#define I915_BO_ALLOC_FLAGS (I915_BO_ALLOC_CONTIGUOUS | I915_BO_ALLOC_VOLATILE)
-#define I915_BO_READONLY         BIT(2)
-
+#define I915_BO_ALLOC_CPU_CLEAR  BIT(2)
+#define I915_BO_ALLOC_FLAGS (I915_BO_ALLOC_CONTIGUOUS | \
+			     I915_BO_ALLOC_VOLATILE | \
+			     I915_BO_ALLOC_CPU_CLEAR)
+#define I915_BO_READONLY         BIT(3)
 	/*
 	 * Is the object to be mapped as read-only to the GPU
 	 * Only honoured if hardware has relevant pte bit
@@ -190,6 +194,15 @@ struct drm_i915_gem_object {
 		struct mutex lock;
 		atomic_t pages_pin_count;
 		atomic_t shrink_pin;
+
+		/**
+		 * Priority list of potential placements for this object.
+		 */
+		struct intel_memory_region **placements;
+		int n_placements;
+
+		/* XXX: Nasty hack, see gem_create */
+		int gem_create_posted_err;
 
 		/**
 		 * Memory region for this object.

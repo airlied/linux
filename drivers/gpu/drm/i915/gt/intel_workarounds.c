@@ -1721,6 +1721,10 @@ rcs_engine_wa_init(struct intel_engine_cs *engine, struct i915_wa_list *wal)
 			    GEN7_DISABLE_SAMPLER_PREFETCH);
 
 		/* Wa_1408615072:tgl */
+	}
+
+	if (IS_DG1(i915) || IS_TGL_REVID(i915, TGL_REVID_A0, TGL_REVID_A0)) {
+		/* Wa_1408615072:tgl[a0],dg1 */
 		wa_write_or(wal, UNSLICE_UNIT_LEVEL_CLKGATE2,
 			    VSUNIT_CLKGATE_DIS_TGL);
 	}

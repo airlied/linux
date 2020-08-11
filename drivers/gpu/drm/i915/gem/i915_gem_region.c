@@ -33,6 +33,10 @@ i915_gem_object_get_pages_buddy(struct drm_i915_gem_object *obj)
 	unsigned int sg_page_sizes;
 	int ret;
 
+	/* XXX: Check if we have any post. This is nasty hack, see gem_create */
+	if (obj->mm.gem_create_posted_err)
+		return obj->mm.gem_create_posted_err;
+
 	st = kmalloc(sizeof(*st), GFP_KERNEL);
 	if (!st)
 		return -ENOMEM;
@@ -90,6 +94,26 @@ i915_gem_object_get_pages_buddy(struct drm_i915_gem_object *obj)
 	sg_page_sizes |= sg->length;
 	sg_mark_end(sg);
 	i915_sg_trim(st);
+
+	/* Intended for kernel internal use only */
+	if (obj->flags & I915_BO_ALLOC_CPU_CLEAR) {
+		struct scatterlist *sg;
+		unsigned long i;
+
+		for_each_sg(st->sgl, sg, st->nents, i) {
+			unsigned int length;
+			void __iomem *vaddr;
+			dma_addr_t daddr;
+
+			daddr = sg_dma_address(sg);
+			daddr -= mem->region.start;
+			length = sg_dma_len(sg);
+
+			vaddr = io_mapping_map_wc(&mem->iomap, daddr, length);
+			memset64(vaddr, 0, length / sizeof(u64));
+			io_mapping_unmap(vaddr);
+		}
+	}
 
 	__i915_gem_object_set_pages(obj, st, sg_page_sizes);
 

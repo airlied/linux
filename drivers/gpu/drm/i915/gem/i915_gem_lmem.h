@@ -11,10 +11,32 @@
 struct drm_i915_private;
 struct drm_i915_gem_object;
 struct intel_memory_region;
+struct drm_i915_gem_pread;
+struct drm_i915_gem_pwrite;
 
 extern const struct drm_i915_gem_object_ops i915_gem_lmem_obj_ops;
 
+int i915_gem_object_lmem_pread(struct drm_i915_gem_object *obj,
+			       const struct drm_i915_gem_pread *args);
+int i915_gem_object_lmem_pwrite(struct drm_i915_gem_object *obj,
+				const struct drm_i915_gem_pwrite *args);
+
+void __iomem *
+i915_gem_object_lmem_io_map(struct drm_i915_gem_object *obj,
+			    unsigned long n,
+			    unsigned long size);
+void __iomem *i915_gem_object_lmem_io_map_page(struct drm_i915_gem_object *obj,
+					       unsigned long n);
+void __iomem *
+i915_gem_object_lmem_io_map_page_atomic(struct drm_i915_gem_object *obj,
+					unsigned long n);
+
 bool i915_gem_object_is_lmem(struct drm_i915_gem_object *obj);
+bool i915_gem_object_is_devmem(struct drm_i915_gem_object *obj);
+
+struct drm_i915_gem_object *
+i915_gem_object_create_lmem_from_data(struct drm_i915_private *i915,
+				      const void *data, size_t size);
 
 struct drm_i915_gem_object *
 i915_gem_object_create_lmem(struct drm_i915_private *i915,

@@ -3965,12 +3965,13 @@ tgl_tc_cold_request(struct drm_i915_private *i915, bool block)
 	int ret;
 
 	while (1) {
-		u32 low_val = 0, high_val;
+		u32 low_val;
+		u32 high_val = 0;
 
 		if (block)
-			high_val = TGL_PCODE_EXIT_TCCOLD_DATA_H_BLOCK_REQ;
+			low_val = TGL_PCODE_EXIT_TCCOLD_DATA_L_BLOCK_REQ;
 		else
-			high_val = TGL_PCODE_EXIT_TCCOLD_DATA_H_UNBLOCK_REQ;
+			low_val = TGL_PCODE_EXIT_TCCOLD_DATA_L_UNBLOCK_REQ;
 
 		/*
 		 * Spec states that we should timeout the request after 200us
@@ -3989,8 +3990,7 @@ tgl_tc_cold_request(struct drm_i915_private *i915, bool block)
 		if (++tries == 3)
 			break;
 
-		if (ret == -EAGAIN)
-			msleep(1);
+		msleep(1);
 	}
 
 	if (ret)
@@ -4185,6 +4185,12 @@ static const struct i915_power_well_desc tgl_power_wells[] = {
 		},
 	},
 	{
+		.name = "TC cold off",
+		.domains = TGL_TC_COLD_OFF_POWER_DOMAINS,
+		.ops = &tgl_tc_cold_off_ops,
+		.id = DISP_PW_ID_NONE,
+	},
+	{
 		.name = "AUX A",
 		.domains = TGL_AUX_A_IO_POWER_DOMAINS,
 		.ops = &icl_aux_power_well_ops,
@@ -4369,12 +4375,6 @@ static const struct i915_power_well_desc tgl_power_wells[] = {
 			.hsw.has_fuses = true,
 			.hsw.irq_pipe_mask = BIT(PIPE_D),
 		},
-	},
-	{
-		.name = "TC cold off",
-		.domains = TGL_TC_COLD_OFF_POWER_DOMAINS,
-		.ops = &tgl_tc_cold_off_ops,
-		.id = DISP_PW_ID_NONE,
 	},
 };
 

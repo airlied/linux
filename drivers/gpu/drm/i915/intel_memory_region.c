@@ -6,15 +6,44 @@
 #include "intel_memory_region.h"
 #include "i915_drv.h"
 
-/* XXX: Hysterical raisins. BIT(inst) needs to just be (inst) at some point. */
-#define REGION_MAP(type, inst) \
-	BIT((type) + INTEL_MEMORY_TYPE_SHIFT) | BIT(inst)
-
-const u32 intel_region_map[] = {
-	[INTEL_REGION_SMEM] = REGION_MAP(INTEL_MEMORY_SYSTEM, 0),
-	[INTEL_REGION_LMEM] = REGION_MAP(INTEL_MEMORY_LOCAL, 0),
-	[INTEL_REGION_STOLEN] = REGION_MAP(INTEL_MEMORY_STOLEN, 0),
+const struct intel_memory_region_info intel_region_map[] = {
+       [INTEL_REGION_SMEM] = {
+               .class = INTEL_MEMORY_SYSTEM,
+               .instance = 0,
+       },
+       [INTEL_REGION_LMEM] = {
+               .class = INTEL_MEMORY_LOCAL,
+               .instance = 0,
+       },
+       [INTEL_REGION_STOLEN_SMEM] = {
+               .class = INTEL_MEMORY_STOLEN_SYSTEM,
+               .instance = 0,
+       },
+       [INTEL_REGION_STOLEN_LMEM] = {
+               .class = INTEL_MEMORY_STOLEN_LOCAL,
+               .instance = 0,
+       },
 };
+
+struct intel_memory_region *
+intel_memory_region_lookup(struct drm_i915_private *i915,
+			   u16 class, u16 instance)
+{
+	int i;
+
+	/* XXX: consider maybe converting to an rb tree at some point */
+	for (i = 0; i < ARRAY_SIZE(i915->mm.regions); ++i) {
+		struct intel_memory_region *region = i915->mm.regions[i];
+
+		if (!region)
+			continue;
+
+		if (region->type == class && region->instance == instance)
+			return region;
+	}
+
+	return NULL;
+}
 
 struct intel_memory_region *
 intel_memory_region_by_type(struct drm_i915_private *i915,
@@ -72,6 +101,7 @@ __intel_memory_region_get_pages_buddy(struct intel_memory_region *mem,
 				      struct list_head *blocks)
 {
 	unsigned int min_order = 0;
+	unsigned int max_order;
 	unsigned long n_pages;
 
 	GEM_BUG_ON(!IS_ALIGNED(size, mem->mm.chunk_size));
@@ -92,13 +122,24 @@ __intel_memory_region_get_pages_buddy(struct intel_memory_region *mem,
 
 	n_pages = size >> ilog2(mem->mm.chunk_size);
 
+	/*
+	 * When allocating pages for an lmem object of size > 4G
+	 * the memory blocks allocated from buddy system could be
+	 * from sizes greater than 4G requiring > 32b to represent
+	 * block size. But those blocks cannot be used in sg list
+	 * construction(in caller) as sg->length is only 32b wide.
+	 * Hence limiting the block size to 4G.
+	 */
+	max_order = (ilog2(SZ_4G) - 1) - ilog2(mem->mm.chunk_size);
+
 	mutex_lock(&mem->mm_lock);
 
 	do {
 		struct i915_buddy_block *block;
 		unsigned int order;
 
-		order = fls(n_pages) - 1;
+		order = min_t(u32, (fls(n_pages) - 1), max_order);
+
 		GEM_BUG_ON(order > mem->mm.max_order);
 		GEM_BUG_ON(order < min_order);
 
@@ -156,6 +197,7 @@ int intel_memory_region_init_buddy(struct intel_memory_region *mem)
 
 void intel_memory_region_release_buddy(struct intel_memory_region *mem)
 {
+	i915_buddy_free_list(&mem->mm, &mem->reserved);
 	i915_buddy_fini(&mem->mm);
 }
 
@@ -185,6 +227,7 @@ intel_memory_region_create(struct drm_i915_private *i915,
 	mutex_init(&mem->objects.lock);
 	INIT_LIST_HEAD(&mem->objects.list);
 	INIT_LIST_HEAD(&mem->objects.purgeable);
+	INIT_LIST_HEAD(&mem->reserved);
 
 	mutex_init(&mem->mm_lock);
 
@@ -243,23 +286,37 @@ int intel_memory_regions_hw_probe(struct drm_i915_private *i915)
 {
 	int err, i;
 
+	/* All platforms currently have system memory */
+	GEM_BUG_ON(!HAS_REGION(i915, REGION_SMEM));
+
+	if (IS_DGFX(i915)) {
+		if (IS_ENABLED(CONFIG_DRM_I915_PCIE_STRICT_WRITE_ORDERING))
+			pcie_capability_clear_word(i915->drm.pdev, PCI_EXP_DEVCTL,
+						   PCI_EXP_DEVCTL_RELAX_EN);
+		else
+			pcie_capability_set_word(i915->drm.pdev, PCI_EXP_DEVCTL,
+						 PCI_EXP_DEVCTL_RELAX_EN);
+	}
+
 	for (i = 0; i < ARRAY_SIZE(i915->mm.regions); i++) {
 		struct intel_memory_region *mem = ERR_PTR(-ENODEV);
-		u32 type;
+		u16 type, instance;
 
 		if (!HAS_REGION(i915, BIT(i)))
 			continue;
 
-		type = MEMORY_TYPE_FROM_REGION(intel_region_map[i]);
+		type = intel_region_map[i].class;
+		instance = intel_region_map[i].instance;
 		switch (type) {
 		case INTEL_MEMORY_SYSTEM:
 			mem = i915_gem_shmem_setup(i915);
 			break;
-		case INTEL_MEMORY_STOLEN:
+		case INTEL_MEMORY_STOLEN_LOCAL: /* fallthrough */
+		case INTEL_MEMORY_STOLEN_SYSTEM:
 			mem = i915_gem_stolen_setup(i915);
 			break;
 		case INTEL_MEMORY_LOCAL:
-			mem = intel_setup_fake_lmem(i915);
+			mem = i915_gem_setup_lmem(i915);
 			break;
 		}
 
@@ -271,9 +328,13 @@ int intel_memory_regions_hw_probe(struct drm_i915_private *i915)
 			goto out_cleanup;
 		}
 
-		mem->id = intel_region_map[i];
+		mem->id = i;
 		mem->type = type;
-		mem->instance = MEMORY_INSTANCE_FROM_REGION(intel_region_map[i]);
+		mem->instance = instance;
+
+		if (HAS_LMEM(mem->i915) && type != INTEL_MEMORY_SYSTEM)
+			intel_memory_region_set_name(mem, "%s%u",
+						     mem->name, mem->instance);
 
 		i915->mm.regions[i] = mem;
 	}

@@ -614,9 +614,9 @@ static const struct panel_desc boe_tv101wum_nl6_desc = {
 static const struct drm_display_mode auo_kd101n80_45na_default_mode = {
 	.clock = 157000,
 	.hdisplay = 1200,
-	.hsync_start = 1200 + 80,
-	.hsync_end = 1200 + 80 + 24,
-	.htotal = 1200 + 80 + 24 + 36,
+	.hsync_start = 1200 + 60,
+	.hsync_end = 1200 + 60 + 24,
+	.htotal = 1200 + 60 + 24 + 56,
 	.vdisplay = 1920,
 	.vsync_start = 1920 + 16,
 	.vsync_end = 1920 + 16 + 4,
@@ -787,7 +787,9 @@ static int boe_panel_add(struct boe_panel *boe)
 	boe->base.funcs = &boe_panel_funcs;
 	boe->base.dev = &boe->dsi->dev;
 
-	return drm_panel_add(&boe->base);
+	drm_panel_add(&boe->base);
+
+	return 0;
 }
 
 static int boe_panel_probe(struct mipi_dsi_device *dsi)
