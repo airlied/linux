@@ -169,3 +169,31 @@ static const struct ttm_resource_manager_func i915_ttm_stolen_mgr_func = {
 	.put_node = i915_ttm_stolen_mgr_del,
 	.debug = NULL,
 };
+
+int i915_ttm_stolen_get_pages(struct i915_ttm_bo *bo)
+{
+	struct drm_i915_private *i915 = to_i915_ttm_dev(bo->tbo.bdev);
+	struct sg_table *st;
+	struct scatterlist *sg;
+	struct ttm_resource *mem = &bo->tbo.mem;
+	struct drm_mm_node *node = mem->mm_node;
+
+	st = kmalloc(sizeof(*st), GFP_KERNEL);
+	if (!st)
+		return -ENOMEM;
+
+	if (sg_alloc_table(st, 1, GFP_KERNEL)) {
+		kfree(st);
+		return -ENOMEM;
+	}
+
+	sg = st->sgl;
+	sg->offset = 0;
+	sg->length = bo->tbo.num_pages * PAGE_SIZE;
+
+	sg_dma_address(sg) = (dma_addr_t)i915->dsm.start + node->start;
+	sg_dma_len(sg) = sg->length;
+
+	bo->pages = st;
+	return 0;
+}

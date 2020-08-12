@@ -1170,38 +1170,26 @@ int i915_ttm_create_bo_pages(struct i915_ttm_bo *bo)
 {
 	struct drm_i915_private *i915 = to_i915_ttm_dev(bo->tbo.bdev);
 	/* create pages for LMEM bindings here */
-	struct sg_table *st;
 	struct scatterlist *sg;
 	struct ttm_resource *mem = &bo->tbo.mem;
-	struct drm_mm_node *nodes = mem->mm_node;
-	unsigned pages = mem->num_pages;
-	unsigned int sg_page_sizes;
-	int ret;
-	st = kmalloc(sizeof(*st), GFP_KERNEL);
-	if (!st)
-		return -ENOMEM;
+	unsigned int sg_page_sizes = 0;
+	int ret = 0;
 
 	if (mem->mem_type == I915_TTM_PL_STOLEN) {
-		printk(KERN_ERR "stolen create bo pages\n");
-		if (sg_alloc_table(st, 1, GFP_KERNEL)) {
-			kfree(st);
-			return -ENOMEM;
-		}
-
-		sg = st->sgl;
-		sg->offset = 0;
-		sg->length = bo->tbo.num_pages * PAGE_SIZE;
-
-		sg_dma_address(sg) = (dma_addr_t)i915->dsm.start + nodes->start;
-		sg_dma_len(sg) = sg->length;
-
-
+		ret = i915_ttm_stolen_get_pages(bo);
 	} else if (mem->mem_type == TTM_PL_TT || mem->mem_type == TTM_PL_SYSTEM) {
 		struct ttm_dma_tt *ttm;
 		dma_addr_t *pages_addr;
 		int i;
+		struct drm_mm_node *nodes = mem->mm_node;
+		unsigned pages = mem->num_pages;
+		struct sg_table *st;
+		struct scatterlist *sg;
 		struct scatterlist *sgx;
 
+		st = kmalloc(sizeof(*st), GFP_KERNEL);
+		if (!st)
+			return -ENOMEM;
 		ttm = container_of(bo->tbo.ttm, struct ttm_dma_tt, ttm);
 		pages_addr = ttm->dma_address;
 
@@ -1216,33 +1204,10 @@ int i915_ttm_create_bo_pages(struct i915_ttm_bo *bo)
 			count += __sg_page_count(sgx);
 		}
 	} else {
-		uint32_t region = mem->mem_type == INTEL_MEMORY_LOCAL;
-		if (sg_alloc_table(st, (bo->tbo.num_pages * PAGE_SIZE) >> ilog2(2*1024*1024), GFP_KERNEL)) {
-			kfree(st);
-			return -ENOMEM;
-		}
-
-
-		sg = st->sgl;
-		st->nents = 0;
-		sg_page_sizes = 0;
-
-		while (pages) {
-			pages -= nodes->size;
-
-			sg_dma_address(sg) = i915->mm.regions[region]->io_start + nodes->start;
-
-			sg_dma_len(sg) = nodes->size;
-			sg->length = nodes->size;
-			st->nents++;
-			++nodes;
-		}
-		sg_mark_end(sg);
+		ret = i915_ttm_vram_get_pages(bo);
 	}
 
-	bo->pages = st;
-	bo->page_sizes.sg = sg_page_sizes;
-	return 0;
+	return ret;
 }
 
 int i915_ttm_set_tiling(struct i915_ttm_bo *bo, unsigned int tiling,

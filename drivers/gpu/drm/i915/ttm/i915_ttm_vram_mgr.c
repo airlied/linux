@@ -197,3 +197,40 @@ static const struct ttm_resource_manager_func i915_ttm_vram_mgr_func = {
 	.get_node = i915_ttm_vram_mgr_new,
 	.put_node = i915_ttm_vram_mgr_del,
 };
+
+int i915_ttm_vram_get_pages(struct i915_ttm_bo *bo)
+{
+	struct drm_i915_private *i915 = to_i915_ttm_dev(bo->tbo.bdev);
+	struct sg_table *st;
+	struct scatterlist *sg;
+	struct ttm_resource *mem = &bo->tbo.mem;
+	struct drm_mm_node *nodes = mem->mm_node;
+	unsigned pages = mem->num_pages;
+
+	st = kmalloc(sizeof(*st), GFP_KERNEL);
+	if (!st)
+		return -ENOMEM;
+
+	/* wtf rewrite */
+	if (sg_alloc_table(st, (bo->tbo.num_pages * PAGE_SIZE) >> ilog2(2*1024*1024), GFP_KERNEL)) {
+		kfree(st);
+		return -ENOMEM;
+	}
+
+
+	sg = st->sgl;
+	st->nents = 0;
+
+	while (pages) {
+		pages -= nodes->size;
+
+		sg_dma_address(sg) = i915->mm.regions[INTEL_MEMORY_LOCAL]->io_start + nodes->start;
+
+		sg_dma_len(sg) = nodes->size;
+		sg->length = nodes->size;
+		st->nents++;
+		++nodes;
+	}
+	sg_mark_end(sg);
+	return 0;
+}

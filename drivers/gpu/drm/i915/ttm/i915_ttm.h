@@ -117,9 +117,13 @@ int i915_ttm_create_bo_pages(struct i915_ttm_bo *bo);
 int i915_ttm_vram_mgr_init(struct drm_i915_private *i915);
 void i915_ttm_vram_mgr_fini(struct drm_i915_private *i915);
 
+int i915_ttm_vram_get_pages(struct i915_ttm_bo *bo);
+
 int i915_ttm_gtt_mgr_init(struct drm_i915_private *i915);
 void i915_ttm_gtt_mgr_fini(struct drm_i915_private *i915);
 
 int i915_ttm_stolen_mgr_init(struct drm_i915_private *i915);
 void i915_ttm_stolen_mgr_fini(struct drm_i915_private *i915);
+
+int i915_ttm_stolen_get_pages(struct i915_ttm_bo *bo);
 #endif
