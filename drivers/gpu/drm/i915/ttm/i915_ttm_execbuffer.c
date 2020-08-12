@@ -337,9 +337,14 @@ static void
 i915_ttm_execbuffer_fini(struct i915_ttm_execbuffer *eb, int error,
 			 bool backoff)
 {
+	struct i915_ttm_bo_list_entry *e;	
 	if (error && backoff)
 		ttm_eu_backoff_reservation(&eb->ticket, &eb->validated);
 
+	i915_ttm_bo_list_for_each_entry(e, eb->bo_list) {
+		struct i915_vma *vma = e->vma;
+		__i915_vma_unpin(vma);
+	}
 	if (eb->bo_list)
 		i915_ttm_bo_list_put(eb->bo_list);
 }
