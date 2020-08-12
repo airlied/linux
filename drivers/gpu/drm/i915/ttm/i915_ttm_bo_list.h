@@ -10,6 +10,7 @@ struct i915_ttm_bo_list_entry {
 	struct i915_vma *vma;
 	u32 user_flags;
 	u64 pin_flags;
+	bool vma_pinned;
 };
 
 struct i915_ttm_bo_list {

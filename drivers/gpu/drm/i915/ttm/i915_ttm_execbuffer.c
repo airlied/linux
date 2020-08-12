@@ -342,8 +342,10 @@ i915_ttm_execbuffer_fini(struct i915_ttm_execbuffer *eb, int error,
 		ttm_eu_backoff_reservation(&eb->ticket, &eb->validated);
 
 	i915_ttm_bo_list_for_each_entry(e, eb->bo_list) {
-		struct i915_vma *vma = e->vma;
-		__i915_vma_unpin(vma);
+		if (e->vma_pinned) {
+			struct i915_vma *vma = e->vma;
+			__i915_vma_unpin(vma);
+		}
 	}
 	if (eb->bo_list)
 		i915_ttm_bo_list_put(eb->bo_list);
@@ -516,6 +518,8 @@ i915_ttm_do_execbuffer(struct drm_device *dev,
 	struct drm_i915_gem_exec_object2 *exec2_list;
 	struct i915_ttm_execbuffer eb = {};
 	struct dma_fence *in_fence = NULL;
+	int out_fence_fd = -1;
+	struct sync_file *out_fence = NULL;	
 	struct list_head duplicates;
 	unsigned int i;
 	int r;
@@ -545,6 +549,14 @@ i915_ttm_do_execbuffer(struct drm_device *dev,
 	}
 #undef IN_FENCES
 
+	if (args->flags & I915_EXEC_FENCE_OUT) {
+		out_fence_fd = get_unused_fd_flags(O_CLOEXEC);
+		if (out_fence_fd < 0) {
+			r = out_fence_fd;
+			
+			goto err_in_fence;
+		}
+	}
 	r = eb_select_context(&eb);
 	if (unlikely(r))
 		return -EINVAL;
@@ -552,6 +564,10 @@ i915_ttm_do_execbuffer(struct drm_device *dev,
 	r = eb_pin_engine(&eb, file, args);
 
 	eb.request = i915_request_create(eb.context);
+	if (IS_ERR(eb.request)) {
+		r = PTR_ERR(eb.request);
+		goto err_unpin_engine;
+	}
 
 	if (in_fence) {
 		if (args->flags & I915_EXEC_FENCE_SUBMIT)
@@ -569,6 +585,14 @@ i915_ttm_do_execbuffer(struct drm_device *dev,
 		r = await_fence_array(&eb, fences);
 		if (r)
 			goto out;
+	}
+
+	if (out_fence_fd != -1) {
+		out_fence = sync_file_create(&eb.request->fence);
+		if (!out_fence) {
+			r = -ENOMEM;
+			goto err_request;
+		}
 	}
 
 	INIT_LIST_HEAD(&duplicates);
@@ -611,6 +635,8 @@ i915_ttm_do_execbuffer(struct drm_device *dev,
 		r = i915_vma_pin(e->vma, 0, 0, pin_flags);
 		if (r)
 			DRM_ERROR("vma pinning failed %d\n", r);
+		else
+			e->vma_pinned = true;
 	}
 
 	eb.batch = i915_ttm_bo_list_array_entry(eb.bo_list, eb_batch_index(&eb));
@@ -641,16 +667,32 @@ err_request:
 	i915_request_get(eb.request);
 	eb_request_add(&eb);
 
+	ttm_eu_fence_buffer_objects(&eb.ticket, &eb.validated, &eb.request->fence);
 	if (fences)
 		signal_fence_array(&eb, fences);
 
-	ttm_eu_fence_buffer_objects(&eb.ticket, &eb.validated, &eb.request->fence);
-	i915_request_put(eb.request);
+	if (out_fence) {
+		if (r == 0) {
+			fd_install(out_fence_fd, out_fence->file);
+			args->rsvd2 &= GENMASK_ULL(31, 0); /* keep in-fence */
+			args->rsvd2 |= (u64)out_fence_fd << 32;
+			out_fence_fd = -1;
+		} else {
+			fput(out_fence->file);
+		}
+	}
 
+	i915_request_put(eb.request);
+err_unpin_engine:
 	eb_unpin_engine(&eb);
 
 	i915_gem_context_put(eb.gem_context);
 out:
 	i915_ttm_execbuffer_fini(&eb, r, reserved_buffers);
+
+	if (out_fence_fd != -1)
+		put_unused_fd(out_fence_fd);
+err_in_fence:
+	dma_fence_put(in_fence);
 	return r;
 }
