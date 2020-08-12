@@ -30,12 +30,20 @@ struct i915_ttm_gtt_mgr {
 	atomic64_t available;
 };
 
+struct i915_ttm_stolen_mgr {
+	struct ttm_resource_manager manager;
+	struct drm_mm mm;
+	spinlock_t lock;
+	atomic64_t available;
+};
+
 struct i915_ttm_mman {
 	struct ttm_bo_device bdev;
 	bool mem_global_referenced;
 	bool initialized;
 	struct i915_ttm_vram_mgr vram_mgr;
 	struct i915_ttm_gtt_mgr gtt_mgr;
+	struct i915_ttm_stolen_mgr stolen_mgr;
 	void __iomem *aper_base_kaddr;
 };
 

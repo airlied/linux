@@ -4,12 +4,6 @@
 /* populate should come from the linear page chunk. */
 #include "i915_drv.h"
 #include "i915_ttm.h"
-struct i915_ttm_stolen_mgr {
-	struct ttm_resource_manager manager;
-	struct drm_mm mm;
-	spinlock_t lock;
-	atomic64_t available;
-};
 
 static inline struct i915_ttm_stolen_mgr *to_stolen_mgr(struct ttm_resource_manager *man)
 {
@@ -18,7 +12,6 @@ static inline struct i915_ttm_stolen_mgr *to_stolen_mgr(struct ttm_resource_mana
 
 struct i915_ttm_stolen_node {
 	struct drm_mm_node node;
-	struct ttm_buffer_object *tbo;
 	struct ttm_resource gtt_res;
 };
 
@@ -32,15 +25,10 @@ static const struct ttm_resource_manager_func i915_ttm_stolen_mgr_func;
 
 int i915_ttm_stolen_mgr_init(struct drm_i915_private *i915)
 {
-	struct i915_ttm_stolen_mgr *mgr;
-	struct ttm_resource_manager *man;
+	struct i915_ttm_stolen_mgr *mgr = &i915->ttm_mman.stolen_mgr;
+	struct ttm_resource_manager *man = &mgr->manager;
 	int ret;
 	unsigned long p_size = i915->stolen_usable_size >> PAGE_SHIFT;
-	mgr = kzalloc(sizeof(*mgr), GFP_KERNEL);
-	if (!mgr)
-		return -ENOMEM;
-
-	man = &mgr->manager;
 
 	printk("creating stolen size %llu\n", i915->stolen_usable_size);
 
@@ -62,8 +50,9 @@ int i915_ttm_stolen_mgr_init(struct drm_i915_private *i915)
 
 void i915_ttm_stolen_mgr_fini(struct drm_i915_private *i915)
 {
-	struct ttm_resource_manager *man = ttm_manager_type(&i915->ttm_mman.bdev, I915_TTM_PL_STOLEN);
-	struct i915_ttm_stolen_mgr *mgr = to_stolen_mgr(man);
+	struct i915_ttm_stolen_mgr *mgr = &i915->ttm_mman.stolen_mgr;
+	struct ttm_resource_manager *man = &mgr->manager;
+
 	int ret;
 
 	ttm_resource_manager_set_used(man, false);
@@ -77,7 +66,6 @@ void i915_ttm_stolen_mgr_fini(struct drm_i915_private *i915)
 
 	ttm_resource_manager_cleanup(man);
 	ttm_set_driver_manager(&i915->ttm_mman.bdev, TTM_PL_TT, NULL);
-	kfree(mgr);
 }
 
 /**
@@ -123,7 +111,6 @@ static int i915_ttm_stolen_mgr_new(struct ttm_resource_manager *man,
 		r = -ENOMEM;
 		goto err_out;
 	}
-	node->tbo = tbo;
 
 	/* find space in stolen address space first */
 	spin_lock(&mgr->lock);
