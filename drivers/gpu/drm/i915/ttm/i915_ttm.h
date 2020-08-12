@@ -97,14 +97,15 @@ int i915_ttm_gem_object_create(struct drm_i915_private *i915, unsigned long size
 void i915_ttm_gem_object_close(struct drm_gem_object *gem, struct drm_file *file);
 void i915_ttm_gem_object_free(struct drm_gem_object *gobj);
 int
-i915_ttm_dumb_mmap_offset(struct drm_i915_private *i915,
-			  struct drm_file *file,
+i915_ttm_dumb_mmap_offset(struct drm_file *file,
 			  u32 handle,
 			  u64 *offset);
+
 int
-i915_ttm_mmap_offset_ioctl(struct drm_i915_private *i915,
-			   struct drm_i915_gem_mmap_offset *args,
-			   struct drm_file *file);
+i915_ttm_mmap_offset_ioctl(struct drm_file *file,
+			   u32 handle,
+			   enum i915_mmap_type mmap_type,
+			   u64 *offset);
 int
 i915_ttm_do_execbuffer(struct drm_device *dev,
 		       struct drm_file *file,

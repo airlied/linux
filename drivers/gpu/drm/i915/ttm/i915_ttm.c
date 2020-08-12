@@ -1138,8 +1138,7 @@ retry:
 }
 
 int
-i915_ttm_dumb_mmap_offset(struct drm_i915_private *i915,
-			  struct drm_file *file,
+i915_ttm_dumb_mmap_offset(struct drm_file *file,
 			  u32 handle,
 			  u64 *offset)
 {
@@ -1158,11 +1157,12 @@ i915_ttm_dumb_mmap_offset(struct drm_i915_private *i915,
 }
 
 int
-i915_ttm_mmap_offset_ioctl(struct drm_i915_private *i915,
-			   struct drm_i915_gem_mmap_offset *args,
-			   struct drm_file *file)
+i915_ttm_mmap_offset_ioctl(struct drm_file *file,
+			   u32 handle,
+			   enum i915_mmap_type mmap_type,
+			   u64 *offset)
 {
-	return i915_ttm_dumb_mmap_offset(i915, file, args->handle, &args->offset);
+	return i915_ttm_dumb_mmap_offset(file, handle, offset);
 }
 
 
@@ -1210,8 +1210,10 @@ int i915_ttm_create_bo_pages(struct i915_ttm_bo *bo)
 					  GFP_KERNEL);
 
 		//TODO scatter list binding for real life
+		int count = 0;
 		for_each_sg(st->sgl, sgx, st->nents, i) {
-			sgx->dma_address = ttm->dma_address[i];
+			sg_dma_address(sgx) = ttm->dma_address[count];
+			count += __sg_page_count(sgx);
 		}
 	} else {
 		uint32_t region = mem->mem_type == INTEL_MEMORY_LOCAL;
