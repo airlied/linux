@@ -1,12 +1,6 @@
 
 #include "i915_drv.h"
 #include "i915_ttm.h"
-struct i915_ttm_gtt_mgr {
-	struct ttm_resource_manager manager;
-	struct drm_mm mm;
-	spinlock_t lock;
-	atomic64_t available;
-};
 
 static inline struct i915_ttm_gtt_mgr *to_gtt_mgr(struct ttm_resource_manager *man)
 {
@@ -25,9 +19,7 @@ int i915_ttm_gtt_mgr_init(struct drm_i915_private *i915)
 	unsigned long gtt_pages = i915->ggtt.vm.total >> PAGE_SHIFT;
 	int ret;
 
-	mgr = kzalloc(sizeof(*mgr), GFP_KERNEL);
-	if (!mgr)
-		return -ENOMEM;
+	mgr = &i915->ttm_mman.gtt_mgr;
 	man = &mgr->manager;
 
 	printk("creating GTT size %llu\n", i915->ggtt.vm.total);
@@ -48,8 +40,9 @@ int i915_ttm_gtt_mgr_init(struct drm_i915_private *i915)
 
 void i915_ttm_gtt_mgr_fini(struct drm_i915_private *i915)
 {
-	struct ttm_resource_manager *man = ttm_manager_type(&i915->ttm_mman.bdev, TTM_PL_TT);
-	struct i915_ttm_gtt_mgr *mgr = to_gtt_mgr(man);
+	struct i915_ttm_gtt_mgr *mgr = &i915->ttm_mman.gtt_mgr;
+	struct ttm_resource_manager *man = &mgr->manager;
+
 	int ret;
 	ttm_resource_manager_set_used(man, false);
 
@@ -63,8 +56,6 @@ void i915_ttm_gtt_mgr_fini(struct drm_i915_private *i915)
 
 	ttm_resource_manager_cleanup(man);
 	ttm_set_driver_manager(&i915->ttm_mman.bdev, TTM_PL_TT, NULL);
-
-	kfree(mgr);
 }
 
 /**
