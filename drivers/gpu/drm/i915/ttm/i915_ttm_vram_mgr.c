@@ -1,13 +1,6 @@
 
 #include "i915_drv.h"
 
-struct i915_ttm_vram_mgr {
-	struct ttm_resource_manager manager;
-	struct drm_mm mm;
-	spinlock_t lock;
-	atomic64_t usage;
-};
-
 static inline struct i915_ttm_vram_mgr *to_vram_mgr(struct ttm_resource_manager *man)
 {
 	return container_of(man, struct i915_ttm_vram_mgr, manager);
@@ -47,11 +40,8 @@ int i915_ttm_vram_mgr_init(struct drm_i915_private *i915)
 		return 0;
 
 	vram_size = i915->mm.regions[INTEL_REGION_LMEM]->total >> PAGE_SHIFT;
-	mgr = kzalloc(sizeof(*mgr), GFP_KERNEL);
 
-	if (!mgr)
-		return -ENOMEM;
-
+	mgr = &i915->ttm_mman.vram_mgr;
 	man = &mgr->manager;
 
 	man->available_caching = TTM_PL_FLAG_UNCACHED | TTM_PL_FLAG_WC;
@@ -69,8 +59,8 @@ int i915_ttm_vram_mgr_init(struct drm_i915_private *i915)
 
 void i915_ttm_vram_mgr_fini(struct drm_i915_private *i915)
 {
-	struct ttm_resource_manager *man = ttm_manager_type(&i915->ttm_mman.bdev, TTM_PL_VRAM);
-	struct i915_ttm_vram_mgr *mgr = to_vram_mgr(man);
+	struct i915_ttm_vram_mgr *mgr = &i915->ttm_mman.vram_mgr;
+	struct ttm_resource_manager *man = &mgr->manager;
 	int ret;
 
 	ttm_resource_manager_set_used(man, false);
@@ -84,7 +74,6 @@ void i915_ttm_vram_mgr_fini(struct drm_i915_private *i915)
 
 	ttm_resource_manager_cleanup(man);
 	ttm_set_driver_manager(&i915->ttm_mman.bdev, TTM_PL_VRAM, NULL);
-	kfree(mgr);
 }
 
 static int i915_ttm_vram_mgr_new(struct ttm_resource_manager *man,

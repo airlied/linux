@@ -16,12 +16,19 @@
 #define I915_TTM_CREATE_VRAM_CONTIGUOUS (1 << 0)
 #define I915_TTM_CREATE_CPU_GTT_USWC (1 << 1)
 
+struct i915_ttm_vram_mgr {
+	struct ttm_resource_manager manager;
+	struct drm_mm mm;
+	spinlock_t lock;
+	atomic64_t usage;
+};
+
 struct i915_ttm_mman {
 	struct ttm_bo_device bdev;
 	bool mem_global_referenced;
 	bool initialized;
+	struct i915_ttm_vram_mgr vram_mgr;
 	void __iomem *aper_base_kaddr;
-	void __iomem *stolen_aper_base_kaddr;
 };
 
 
