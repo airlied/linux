@@ -232,5 +232,6 @@ int i915_ttm_vram_get_pages(struct i915_ttm_bo *bo)
 		++nodes;
 	}
 	sg_mark_end(sg);
+	bo->pages = st;	
 	return 0;
 }

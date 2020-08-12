@@ -497,6 +497,10 @@ static void i915_ttm_bo_destroy(struct ttm_buffer_object *tbo)
 	struct i915_ttm_bo *bo = ttm_to_i915_bo(tbo);
 
 	drm_gem_object_release(&bo->tbo.base);
+	if (bo->pages) {
+		sg_free_table(bo->pages);
+		kfree(bo->pages);
+	}
 	kfree(bo);
 }
 
@@ -1203,6 +1207,7 @@ int i915_ttm_create_bo_pages(struct i915_ttm_bo *bo)
 			sg_dma_address(sgx) = ttm->dma_address[count];
 			count += __sg_page_count(sgx);
 		}
+		bo->pages = st;		
 	} else {
 		ret = i915_ttm_vram_get_pages(bo);
 	}
