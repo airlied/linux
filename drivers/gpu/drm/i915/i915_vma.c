@@ -39,6 +39,7 @@
 #include "i915_trace.h"
 #include "i915_vma.h"
 
+#include "ttm/i915_ttm.h"
 static struct i915_global_vma {
 	struct i915_global base;
 	struct kmem_cache *slab_vmas;
@@ -102,13 +103,15 @@ static void __i915_vma_retire(struct i915_active *ref)
 
 static struct i915_vma *
 vma_create(struct drm_i915_gem_object *obj,
+	   struct i915_ttm_bo *bo,
 	   struct i915_address_space *vm,
 	   const struct i915_ggtt_view *view)
 {
 	struct i915_vma *pos = ERR_PTR(-E2BIG);
 	struct i915_vma *vma;
 	struct rb_node *rb, **p;
-
+	struct i915_object_vmas *vmas;
+	size_t size;
 	/* The aliasing_ppgtt should never be used directly! */
 	GEM_BUG_ON(vm == &vm->gt->ggtt->alias->vm);
 
@@ -121,8 +124,15 @@ vma_create(struct drm_i915_gem_object *obj,
 	vma->vm = i915_vm_get(vm);
 	vma->ops = &vm->vma_ops;
 	vma->obj = obj;
-	vma->resv = obj->base.resv;
-	vma->size = obj->base.size;
+	vma->bo = bo;
+	if (obj) {
+		vma->resv = obj->base.resv;
+		vma->size = obj->base.size;
+		size = obj->base.size;
+	} else {
+		size = i915_ttm_bo_size(bo);
+		vma->size = size;
+	}
 	vma->display_alignment = I915_GTT_MIN_ALIGNMENT;
 
 	i915_active_init(&vma->active, __i915_vma_active, __i915_vma_retire);
@@ -142,10 +152,10 @@ vma_create(struct drm_i915_gem_object *obj,
 			GEM_BUG_ON(range_overflows_t(u64,
 						     view->partial.offset,
 						     view->partial.size,
-						     obj->base.size >> PAGE_SHIFT));
+						     size >> PAGE_SHIFT));
 			vma->size = view->partial.size;
 			vma->size <<= PAGE_SHIFT;
-			GEM_BUG_ON(vma->size > obj->base.size);
+			GEM_BUG_ON(vma->size > size);
 		} else if (view->type == I915_GGTT_VIEW_ROTATED) {
 			vma->size = intel_rotation_info_size(&view->rotated);
 			vma->size <<= PAGE_SHIFT;
@@ -160,31 +170,36 @@ vma_create(struct drm_i915_gem_object *obj,
 
 	GEM_BUG_ON(!IS_ALIGNED(vma->size, I915_GTT_PAGE_SIZE));
 
-	spin_lock(&obj->vma.lock);
+	if (obj)
+		vmas = &obj->vma;
+	else
+		vmas = &bo->vma;
+	spin_lock(&vmas->lock);
 
 	if (i915_is_ggtt(vm)) {
 		if (unlikely(overflows_type(vma->size, u32)))
 			goto err_unlock;
 
-		vma->fence_size = i915_gem_fence_size(vm->i915, vma->size,
-						      i915_gem_object_get_tiling(obj),
-						      i915_gem_object_get_stride(obj));
-		if (unlikely(vma->fence_size < vma->size || /* overflow */
-			     vma->fence_size > vm->total))
-			goto err_unlock;
+		if (obj) {
+			vma->fence_size = i915_gem_fence_size(vm->i915, vma->size,
+							      i915_gem_object_get_tiling(obj),
+							      i915_gem_object_get_stride(obj));
+			if (unlikely(vma->fence_size < vma->size || /* overflow */
+				     vma->fence_size > vm->total))
+				goto err_unlock;
 
-		GEM_BUG_ON(!IS_ALIGNED(vma->fence_size, I915_GTT_MIN_ALIGNMENT));
-
-		vma->fence_alignment = i915_gem_fence_alignment(vm->i915, vma->size,
-								i915_gem_object_get_tiling(obj),
-								i915_gem_object_get_stride(obj));
-		GEM_BUG_ON(!is_power_of_2(vma->fence_alignment));
-
+			GEM_BUG_ON(!IS_ALIGNED(vma->fence_size, I915_GTT_MIN_ALIGNMENT));
+			
+			vma->fence_alignment = i915_gem_fence_alignment(vm->i915, vma->size,
+									i915_gem_object_get_tiling(obj),
+									i915_gem_object_get_stride(obj));
+			GEM_BUG_ON(!is_power_of_2(vma->fence_alignment));
+		}
 		__set_bit(I915_VMA_GGTT_BIT, __i915_vma_flags(vma));
 	}
 
 	rb = NULL;
-	p = &obj->vma.tree.rb_node;
+	p = &vmas->tree.rb_node;
 	while (*p) {
 		long cmp;
 
@@ -197,6 +212,13 @@ vma_create(struct drm_i915_gem_object *obj,
 		 * and dispose of ours.
 		 */
 		cmp = i915_vma_compare(pos, vm, view);
+		if (cmp == 0) {
+			spin_unlock(&vmas->lock);
+			i915_vm_put(vm);
+			i915_vma_free(vma);
+			return pos;
+		}
+
 		if (cmp < 0)
 			p = &rb->rb_right;
 		else if (cmp > 0)
@@ -205,7 +227,7 @@ vma_create(struct drm_i915_gem_object *obj,
 			goto err_unlock;
 	}
 	rb_link_node(&vma->obj_node, rb, p);
-	rb_insert_color(&vma->obj_node, &obj->vma.tree);
+	rb_insert_color(&vma->obj_node, &vmas->tree);
 
 	if (i915_vma_is_ggtt(vma))
 		/*
@@ -214,16 +236,16 @@ vma_create(struct drm_i915_gem_object *obj,
 		 * iterating over only the GGTT vma for an object, see
 		 * for_each_ggtt_vma()
 		 */
-		list_add(&vma->obj_link, &obj->vma.list);
+		list_add(&vma->obj_link, &vmas->list);
 	else
-		list_add_tail(&vma->obj_link, &obj->vma.list);
+		list_add_tail(&vma->obj_link, &vmas->list);
 
-	spin_unlock(&obj->vma.lock);
+	spin_unlock(&vmas->lock);
 
 	return vma;
 
 err_unlock:
-	spin_unlock(&obj->vma.lock);
+	spin_unlock(&vmas->lock);
 err_vma:
 	i915_vm_put(vm);
 	i915_vma_free(vma);
@@ -231,13 +253,13 @@ err_vma:
 }
 
 static struct i915_vma *
-vma_lookup(struct drm_i915_gem_object *obj,
+vma_lookup(struct i915_object_vmas *vmas,
 	   struct i915_address_space *vm,
 	   const struct i915_ggtt_view *view)
 {
 	struct rb_node *rb;
 
-	rb = obj->vma.tree.rb_node;
+	rb = vmas->tree.rb_node;
 	while (rb) {
 		struct i915_vma *vma = rb_entry(rb, struct i915_vma, obj_node);
 		long cmp;
@@ -279,12 +301,48 @@ i915_vma_instance(struct drm_i915_gem_object *obj,
 	GEM_BUG_ON(!atomic_read(&vm->open));
 
 	spin_lock(&obj->vma.lock);
-	vma = vma_lookup(obj, vm, view);
+	vma = vma_lookup(&obj->vma, vm, view);
 	spin_unlock(&obj->vma.lock);
 
 	/* vma_create() will resolve the race if another creates the vma */
 	if (unlikely(!vma))
-		vma = vma_create(obj, vm, view);
+		vma = vma_create(obj, NULL, vm, view);
+
+	GEM_BUG_ON(!IS_ERR(vma) && i915_vma_compare(vma, vm, view));
+	return vma;
+}
+
+
+/**
+ * i915_vma_instance - return the singleton instance of the VMA
+ * @obj: parent &struct drm_i915_gem_object to be mapped
+ * @vm: address space in which the mapping is located
+ * @view: additional mapping requirements
+ *
+ * i915_vma_instance() looks up an existing VMA of the @obj in the @vm with
+ * the same @view characteristics. If a match is not found, one is created.
+ * Once created, the VMA is kept until either the object is freed, or the
+ * address space is closed.
+ *
+ * Returns the vma, or an error pointer.
+ */
+struct i915_vma *
+i915_ttm_vma_instance(struct i915_ttm_bo *bo,
+		      struct i915_address_space *vm,
+		      const struct i915_ggtt_view *view)
+{
+	struct i915_vma *vma;
+
+	GEM_BUG_ON(view && !i915_is_ggtt(vm));
+	GEM_BUG_ON(!atomic_read(&vm->open));
+
+	spin_lock(&bo->vma.lock);
+	vma = vma_lookup(&bo->vma, vm, view);
+	spin_unlock(&bo->vma.lock);
+
+	/* vma_create() will resolve the race if another creates the vma */
+	if (unlikely(!vma))
+		vma = vma_create(NULL, bo, vm, view);
 
 	GEM_BUG_ON(!IS_ERR(vma) && i915_vma_compare(vma, vm, view));
 	return vma;
@@ -1213,16 +1271,27 @@ int i915_vma_move_to_active(struct i915_vma *vma,
 	struct drm_i915_gem_object *obj = vma->obj;
 	int err;
 
-	assert_object_held(obj);
+	if (obj)
+		assert_object_held(obj);
 
 	err = __i915_vma_move_to_active(vma, rq);
 	if (unlikely(err))
 		return err;
 
+	if (vma->bo) {
+		if (flags & EXEC_OBJECT_NEEDS_FENCE && vma->fence)
+			i915_active_add_request(&vma->fence->active, rq);
+		return err;
+	}
+
+
 	if (flags & EXEC_OBJECT_WRITE) {
 		struct intel_frontbuffer *front;
 
-		front = __intel_frontbuffer_get(obj);
+		if (obj)
+			front = __intel_frontbuffer_get(obj);
+		else
+			front = __intel_frontbuffer_get_ttm(vma->bo);
 		if (unlikely(front)) {
 			if (intel_frontbuffer_invalidate(front, ORIGIN_CS))
 				i915_active_add_request(&front->write, rq);
@@ -1230,22 +1299,27 @@ int i915_vma_move_to_active(struct i915_vma *vma,
 		}
 
 		dma_resv_add_excl_fence(vma->resv, &rq->fence);
-		obj->write_domain = I915_GEM_DOMAIN_RENDER;
-		obj->read_domains = 0;
+		if (obj) {
+			obj->write_domain = I915_GEM_DOMAIN_RENDER;
+			obj->read_domains = 0;
+		}
 	} else {
 		err = dma_resv_reserve_shared(vma->resv, 1);
 		if (unlikely(err))
 			return err;
 
 		dma_resv_add_shared_fence(vma->resv, &rq->fence);
-		obj->write_domain = 0;
+		if (obj)
+			obj->write_domain = 0;
 	}
 
 	if (flags & EXEC_OBJECT_NEEDS_FENCE && vma->fence)
 		i915_active_add_request(&vma->fence->active, rq);
 
-	obj->read_domains |= I915_GEM_GPU_DOMAINS;
-	obj->mm.dirty = true;
+	if (obj) {
+		obj->read_domains |= I915_GEM_GPU_DOMAINS;
+		obj->mm.dirty = true;
+	}
 
 	GEM_BUG_ON(!i915_vma_is_active(vma));
 	return 0;

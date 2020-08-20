@@ -29,7 +29,7 @@
 
 #include "gem/i915_gem_object_types.h"
 #include "i915_active.h"
-
+#include "ttm/i915_ttm_object_types.h"
 struct drm_i915_private;
 
 enum fb_op_origin {
@@ -44,6 +44,7 @@ struct intel_frontbuffer {
 	struct kref ref;
 	atomic_t bits;
 	struct i915_active write;
+	struct i915_ttm_bo *bo;
 	struct drm_i915_gem_object *obj;
 	struct rcu_head rcu;
 };
@@ -56,6 +57,8 @@ void intel_frontbuffer_flip(struct drm_i915_private *i915,
 			    unsigned frontbuffer_bits);
 
 void intel_frontbuffer_put(struct intel_frontbuffer *front);
+
+#define front_to_i915(front) (front->obj ? to_i915(front->obj->base.dev) : to_i915_ttm_dev(front->bo->tbo.bdev))
 
 static inline struct intel_frontbuffer *
 __intel_frontbuffer_get(const struct drm_i915_gem_object *obj)
@@ -86,6 +89,37 @@ __intel_frontbuffer_get(const struct drm_i915_gem_object *obj)
 
 struct intel_frontbuffer *
 intel_frontbuffer_get(struct drm_i915_gem_object *obj);
+
+
+static inline struct intel_frontbuffer *
+__intel_frontbuffer_get_ttm(const struct i915_ttm_bo *bo)
+{
+	struct intel_frontbuffer *front;
+
+	if (likely(!rcu_access_pointer(bo->frontbuffer)))
+		return NULL;
+
+	rcu_read_lock();
+	do {
+		front = rcu_dereference(bo->frontbuffer);
+		if (!front)
+			break;
+
+		if (unlikely(!kref_get_unless_zero(&front->ref)))
+			continue;
+
+		if (likely(front == rcu_access_pointer(bo->frontbuffer)))
+			break;
+
+		intel_frontbuffer_put(front);
+	} while (1);
+	rcu_read_unlock();
+
+	return front;
+}
+
+struct intel_frontbuffer *
+intel_frontbuffer_get_ttm(struct i915_ttm_bo *bo);
 
 void __intel_fb_invalidate(struct intel_frontbuffer *front,
 			   enum fb_op_origin origin,

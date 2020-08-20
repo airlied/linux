@@ -19,7 +19,7 @@
 #include "gt/intel_gt_buffer_pool.h"
 #include "gt/intel_gt_pm.h"
 #include "gt/intel_ring.h"
-
+#include "ttm/i915_ttm.h"
 #include "i915_drv.h"
 #include "i915_gem_clflush.h"
 #include "i915_gem_context.h"
@@ -2953,7 +2953,10 @@ i915_gem_execbuffer2_ioctl(struct drm_device *dev, void *data,
 		return -EFAULT;
 	}
 
-	err = i915_gem_do_execbuffer(dev, file, args, exec2_list);
+	if (i915->use_ttm)
+		err = i915_ttm_do_execbuffer(dev, file, args, exec2_list);
+	else
+		err = i915_gem_do_execbuffer(dev, file, args, exec2_list);
 
 	/*
 	 * Now that we have begun execution of the batchbuffer, we ignore

@@ -151,6 +151,7 @@
 #include "intel_ring.h"
 #include "intel_workarounds.h"
 #include "shmem_utils.h"
+#include "ttm/i915_ttm.h"
 
 #define RING_EXECLIST_QFULL		(1 << 0x2)
 #define RING_EXECLIST1_VALID		(1 << 0x3)
@@ -3868,28 +3869,41 @@ gen10_init_indirectctx_bb(struct intel_engine_cs *engine, u32 *batch)
 static int lrc_setup_wa_ctx(struct intel_engine_cs *engine)
 {
 	struct drm_i915_gem_object *obj;
+	struct i915_ttm_bo *bo = NULL;
 	struct i915_vma *vma;
 	int err;
 
-	obj = i915_gem_object_create_shmem(engine->i915, CTX_WA_BB_OBJ_SIZE);
-	if (IS_ERR(obj))
-		return PTR_ERR(obj);
+	if (engine->i915->use_ttm) {
+		uint32_t region = HAS_LMEM(engine->i915) ? REGION_LMEM : REGION_SMEM;
+		int ret = i915_ttm_bo_create_reserved(engine->i915, CTX_WA_BB_OBJ_SIZE, 0, region,
+						      &bo, NULL, NULL);
+		if (ret)
+			return ret;
+	  
+		vma = i915_ttm_vma_instance(bo, &engine->gt->ggtt->vm, NULL);
+	} else {
+		obj = i915_gem_object_create_shmem(engine->i915, CTX_WA_BB_OBJ_SIZE);
+		if (IS_ERR(obj))
+			return PTR_ERR(obj);
 
-	vma = i915_vma_instance(obj, &engine->gt->ggtt->vm, NULL);
-	if (IS_ERR(vma)) {
-		err = PTR_ERR(vma);
-		goto err;
+		vma = i915_vma_instance(obj, &engine->gt->ggtt->vm, NULL);
+		if (IS_ERR(vma)) {
+			err = PTR_ERR(vma);
+			goto err;
+		}
+
+		err = i915_ggtt_pin(vma, 0, PIN_HIGH);
+		if (err)
+			goto err;
 	}
-
-	err = i915_ggtt_pin(vma, 0, PIN_HIGH);
-	if (err)
-		goto err;
-
 	engine->wa_ctx.vma = vma;
 	return 0;
 
 err:
-	i915_gem_object_put(obj);
+	if (bo)
+		i915_ttm_bo_unref(&bo);
+	if (obj)
+		i915_gem_object_put(obj);
 	return err;
 }
 
@@ -3909,7 +3923,8 @@ static int intel_init_workaround_bb(struct intel_engine_cs *engine)
 	void *batch, *batch_ptr;
 	unsigned int i;
 	int ret;
-
+	struct ttm_bo_kmap_obj kmap_obj;
+	
 	if (engine->class != RENDER_CLASS)
 		return 0;
 
@@ -3941,8 +3956,13 @@ static int intel_init_workaround_bb(struct intel_engine_cs *engine)
 		return ret;
 	}
 
-	batch = i915_gem_object_pin_map(wa_ctx->vma->obj, I915_MAP_WB);
+	if (engine->i915->use_ttm) {
+		ret = ttm_bo_kmap(&wa_ctx->vma->bo->tbo, 0, 1, &kmap_obj);
 
+		batch = batch_ptr = kmap_obj.virtual;
+	} else {
+		batch = i915_gem_object_pin_map(wa_ctx->vma->obj, I915_MAP_WB);
+	}
 	/*
 	 * Emit the two workaround batch buffers, recording the offset from the
 	 * start of the workaround batch buffer object for each and their
@@ -3962,8 +3982,12 @@ static int intel_init_workaround_bb(struct intel_engine_cs *engine)
 	}
 	GEM_BUG_ON(batch_ptr - batch > CTX_WA_BB_OBJ_SIZE);
 
-	__i915_gem_object_flush_map(wa_ctx->vma->obj, 0, batch_ptr - batch);
-	__i915_gem_object_release_map(wa_ctx->vma->obj);
+	if (engine->i915->use_ttm)
+		ttm_bo_kunmap(&kmap_obj);
+	else {
+		__i915_gem_object_flush_map(wa_ctx->vma->obj, 0, batch_ptr - batch);
+		__i915_gem_object_release_map(wa_ctx->vma->obj);
+	}
 	if (ret)
 		lrc_destroy_wa_ctx(engine);
 

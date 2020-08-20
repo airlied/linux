@@ -55,6 +55,7 @@
 #include "i915_trace.h"
 #include "i915_vgpu.h"
 
+#include "ttm/i915_ttm.h"
 #include "intel_pm.h"
 
 static int
@@ -395,6 +396,7 @@ int
 i915_gem_pread_ioctl(struct drm_device *dev, void *data,
 		     struct drm_file *file)
 {
+	struct drm_i915_private *i915 = to_i915(dev);	
 	struct drm_i915_gem_pread *args = data;
 	struct drm_i915_gem_object *obj;
 	int ret;
@@ -402,6 +404,8 @@ i915_gem_pread_ioctl(struct drm_device *dev, void *data,
 	if (args->size == 0)
 		return 0;
 
+	if (i915->use_ttm)
+		return -EINVAL;
 	if (!access_ok(u64_to_user_ptr(args->data_ptr),
 		       args->size))
 		return -EFAULT;
@@ -692,12 +696,16 @@ int
 i915_gem_pwrite_ioctl(struct drm_device *dev, void *data,
 		      struct drm_file *file)
 {
+	struct drm_i915_private *i915 = to_i915(dev);		
 	struct drm_i915_gem_pwrite *args = data;
 	struct drm_i915_gem_object *obj;
 	int ret;
 
 	if (args->size == 0)
 		return 0;
+
+	if (i915->use_ttm)
+		return -EINVAL;
 
 	if (!access_ok(u64_to_user_ptr(args->data_ptr), args->size))
 		return -EFAULT;
@@ -956,6 +964,9 @@ i915_gem_madvise_ioctl(struct drm_device *dev, void *data,
 	default:
 	    return -EINVAL;
 	}
+
+	if (i915->use_ttm)
+		return 0;
 
 	obj = i915_gem_object_lookup(file_priv, args->handle);
 	if (!obj)

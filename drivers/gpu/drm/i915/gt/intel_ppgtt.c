@@ -11,6 +11,7 @@
 #include "gem/i915_gem_region.h"
 #include "gen6_ppgtt.h"
 #include "gen8_ppgtt.h"
+#include "ttm/i915_ttm.h"
 
 struct i915_page_table *alloc_pt(struct i915_address_space *vm)
 {
@@ -193,7 +194,7 @@ void ppgtt_bind_vma(struct i915_address_space *vm,
 
 	/* Applicable to VLV, and gen8+ */
 	pte_flags = 0;
-	if (i915_gem_object_is_readonly(vma->obj))
+	if (vma->obj && i915_gem_object_is_readonly(vma->obj))
 		pte_flags |= PTE_READ_ONLY;
 	if (i915_gem_object_is_devmem(vma->obj))
 		pte_flags |= PTE_LM;
@@ -294,8 +295,15 @@ int ppgtt_set_pages(struct i915_vma *vma)
 {
 	GEM_BUG_ON(vma->pages);
 
-	vma->pages = vma->obj->mm.pages;
-	vma->page_sizes = vma->obj->mm.page_sizes;
+	if (vma->obj) {
+		vma->pages = vma->obj->mm.pages;
+		vma->page_sizes = vma->obj->mm.page_sizes;
+	} else {
+		if (!vma->bo->pages)
+			i915_ttm_create_bo_pages(vma->bo);
+		vma->pages = vma->bo->pages;
+		vma->page_sizes = vma->bo->page_sizes;
+	}
 
 	return 0;
 }

@@ -17,6 +17,7 @@
 #include "i915_vgpu.h"
 
 #include "intel_gtt.h"
+#include "ttm/i915_ttm.h"
 
 static int
 i915_get_ggtt_vma_pages(struct i915_vma *vma);
@@ -454,7 +455,7 @@ static void ggtt_bind_vma(struct i915_address_space *vm,
 
 	/* Applicable to VLV (gen8+ do not support RO in the GGTT) */
 	pte_flags = 0;
-	if (vma->vm->has_read_only && i915_gem_object_is_readonly(obj))
+	if (vma->vm->has_read_only && obj && i915_gem_object_is_readonly(obj))
 		pte_flags |= PTE_READ_ONLY;
 	if (i915_gem_object_is_devmem(obj))
 		pte_flags |= PTE_LM;
@@ -816,11 +817,18 @@ int ggtt_set_pages(struct i915_vma *vma)
 
 	GEM_BUG_ON(vma->pages);
 
-	ret = i915_get_ggtt_vma_pages(vma);
-	if (ret)
-		return ret;
+	if (vma->obj) {
+		ret = i915_get_ggtt_vma_pages(vma);
+		if (ret)
+			return ret;
 
-	vma->page_sizes = vma->obj->mm.page_sizes;
+		vma->page_sizes = vma->obj->mm.page_sizes;
+	} else {
+		if (!vma->bo->pages)
+			i915_ttm_create_bo_pages(vma->bo);
+		vma->pages = vma->bo->pages;
+		vma->page_sizes = vma->bo->page_sizes;
+	}
 
 	return 0;
 }

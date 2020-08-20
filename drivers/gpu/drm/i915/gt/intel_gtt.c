@@ -119,9 +119,14 @@ void i915_address_space_init(struct i915_address_space *vm, int subclass)
 
 void clear_pages(struct i915_vma *vma)
 {
+	bool free_table = false;
 	GEM_BUG_ON(!vma->pages);
 
-	if (vma->pages != vma->obj->mm.pages) {
+	if (vma->obj && vma->pages != vma->obj->mm.pages)
+		free_table = true;
+	if (vma->bo && vma->pages != vma->bo->pages)
+		free_table = true;
+	if (free_table) {
 		sg_free_table(vma->pages);
 		kfree(vma->pages);
 	}

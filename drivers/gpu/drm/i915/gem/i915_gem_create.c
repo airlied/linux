@@ -10,6 +10,7 @@
 #include "gem/i915_gem_object_blt.h"
 #include "gem/i915_gem_region.h"
 
+#include "ttm/i915_ttm.h"
 #include "i915_drv.h"
 #include "i915_user_extensions.h"
 
@@ -154,6 +155,20 @@ i915_gem_dumb_create(struct drm_file *file,
 	if (HAS_LMEM(to_i915(dev)))
 		mem_type = INTEL_MEMORY_LOCAL;
 
+	if (to_i915(dev)->use_ttm) {
+		struct drm_gem_object *gobj;
+		int ret = i915_ttm_gem_object_create(to_i915(dev), args->size, 0, (1 << mem_type), 0,
+						     ttm_bo_type_device, NULL, &gobj);
+		if (ret)
+			return -ENOMEM;
+		ret = drm_gem_handle_create(file, gobj, &args->handle);
+		drm_gem_object_put(gobj);
+		if (ret)
+			return ret;
+		return 0;
+	}
+
+	
 	placements = kmalloc(sizeof(struct intel_memory_region *), GFP_KERNEL);
 	if (!placements)
 		return -ENOMEM;
@@ -342,6 +357,20 @@ i915_gem_create_ioctl(struct drm_device *dev, void *data,
 	struct drm_i915_gem_create_ext *args = data;
 	int ret;
 
+
+	if (i915->use_ttm) {
+		struct drm_gem_object *gobj;
+		int ret = i915_ttm_gem_object_create(i915, args->size, 0, 0, 0,
+						     ttm_bo_type_device, NULL, &gobj);
+		if (ret)
+			return -ENOMEM;
+		ret = drm_gem_handle_create(file, gobj, &args->handle);
+		drm_gem_object_put(gobj);
+		if (ret)
+			return ret;
+		return 0;
+	}
+
 	i915_gem_flush_free_objects(i915);
 
 	ret = i915_user_extensions(u64_to_user_ptr(args->extensions),
@@ -366,6 +395,8 @@ i915_gem_create_ioctl(struct drm_device *dev, void *data,
 		ext_data.n_placements = 1;
 	}
 
+
+	
 	ret = i915_gem_create(file,
 			      ext_data.placements,
 			      ext_data.n_placements,
