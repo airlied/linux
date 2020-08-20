@@ -640,11 +640,19 @@ __i915_gem_object_create_stolen(struct intel_memory_region *mem,
 	cache_level = HAS_LLC(mem->i915) ? I915_CACHE_LLC : I915_CACHE_NONE;
 	i915_gem_object_set_cache_coherency(obj, cache_level);
 
-	err = i915_gem_object_pin_pages(obj);
-	if (err)
+	if (WARN_ON(!i915_gem_object_trylock(obj))) {
+		err = -EBUSY;
 		goto cleanup;
+	}
+
+	err = i915_gem_object_pin_pages(obj);
+	if (err) {
+		i915_gem_object_unlock(obj);
+		goto cleanup;
+	}
 
 	i915_gem_object_init_memory_region(obj, mem);
+	i915_gem_object_unlock(obj);
 
 	return obj;
 
