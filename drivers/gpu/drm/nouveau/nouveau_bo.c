@@ -1279,7 +1279,7 @@ nouveau_ttm_tt_populate(struct ttm_bo_device *bdev,
 
 #if IS_ENABLED(CONFIG_AGP)
 	if (drm->agp.bridge) {
-		return ttm_agp_tt_populate(bdev, ttm, ctx);
+		return ttm_pool_populate(ttm, ctx);
 	}
 #endif
 
@@ -1308,7 +1308,7 @@ nouveau_ttm_tt_unpopulate(struct ttm_bo_device *bdev,
 
 #if IS_ENABLED(CONFIG_AGP)
 	if (drm->agp.bridge) {
-		ttm_agp_tt_unpopulate(bdev, ttm);
+		ttm_pool_unpopulate(ttm);
 		return;
 	}
 #endif
