@@ -878,6 +878,7 @@ nouveau_bo_move_flipd(struct ttm_buffer_object *bo, bool evict, bool intr,
 	ret = ttm_tt_bind(bo->bdev, bo->ttm, &tmp_reg, &ctx);
 	if (ret)
 		goto out;
+	bo->ttm_bound = true;
 
 	ret = nouveau_bo_move_m2mf(bo, true, intr, no_wait_gpu, &tmp_reg);
 	if (ret)

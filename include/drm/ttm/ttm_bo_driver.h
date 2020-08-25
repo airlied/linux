@@ -732,4 +732,5 @@ int ttm_range_man_init(struct ttm_bo_device *bdev,
 int ttm_range_man_fini(struct ttm_bo_device *bdev,
 		       unsigned type);
 
+void ttm_bo_tt_destroy(struct ttm_buffer_object *bo, struct ttm_tt *tt);
 #endif

@@ -282,9 +282,12 @@ static int ttm_bo_handle_move_mem(struct ttm_buffer_object *bo,
 			goto out_err;
 
 		if (mem->mem_type != TTM_PL_SYSTEM) {
-			ret = ttm_tt_bind(bdev, bo->ttm, mem, ctx);
-			if (ret)
-				goto out_err;
+			if (bo->ttm_bound == false) {
+				ret = ttm_tt_bind(bdev, bo->ttm, mem, ctx);
+				if (ret)
+					goto out_err;
+				bo->ttm_bound = true;
+			}
 		}
 
 		if (bo->mem.mem_type == TTM_PL_SYSTEM) {
@@ -324,8 +327,7 @@ moved:
 out_err:
 	new_man = ttm_manager_type(bdev, bo->mem.mem_type);
 	if (!new_man->use_tt) {
-		ttm_tt_destroy(bdev, bo->ttm);
-		bo->ttm = NULL;
+		ttm_bo_tt_destroy(bo, bo->ttm);
 	}
 
 	return ret;
@@ -344,8 +346,7 @@ static void ttm_bo_cleanup_memtype_use(struct ttm_buffer_object *bo)
 	if (bo->bdev->driver->move_notify)
 		bo->bdev->driver->move_notify(bo, false, NULL);
 
-	ttm_tt_destroy(bo->bdev, bo->ttm);
-	bo->ttm = NULL;
+	ttm_bo_tt_destroy(bo, bo->ttm);
 	ttm_resource_free(bo, &bo->mem);
 }
 

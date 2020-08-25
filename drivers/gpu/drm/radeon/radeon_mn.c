@@ -53,7 +53,7 @@ static bool radeon_mn_invalidate(struct mmu_interval_notifier *mn,
 	struct ttm_operation_ctx ctx = { false, false };
 	long r;
 
-	if (!bo->tbo.ttm || bo->tbo.ttm->bound == false)
+	if (!bo->tbo.ttm || bo->tbo.ttm_bound == false)
 		return true;
 
 	if (!mmu_notifier_range_blockable(range))

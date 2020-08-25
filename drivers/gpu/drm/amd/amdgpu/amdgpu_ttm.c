@@ -551,6 +551,7 @@ static int amdgpu_move_vram_ram(struct ttm_buffer_object *bo, bool evict,
 	if (unlikely(r)) {
 		goto out_cleanup;
 	}
+	bo->ttm_bound = true;
 
 	/* blit VRAM to GTT */
 	r = amdgpu_move_blit(bo, evict, &tmp_mem, old_mem);

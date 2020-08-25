@@ -58,7 +58,6 @@ enum ttm_caching_state {
  * @swap_storage: Pointer to shmem struct file for swap storage.
  * @caching_state: The current caching state of the pages.
  * @populated: if the backing store is populated
- * @bound: if this object has been bound to a global table.
  *
  * This is a structure holding the pages, caching- and aperture binding
  * status for a buffer object that isn't backed by fixed (VRAM / AGP)
@@ -71,7 +70,6 @@ struct ttm_tt {
 	struct file *swap_storage;
 	enum ttm_caching_state caching_state;
 	bool populated;
-	bool bound;
 };
 
 /**
@@ -149,7 +147,7 @@ int ttm_tt_bind(struct ttm_bo_device *bdev,
  *
  * @ttm: The struct ttm_tt.
  *
- * Unbind, unpopulate and destroy common struct ttm_tt.
+ * Destroy common struct ttm_tt.
  */
 void ttm_tt_destroy(struct ttm_bo_device *bdev, struct ttm_tt *ttm);
 

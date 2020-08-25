@@ -209,14 +209,6 @@ EXPORT_SYMBOL(ttm_tt_set_placement_caching);
 
 void ttm_tt_destroy(struct ttm_bo_device *bdev, struct ttm_tt *ttm)
 {
-	if (ttm == NULL)
-		return;
-
-	ttm_tt_unbind(bdev, ttm);
-
-	if (ttm->populated)
-		ttm_tt_unpopulate(bdev, ttm);
-
 	if (!(ttm->page_flags & TTM_PAGE_FLAG_PERSISTENT_SWAP) &&
 	    ttm->swap_storage)
 		fput(ttm->swap_storage);
@@ -311,10 +303,7 @@ EXPORT_SYMBOL(ttm_dma_tt_fini);
 
 void ttm_tt_unbind(struct ttm_bo_device *bdev, struct ttm_tt *ttm)
 {
-	if (ttm->bound) {
-		bdev->driver->ttm_tt_unbind(bdev, ttm);
-		ttm->bound = false;
-	}
+	bdev->driver->ttm_tt_unbind(bdev, ttm);
 }
 
 int ttm_tt_bind(struct ttm_bo_device *bdev,
@@ -326,9 +315,6 @@ int ttm_tt_bind(struct ttm_bo_device *bdev,
 	if (!ttm)
 		return -EINVAL;
 
-	if (ttm->bound)
-		return 0;
-
 	ret = ttm_tt_populate(bdev, ttm, ctx);
 	if (ret)
 		return ret;
@@ -336,9 +322,6 @@ int ttm_tt_bind(struct ttm_bo_device *bdev,
 	ret = bdev->driver->ttm_tt_bind(bdev, ttm, bo_mem);
 	if (unlikely(ret != 0))
 		return ret;
-
-	ttm->bound = true;
-
 	return 0;
 }
 EXPORT_SYMBOL(ttm_tt_bind);
