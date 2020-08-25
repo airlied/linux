@@ -67,7 +67,6 @@ struct ttm_tt {
 	struct page **pages;
 	uint32_t page_flags;
 	unsigned long num_pages;
-	struct sg_table *sg; /* for SG objects via dma-buf */
 	struct file *swap_storage;
 	enum ttm_caching_state caching_state;
 	enum {
@@ -90,6 +89,7 @@ struct ttm_tt {
  */
 struct ttm_dma_tt {
 	struct ttm_tt ttm;
+	struct sg_table *sg; /* for SG objects via dma-buf */
 	dma_addr_t *dma_address;
 	struct list_head pages_list;
 };

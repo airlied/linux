@@ -116,7 +116,7 @@ nouveau_mem_host(struct ttm_resource *reg, struct ttm_dma_tt *tt)
 		mem->comp = 0;
 	}
 
-	if (tt->ttm.sg) args.sgl = tt->ttm.sg->sgl;
+	if (tt->sg) args.sgl = tt->sg->sgl;
 	else            args.dma = tt->dma_address;
 
 	mutex_lock(&drm->master.lock);

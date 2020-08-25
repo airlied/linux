@@ -985,25 +985,25 @@ static int amdgpu_ttm_tt_pin_userptr(struct ttm_bo_device *bdev,
 		DMA_BIDIRECTIONAL : DMA_TO_DEVICE;
 
 	/* Allocate an SG array and squash pages into it */
-	r = sg_alloc_table_from_pages(ttm->sg, ttm->pages, ttm->num_pages, 0,
+	r = sg_alloc_table_from_pages(gtt->ttm.sg, ttm->pages, ttm->num_pages, 0,
 				      ttm->num_pages << PAGE_SHIFT,
 				      GFP_KERNEL);
 	if (r)
 		goto release_sg;
 
 	/* Map SG to device */
-	r = dma_map_sgtable(adev->dev, ttm->sg, direction, 0);
+	r = dma_map_sgtable(adev->dev, gtt->ttm.sg, direction, 0);
 	if (r)
 		goto release_sg;
 
 	/* convert SG to linear array of pages and dma addresses */
-	drm_prime_sg_to_page_addr_arrays(ttm->sg, ttm->pages,
+	drm_prime_sg_to_page_addr_arrays(gtt->ttm.sg, ttm->pages,
 					 gtt->ttm.dma_address, ttm->num_pages);
 
 	return 0;
 
 release_sg:
-	kfree(ttm->sg);
+	kfree(gtt->ttm.sg);
 	return r;
 }
 
@@ -1021,12 +1021,12 @@ static void amdgpu_ttm_tt_unpin_userptr(struct ttm_bo_device *bdev,
 		DMA_BIDIRECTIONAL : DMA_TO_DEVICE;
 
 	/* double check that we don't free the table twice */
-	if (!ttm->sg->sgl)
+	if (!gtt->ttm.sg->sgl)
 		return;
 
 	/* unmap the pages mapped to the device */
-	dma_unmap_sgtable(adev->dev, ttm->sg, direction, 0);
-	sg_free_table(ttm->sg);
+	dma_unmap_sgtable(adev->dev, gtt->ttm.sg, direction, 0);
+	sg_free_table(gtt->ttm.sg);
 
 #if IS_ENABLED(CONFIG_DRM_AMDGPU_USERPTR)
 	if (gtt->range) {
@@ -1296,8 +1296,8 @@ static int amdgpu_ttm_tt_populate(struct ttm_bo_device *bdev,
 
 	/* user pages are bound by amdgpu_ttm_tt_pin_userptr() */
 	if (gtt && gtt->userptr) {
-		ttm->sg = kzalloc(sizeof(struct sg_table), GFP_KERNEL);
-		if (!ttm->sg)
+		gtt->ttm.sg = kzalloc(sizeof(struct sg_table), GFP_KERNEL);
+		if (!gtt->ttm.sg)
 			return -ENOMEM;
 
 		ttm->page_flags |= TTM_PAGE_FLAG_SG;
@@ -1306,7 +1306,7 @@ static int amdgpu_ttm_tt_populate(struct ttm_bo_device *bdev,
 	}
 
 	if (ttm->page_flags & TTM_PAGE_FLAG_SG) {
-		if (!ttm->sg) {
+		if (!gtt->ttm.sg) {
 			struct dma_buf_attachment *attach;
 			struct sg_table *sgt;
 
@@ -1315,10 +1315,10 @@ static int amdgpu_ttm_tt_populate(struct ttm_bo_device *bdev,
 			if (IS_ERR(sgt))
 				return PTR_ERR(sgt);
 
-			ttm->sg = sgt;
+			gtt->ttm.sg = sgt;
 		}
 
-		drm_prime_sg_to_page_addr_arrays(ttm->sg, ttm->pages,
+		drm_prime_sg_to_page_addr_arrays(gtt->ttm.sg, ttm->pages,
 						 gtt->ttm.dma_address,
 						 ttm->num_pages);
 		ttm->state = tt_unbound;
@@ -1349,17 +1349,17 @@ static void amdgpu_ttm_tt_unpopulate(struct ttm_bo_device *bdev, struct ttm_tt *
 
 	if (gtt && gtt->userptr) {
 		amdgpu_ttm_tt_set_user_pages(ttm, NULL);
-		kfree(ttm->sg);
+		kfree(gtt->ttm.sg);
 		ttm->page_flags &= ~TTM_PAGE_FLAG_SG;
 		return;
 	}
 
-	if (ttm->sg && gtt->gobj->import_attach) {
+	if (gtt->ttm.sg && gtt->gobj->import_attach) {
 		struct dma_buf_attachment *attach;
 
 		attach = gtt->gobj->import_attach;
-		dma_buf_unmap_attachment(attach, ttm->sg, DMA_BIDIRECTIONAL);
-		ttm->sg = NULL;
+		dma_buf_unmap_attachment(attach, gtt->ttm.sg, DMA_BIDIRECTIONAL);
+		gtt->ttm.sg = NULL;
 		return;
 	}
 

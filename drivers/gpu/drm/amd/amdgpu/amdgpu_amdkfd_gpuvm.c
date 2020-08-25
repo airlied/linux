@@ -1231,8 +1231,9 @@ int amdgpu_amdkfd_gpuvm_alloc_memory_of_gpu(
 		goto err_bo_create;
 	}
 	if (bo_type == ttm_bo_type_sg) {
+		struct ttm_dma_tt *dma_ttm = (struct ttm_dma_tt *)bo->tbo.ttm;
 		bo->tbo.sg = sg;
-		bo->tbo.ttm->sg = sg;
+		dma_ttm->sg = sg;
 	}
 	bo->kfd_bo = *mem;
 	(*mem)->bo = bo;

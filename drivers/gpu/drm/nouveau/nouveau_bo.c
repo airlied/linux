@@ -1266,9 +1266,9 @@ nouveau_ttm_tt_populate(struct ttm_bo_device *bdev,
 	if (ttm->state != tt_unpopulated)
 		return 0;
 
-	if (slave && ttm->sg) {
+	if (slave && ttm_dma->sg) {
 		/* make userspace faulting work */
-		drm_prime_sg_to_page_addr_arrays(ttm->sg, ttm->pages,
+		drm_prime_sg_to_page_addr_arrays(ttm_dma->sg, ttm->pages,
 						 ttm_dma->dma_address, ttm->num_pages);
 		ttm->state = tt_unbound;
 		return 0;
