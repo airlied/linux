@@ -307,22 +307,15 @@ void ttm_tt_unbind(struct ttm_bo_device *bdev, struct ttm_tt *ttm)
 }
 
 int ttm_tt_bind(struct ttm_bo_device *bdev,
-		struct ttm_tt *ttm, struct ttm_resource *bo_mem,
-		struct ttm_operation_ctx *ctx)
+		struct ttm_tt *ttm, struct ttm_resource *bo_mem)
 {
-	int ret = 0;
-
 	if (!ttm)
 		return -EINVAL;
 
-	ret = ttm_tt_populate(bdev, ttm, ctx);
-	if (ret)
-		return ret;
+	if (WARN_ON(!ttm->populated))
+		return -EINVAL;
 
-	ret = bdev->driver->ttm_tt_bind(bdev, ttm, bo_mem);
-	if (unlikely(ret != 0))
-		return ret;
-	return 0;
+	return bdev->driver->ttm_tt_bind(bdev, ttm, bo_mem);
 }
 EXPORT_SYMBOL(ttm_tt_bind);
 
@@ -455,6 +448,7 @@ int ttm_tt_populate(struct ttm_bo_device *bdev,
 		ttm_tt_add_mapping(bdev, ttm);
 	return ret;
 }
+EXPORT_SYMBOL(ttm_tt_populate);
 
 static void ttm_tt_clear_mapping(struct ttm_tt *ttm)
 {
