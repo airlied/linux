@@ -464,13 +464,13 @@ int vmw_bo_cpu_blit(struct ttm_buffer_object *dst,
 	if (!(src->mem.placement & TTM_PL_FLAG_NO_EVICT))
 		dma_resv_assert_held(src->base.resv);
 
-	if (dst->ttm->state == tt_unpopulated) {
+	if (dst->ttm->populated == false) {
 		ret = dst->bdev->driver->ttm_tt_populate(dst->bdev, dst->ttm, &ctx);
 		if (ret)
 			return ret;
 	}
 
-	if (src->ttm->state == tt_unpopulated) {
+	if (src->ttm->populated == false) {
 		ret = src->bdev->driver->ttm_tt_populate(src->bdev, src->ttm, &ctx);
 		if (ret)
 			return ret;

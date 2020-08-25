@@ -1301,7 +1301,7 @@ static int amdgpu_ttm_tt_populate(struct ttm_bo_device *bdev,
 			return -ENOMEM;
 
 		ttm->page_flags |= TTM_PAGE_FLAG_SG;
-		ttm->state = tt_unbound;
+		ttm->populated = true;
 		return 0;
 	}
 
@@ -1321,7 +1321,7 @@ static int amdgpu_ttm_tt_populate(struct ttm_bo_device *bdev,
 		drm_prime_sg_to_page_addr_arrays(gtt->ttm.sg, ttm->pages,
 						 gtt->ttm.dma_address,
 						 ttm->num_pages);
-		ttm->state = tt_unbound;
+		ttm->populated = true;
 		return 0;
 	}
 

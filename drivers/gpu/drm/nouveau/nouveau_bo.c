@@ -1263,14 +1263,14 @@ nouveau_ttm_tt_populate(struct ttm_bo_device *bdev,
 	struct device *dev;
 	bool slave = !!(ttm->page_flags & TTM_PAGE_FLAG_SG);
 
-	if (ttm->state != tt_unpopulated)
+	if (ttm->populated)
 		return 0;
 
 	if (slave && ttm_dma->sg) {
 		/* make userspace faulting work */
 		drm_prime_sg_to_page_addr_arrays(ttm_dma->sg, ttm->pages,
 						 ttm_dma->dma_address, ttm->num_pages);
-		ttm->state = tt_unbound;
+		ttm->populated = true;
 		return 0;
 	}
 

@@ -1044,7 +1044,7 @@ ttm_pool_unpopulate_helper(struct ttm_tt *ttm, unsigned mem_count_update)
 put_pages:
 	ttm_put_pages(ttm->pages, ttm->num_pages, ttm->page_flags,
 		      ttm->caching_state);
-	ttm->state = tt_unpopulated;
+	ttm->populated = false;
 }
 
 int ttm_pool_populate(struct ttm_tt *ttm, struct ttm_operation_ctx *ctx)
@@ -1053,7 +1053,7 @@ int ttm_pool_populate(struct ttm_tt *ttm, struct ttm_operation_ctx *ctx)
 	unsigned i;
 	int ret;
 
-	if (ttm->state != tt_unpopulated)
+	if (ttm->populated)
 		return 0;
 
 	if (ttm_check_under_lowerlimit(mem_glob, ttm->num_pages, ctx))
@@ -1083,7 +1083,7 @@ int ttm_pool_populate(struct ttm_tt *ttm, struct ttm_operation_ctx *ctx)
 		}
 	}
 
-	ttm->state = tt_unbound;
+	ttm->populated = true;
 	return 0;
 }
 EXPORT_SYMBOL(ttm_pool_populate);
