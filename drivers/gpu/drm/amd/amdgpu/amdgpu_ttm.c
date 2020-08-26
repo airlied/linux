@@ -1339,7 +1339,7 @@ static int amdgpu_ttm_tt_populate(struct ttm_bo_device *bdev,
 
 	/* fall back to generic helper to populate the page array
 	 * and map them to the device */
-	return ttm_populate_and_map_pages(adev->dev, &gtt->ttm, ctx);
+	return ttm_populate_and_map_pages(&gtt->ttm, adev->dev, ctx);
 }
 
 /**
@@ -1382,7 +1382,7 @@ static void amdgpu_ttm_tt_unpopulate(struct ttm_bo_device *bdev, struct ttm_tt *
 #endif
 
 	/* fall back to generic helper to unmap and unpopulate array */
-	ttm_unmap_and_unpopulate_pages(adev->dev, &gtt->ttm);
+	ttm_unmap_and_unpopulate_pages(&gtt->ttm, adev->dev);
 }
 
 /**

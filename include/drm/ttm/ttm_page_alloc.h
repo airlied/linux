@@ -61,13 +61,15 @@ void ttm_pool_unpopulate(struct ttm_tt *ttm);
 /**
  * Populates and DMA maps pages to fullfil a ttm_dma_populate() request
  */
-int ttm_populate_and_map_pages(struct device *dev, struct ttm_dma_tt *tt,
-				struct ttm_operation_ctx *ctx);
+int ttm_populate_and_map_pages(struct ttm_dma_tt *tt,
+			       struct device *dev,
+			       struct ttm_operation_ctx *ctx);
 
 /**
  * Unpopulates and DMA unmaps pages as part of a
  * ttm_dma_unpopulate() request */
-void ttm_unmap_and_unpopulate_pages(struct device *dev, struct ttm_dma_tt *tt);
+void ttm_unmap_and_unpopulate_pages(struct ttm_dma_tt *tt,
+				    struct device *dev);
 
 /**
  * Output the state of pools to debugfs file

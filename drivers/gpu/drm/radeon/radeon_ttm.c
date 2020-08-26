@@ -643,7 +643,7 @@ static int radeon_ttm_tt_populate(struct ttm_bo_device *bdev,
 	}
 #endif
 
-	return ttm_populate_and_map_pages(rdev->dev, &gtt->ttm, ctx);
+	return ttm_populate_and_map_pages(&gtt->ttm, rdev->dev, ctx);
 }
 
 static void radeon_ttm_tt_unpopulate(struct ttm_bo_device *bdev, struct ttm_tt *ttm)
@@ -675,7 +675,7 @@ static void radeon_ttm_tt_unpopulate(struct ttm_bo_device *bdev, struct ttm_tt *
 	}
 #endif
 
-	ttm_unmap_and_unpopulate_pages(rdev->dev, &gtt->ttm);
+	ttm_unmap_and_unpopulate_pages(&gtt->ttm, rdev->dev);
 }
 
 int radeon_ttm_tt_set_userptr(struct radeon_device *rdev,

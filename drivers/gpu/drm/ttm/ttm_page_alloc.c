@@ -1094,8 +1094,9 @@ void ttm_pool_unpopulate(struct ttm_tt *ttm)
 }
 EXPORT_SYMBOL(ttm_pool_unpopulate);
 
-int ttm_populate_and_map_pages(struct device *dev, struct ttm_dma_tt *tt,
-					struct ttm_operation_ctx *ctx)
+int ttm_populate_and_map_pages(struct ttm_dma_tt *tt,
+			       struct device *dev,
+			       struct ttm_operation_ctx *ctx)
 {
 	unsigned i, j;
 	int r;
@@ -1137,7 +1138,8 @@ int ttm_populate_and_map_pages(struct device *dev, struct ttm_dma_tt *tt,
 }
 EXPORT_SYMBOL(ttm_populate_and_map_pages);
 
-void ttm_unmap_and_unpopulate_pages(struct device *dev, struct ttm_dma_tt *tt)
+void ttm_unmap_and_unpopulate_pages(struct ttm_dma_tt *tt,
+				    struct device *dev)
 {
 	unsigned i, j;
 

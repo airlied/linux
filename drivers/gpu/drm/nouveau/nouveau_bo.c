@@ -1293,7 +1293,7 @@ nouveau_ttm_tt_populate(struct ttm_bo_device *bdev,
 		return ttm_dma_populate((void *)ttm, dev, ctx);
 	}
 #endif
-	return ttm_populate_and_map_pages(dev, ttm_dma, ctx);
+	return ttm_populate_and_map_pages(ttm_dma, dev, ctx);
 }
 
 static void
@@ -1325,7 +1325,7 @@ nouveau_ttm_tt_unpopulate(struct ttm_bo_device *bdev,
 	}
 #endif
 
-	ttm_unmap_and_unpopulate_pages(dev, ttm_dma);
+	ttm_unmap_and_unpopulate_pages(ttm_dma, dev);
 }
 
 static void
