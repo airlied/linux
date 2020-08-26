@@ -68,9 +68,9 @@ enum ttm_caching_state {
 struct ttm_tt {
 	struct page **pages;
 	uint32_t page_flags;
+	enum ttm_caching_state caching_state;
 	unsigned long num_pages;
 	struct file *swap_storage;
-	enum ttm_caching_state caching_state;
 };
 
 static inline bool ttm_tt_is_populated(struct ttm_tt *tt)

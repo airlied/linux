@@ -100,8 +100,8 @@ struct ttm_place {
  */
 struct ttm_placement {
 	unsigned		num_placement;
-	const struct ttm_place	*placement;
 	unsigned		num_busy_placement;
+	const struct ttm_place	*placement;
 	const struct ttm_place	*busy_placement;
 };
 
