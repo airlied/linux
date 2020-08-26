@@ -42,6 +42,8 @@ struct ttm_operation_ctx;
 #define TTM_PAGE_FLAG_SG              (1 << 8)
 #define TTM_PAGE_FLAG_NO_RETRY	      (1 << 9)
 
+#define TTM_PAGE_FLAG_PRIV_POPULATED  (1 << 31)
+
 enum ttm_caching_state {
 	tt_uncached,
 	tt_wc,
@@ -69,17 +71,19 @@ struct ttm_tt {
 	unsigned long num_pages;
 	struct file *swap_storage;
 	enum ttm_caching_state caching_state;
-	bool _populated;
 };
 
 static inline bool ttm_tt_is_populated(struct ttm_tt *tt)
 {
-	return tt->_populated;
+	return tt->page_flags & TTM_PAGE_FLAG_PRIV_POPULATED;
 }
 
 static inline void ttm_tt_set_populated(struct ttm_tt *tt, bool flag)
 {
-	tt->_populated = flag;
+	if (flag)
+		tt->page_flags |= TTM_PAGE_FLAG_PRIV_POPULATED;
+	else
+		tt->page_flags &= ~TTM_PAGE_FLAG_PRIV_POPULATED;
 }
 
 /**
