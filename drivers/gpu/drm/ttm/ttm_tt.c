@@ -156,7 +156,7 @@ static int ttm_tt_set_caching(struct ttm_tt *ttm,
 	if (ttm->caching_state == c_state)
 		return 0;
 
-	if (!ttm->populated) {
+	if (!ttm_tt_is_populated(ttm)) {
 		/* Change caching but don't populate */
 		ttm->caching_state = c_state;
 		return 0;
@@ -225,7 +225,7 @@ static void ttm_tt_init_fields(struct ttm_tt *ttm,
 	ttm->caching_state = tt_cached;
 	ttm->page_flags = page_flags;
 	ttm->swap_storage = NULL;
-	ttm->populated = false;
+	ttm_tt_set_populated(ttm, false);
 }
 
 int ttm_tt_init(struct ttm_tt *ttm, struct ttm_buffer_object *bo,
@@ -312,7 +312,7 @@ int ttm_tt_bind(struct ttm_bo_device *bdev,
 	if (!ttm)
 		return -EINVAL;
 
-	if (WARN_ON(!ttm->populated))
+	if (WARN_ON(!ttm_tt_is_populated(ttm)))
 		return -EINVAL;
 
 	return bdev->driver->ttm_tt_bind(bdev, ttm, bo_mem);
@@ -437,7 +437,7 @@ int ttm_tt_populate(struct ttm_bo_device *bdev,
 {
 	int ret;
 
-	if (ttm->populated)
+	if (ttm_tt_is_populated(ttm))
 		return 0;
 
 	if (bdev->driver->ttm_tt_populate)
@@ -467,7 +467,7 @@ static void ttm_tt_clear_mapping(struct ttm_tt *ttm)
 void ttm_tt_unpopulate(struct ttm_bo_device *bdev,
 		       struct ttm_tt *ttm)
 {
-	if (!ttm->populated)
+	if (!ttm_tt_is_populated(ttm))
 		return;
 
 	ttm_tt_clear_mapping(ttm);

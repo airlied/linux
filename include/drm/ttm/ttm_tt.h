@@ -69,8 +69,18 @@ struct ttm_tt {
 	unsigned long num_pages;
 	struct file *swap_storage;
 	enum ttm_caching_state caching_state;
-	bool populated;
+	bool _populated;
 };
+
+static inline bool ttm_tt_is_populated(struct ttm_tt *tt)
+{
+	return tt->_populated;
+}
+
+static inline void ttm_tt_set_populated(struct ttm_tt *tt, bool flag)
+{
+	tt->_populated = flag;
+}
 
 /**
  * struct ttm_dma_tt
