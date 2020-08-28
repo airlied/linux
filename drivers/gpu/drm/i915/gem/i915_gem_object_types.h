@@ -57,6 +57,8 @@ struct drm_i915_gem_object_ops {
 
 	int (*pwrite)(struct drm_i915_gem_object *obj,
 		      const struct drm_i915_gem_pwrite *arg);
+	int (*pread)(struct drm_i915_gem_object *obj,
+		     const struct drm_i915_gem_pread *arg);
 
 	int (*dmabuf_export)(struct drm_i915_gem_object *obj);
 	void (*release)(struct drm_i915_gem_object *obj);
