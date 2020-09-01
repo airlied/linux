@@ -163,6 +163,15 @@ static int i915_ttm_bo_move(struct ttm_buffer_object *tbo, bool evict,
 		return 0;
 	}
 
+	if (old_mem->mem_type == TTM_PL_TT &&
+	    new_mem->mem_type == TTM_PL_TT){
+		return ttm_bo_move_ttm(tbo, ctx, new_mem);
+	}
+	if (old_mem->mem_type == TTM_PL_VRAM &&
+	    new_mem->mem_type == TTM_PL_VRAM){
+		return ttm_bo_move_ttm(tbo, ctx, new_mem);
+	}
+
 	if ((old_mem->mem_type == TTM_PL_TT &&
 	     new_mem->mem_type == TTM_PL_SYSTEM) ||
 	    (old_mem->mem_type == TTM_PL_SYSTEM &&
@@ -263,14 +272,22 @@ static int i915_ttm_backend_bind(struct ttm_tt *ttm,
 {
 	struct i915_ttm_tt *gtt = (struct i915_ttm_tt *)ttm;
 	int r;
+	u64 map_flag = 0;
 	if (ttm->page_flags & TTM_PAGE_FLAG_SG)
 		return 0;
 
-	if (!i915_ttm_gtt_mgr_has_gart_addr(bo_mem)) {
+	if (bo_mem->mem_type == TTM_PL_TT && !i915_ttm_gtt_mgr_has_gart_addr(bo_mem)) {
 		gtt->offset = I915_TTM_BO_INVALID_OFFSET;
 		return 0;
 	}
-	r = i915_vma_pin(gtt->vma, 0, 0, PIN_MAPPABLE | PIN_OFFSET_FIXED | PIN_GLOBAL | (bo_mem->start << PAGE_SHIFT));
+
+	return 0;
+#if 0
+	if (bo_mem->mem_type != TTM_PL_VRAM)
+		map_flag = PIN_MAPPABLE;
+	r = i915_vma_pin(gtt->vma, 0, 0, map_flag | PIN_OFFSET_FIXED | PIN_GLOBAL | (bo_mem->start << PAGE_SHIFT));
+	printk(KERN_ERR "vma pin failed %d, %lx\n", r, bo_mem->start);
+#endif
 	return r;
 }
 
@@ -279,7 +296,7 @@ static void i915_ttm_backend_unbind(struct ttm_tt *ttm)
 	struct i915_ttm_tt *gtt = (struct i915_ttm_tt *)ttm;
 	if (ttm->page_flags & TTM_PAGE_FLAG_SG)
 		return;
-	i915_vma_unpin(gtt->vma);
+	//	i915_vma_unpin(gtt->vma);
 }
 
 static void i915_ttm_backend_destroy(struct ttm_tt *ttm)
@@ -344,6 +361,10 @@ static void i915_ttm_tt_unpopulate(struct ttm_tt *ttm)
 	struct drm_i915_private *i915 = to_i915_ttm_dev(ttm->bdev);
 	struct i915_ttm_tt *gtt = (void *)ttm;
 	printk(KERN_INFO "tt unpopulate %p\n", ttm);
+	if (ttm->page_flags & TTM_PAGE_FLAG_SG) {
+		return;
+	}
+	
 	ttm_unmap_and_unpopulate_pages(i915->drm.dev, &gtt->ttm);
 }
 
@@ -618,7 +639,7 @@ void i915_ttm_bo_placement_from_region(struct i915_ttm_bo *bo, u32 region)
 	}
 
 	if (region & REGION_LMEM) {
-		places[c].fpfn = 0;
+		places[c].fpfn = 0x100000 >> PAGE_SHIFT;
 		places[c].lpfn = 0;
 		places[c].flags = TTM_PL_FLAG_WC | TTM_PL_FLAG_UNCACHED |
 			TTM_PL_FLAG_VRAM;
@@ -1238,9 +1259,14 @@ int i915_ttm_alloc_gtt(struct ttm_buffer_object *tbo)
 	struct ttm_place placements;
 	uint64_t addr, flags;
 	int r;
+	u64 map_flag = 0;
 
-	if (tbo->mem.start != I915_TTM_BO_INVALID_OFFSET)
-		return 0;
+	if (!HAS_LMEM(i915))
+		map_flag = PIN_MAPPABLE;
+
+	if (tbo->mem.start != I915_TTM_BO_INVALID_OFFSET) {
+		return i915_vma_pin(gtt->vma, 0, 0, map_flag | PIN_OFFSET_FIXED | PIN_GLOBAL | (tbo->mem.start << PAGE_SHIFT));
+	}
 
 	/* allocate GART space */
 	tmp = tbo->mem;
@@ -1251,8 +1277,12 @@ int i915_ttm_alloc_gtt(struct ttm_buffer_object *tbo)
 	placement.busy_placement = &placements;
 	placements.fpfn = 0;
 	placements.lpfn = i915->ggtt.vm.total >> PAGE_SHIFT;
-	placements.flags = (tbo->mem.placement & ~TTM_PL_MASK_MEM) |
-		TTM_PL_FLAG_TT;
+	placements.flags = (tbo->mem.placement & ~TTM_PL_MASK_MEM);
+
+	if (tbo->mem.mem_type == TTM_PL_TT)
+		placements.flags |= TTM_PL_FLAG_TT;
+	else if (tbo->mem.mem_type == TTM_PL_VRAM)
+		placements.flags |= TTM_PL_FLAG_VRAM;
 
 	r = ttm_bo_mem_space(tbo, &placement, &tmp, &ctx);
 	if (unlikely(r))
@@ -1260,7 +1290,7 @@ int i915_ttm_alloc_gtt(struct ttm_buffer_object *tbo)
 
 	/* Bind pages */
 	gtt->offset = (u64)tmp.start << PAGE_SHIFT;
-	r = i915_vma_pin(gtt->vma, 0, 0, PIN_MAPPABLE | PIN_OFFSET_FIXED | PIN_GLOBAL | (tmp.start << PAGE_SHIFT));
+	r = i915_vma_pin(gtt->vma, 0, 0, map_flag | PIN_OFFSET_FIXED | PIN_GLOBAL | (tmp.start << PAGE_SHIFT));
 	if (unlikely(r)) {
 		ttm_bo_mem_put(tbo, &tmp);
 		return r;

@@ -6,6 +6,15 @@ static inline struct i915_ttm_vram_mgr *to_vram_mgr(struct ttm_resource_manager 
 	return container_of(man, struct i915_ttm_vram_mgr, manager);
 }
 
+struct i915_ttm_vram_node {
+	struct ttm_resource gtt_res;
+	struct drm_mm_node *nodes;
+};
+
+static inline struct drm_i915_private *vram_mgr_to_i915(struct ttm_resource_manager *man)
+{
+	return container_of(man, struct drm_i915_private, ttm_mman.vram_mgr.manager);
+}
 /**
  * i915_ttm_vram_mgr_virt_start - update virtual start address
  *
@@ -44,6 +53,7 @@ int i915_ttm_vram_mgr_init(struct drm_i915_private *i915)
 	mgr = &i915->ttm_mman.vram_mgr;
 	man = &mgr->manager;
 
+	man->use_tt = true;
 	man->available_caching = TTM_PL_FLAG_UNCACHED | TTM_PL_FLAG_WC;
 	man->default_caching = TTM_PL_FLAG_WC;
 	man->func = &i915_ttm_vram_mgr_func;
@@ -85,8 +95,11 @@ static int i915_ttm_vram_mgr_new(struct ttm_resource_manager *man,
 	struct drm_mm *mm = &mgr->mm;
 	struct drm_mm_node *nodes;
 	enum drm_mm_insert_mode mode;
+	struct ttm_resource_manager *gtt_mgr = ttm_manager_type(tbo->bdev, TTM_PL_TT);
 	unsigned long lpfn, num_nodes, pages_per_node, pages_left;
 	uint64_t mem_bytes, max_bytes;
+	struct i915_ttm_vram_node *node;
+	struct drm_i915_private *i915 = vram_mgr_to_i915(man);
 	unsigned i;
 	int r;
 
@@ -106,9 +119,16 @@ static int i915_ttm_vram_mgr_new(struct ttm_resource_manager *man,
 		num_nodes = DIV_ROUND_UP(mem->num_pages, pages_per_node);
 	}
 
-	nodes = kvmalloc_array((uint32_t)num_nodes, sizeof(*nodes),
-			       GFP_KERNEL | __GFP_ZERO);
-	if (!nodes) {
+	printk(KERN_ERR "vram mgr alloc %d %ld %ld\n", place->fpfn, lpfn, num_nodes);
+	node = kzalloc(sizeof(*node), GFP_KERNEL);
+	if (!node) {
+		r = -ENOMEM;
+		goto error;
+	}
+
+	node->nodes = kvmalloc_array((uint32_t)num_nodes, sizeof(*nodes),
+				     GFP_KERNEL | __GFP_ZERO);
+	if (!node->nodes) {
 		atomic64_sub(mem_bytes, &mgr->usage);
 		return -ENOMEM;
 	}
@@ -123,7 +143,7 @@ static int i915_ttm_vram_mgr_new(struct ttm_resource_manager *man,
 	for (i = 0; pages_left >= pages_per_node; ++i) {
 		unsigned long pages = rounddown_pow_of_two(pages_left);
 
-		r = drm_mm_insert_node_in_range(mm, &nodes[i], pages,
+		r = drm_mm_insert_node_in_range(mm, &node->nodes[i], pages,
 						pages_per_node, 0,
 						place->fpfn, lpfn,
 						mode);
@@ -131,7 +151,7 @@ static int i915_ttm_vram_mgr_new(struct ttm_resource_manager *man,
 			break;
 
 //		vis_usage += i915_ttm_vram_mgr_vis_size(adev, &nodes[i]);
-		i915_ttm_vram_mgr_virt_start(mem, &nodes[i]);
+		i915_ttm_vram_mgr_virt_start(mem, &node->nodes[i]);
 		pages_left -= pages;
 	}
 
@@ -142,7 +162,7 @@ static int i915_ttm_vram_mgr_new(struct ttm_resource_manager *man,
 		if (pages == pages_per_node)
 			alignment = pages_per_node;
 
-		r = drm_mm_insert_node_in_range(mm, &nodes[i],
+		r = drm_mm_insert_node_in_range(mm, &node->nodes[i],
 						pages, alignment, 0,
 						place->fpfn, lpfn,
 						mode);
@@ -150,24 +170,40 @@ static int i915_ttm_vram_mgr_new(struct ttm_resource_manager *man,
 			goto error;
 
 //		vis_usage += i915_ttm_vram_mgr_vis_size(adev, &nodes[i]);
-		i915_ttm_vram_mgr_virt_start(mem, &nodes[i]);
+		i915_ttm_vram_mgr_virt_start(mem, &node->nodes[i]);
 		pages_left -= pages;
 	}
 	spin_unlock(&mgr->lock);
+	struct ttm_place gtt_place = *place;
+	gtt_place.fpfn = 0;
+	/* force gtt mgr to give us a node */
+	gtt_place.lpfn = i915->ggtt.vm.total >> PAGE_SHIFT;
+	node->gtt_res = *mem;
+	node->gtt_res.mm_node = NULL;
+		/* allocate a gtt node as well */
+	r = gtt_mgr->func->get_node(gtt_mgr, tbo, &gtt_place, &node->gtt_res);
+	if (unlikely(r)) {
+		printk(KERN_ERR "fail two, %d %d\n", place->fpfn, place->lpfn);
+		goto error;
+	}
+
 
 //	atomic64_add(vis_usage, &mgr->vis_usage);
 
-	mem->mm_node = nodes;
+	mem->mm_node = node;
+	mem->start = node->gtt_res.start;
 
 	return 0;
 
 error:
 	while (i--)
-		drm_mm_remove_node(&nodes[i]);
+		drm_mm_remove_node(&node->nodes[i]);
 	spin_unlock(&mgr->lock);
 	atomic64_sub(mem->num_pages << PAGE_SHIFT, &mgr->usage);
 
-	kvfree(nodes);
+	kvfree(node->nodes);
+	kfree(node);
+
 	return r == -ENOSPC ? 0 : r;
 }
 
@@ -175,12 +211,17 @@ static void i915_ttm_vram_mgr_del(struct ttm_resource_manager *man,
 				  struct ttm_resource *mem)
 {
 	struct i915_ttm_vram_mgr *mgr = to_vram_mgr(man);
-	struct drm_mm_node *nodes = mem->mm_node;
+	struct i915_ttm_vram_node *node = mem->mm_node;
+	struct drm_mm_node *nodes;
 	unsigned pages = mem->num_pages;
 	uint64_t usage = 0;
-	if (!mem->mm_node)
+	struct drm_i915_private *i915 = vram_mgr_to_i915(man);
+	struct ttm_resource_manager *gtt_mgr = ttm_manager_type(&i915->ttm_mman.bdev, TTM_PL_TT);
+
+	if (!node)
 		return;
 
+	nodes = node->nodes;
 	spin_lock(&mgr->lock);
 	while (pages) {
 		pages -= nodes->size;
@@ -189,7 +230,10 @@ static void i915_ttm_vram_mgr_del(struct ttm_resource_manager *man,
 		++nodes;
 	}
 	spin_unlock(&mgr->lock);
-	kvfree(mem->mm_node);
+	gtt_mgr->func->put_node(gtt_mgr, &node->gtt_res);
+
+	kvfree(node->nodes);
+	kfree(node);
 	mem->mm_node = NULL;
 }
 
@@ -204,15 +248,27 @@ int i915_ttm_vram_get_pages(struct i915_ttm_bo *bo)
 	struct sg_table *st;
 	struct scatterlist *sg;
 	struct ttm_resource *mem = &bo->tbo.mem;
-	struct drm_mm_node *nodes = mem->mm_node;
+	struct i915_ttm_vram_node *node = mem->mm_node;
+	struct drm_mm_node *nodes = node->nodes;
 	unsigned pages = mem->num_pages;
+	int num_entries = 0;
+
+	if (!mem->mm_node)
+		return -EINVAL;
 
 	st = kmalloc(sizeof(*st), GFP_KERNEL);
 	if (!st)
 		return -ENOMEM;
 
+	for (pages = mem->num_pages, nodes = node->nodes;
+	     pages; pages -= nodes->size, ++nodes)
+		++num_entries;
+
+	pages = mem->num_pages;
+	nodes = node->nodes;
+	printk(KERN_ERR "num entires is %d\n", num_entries);
 	/* wtf rewrite */
-	if (sg_alloc_table(st, (bo->tbo.num_pages * PAGE_SIZE) >> ilog2(2*1024*1024), GFP_KERNEL)) {
+	if (sg_alloc_table(st, num_entries, GFP_KERNEL)) {
 		kfree(st);
 		return -ENOMEM;
 	}
@@ -224,7 +280,7 @@ int i915_ttm_vram_get_pages(struct i915_ttm_bo *bo)
 	while (pages) {
 		pages -= nodes->size;
 
-		sg_dma_address(sg) = i915->mm.regions[INTEL_MEMORY_LOCAL]->io_start + nodes->start;
+		sg_dma_address(sg) = nodes->start;
 
 		sg_dma_len(sg) = nodes->size;
 		sg->length = nodes->size;
@@ -232,6 +288,19 @@ int i915_ttm_vram_get_pages(struct i915_ttm_bo *bo)
 		++nodes;
 	}
 	sg_mark_end(sg);
-	bo->pages = st;	
+	bo->pages = st;
 	return 0;
+}
+
+unsigned long i915_ttm_vram_obj_get_offset(struct ttm_resource *mem)
+{
+	struct i915_ttm_vram_node *node = mem->mm_node;
+
+	if (!mem) {
+		WARN_ON(1);
+		return 0;
+	}
+	if (!node)
+	    return 0;
+	return node->nodes[0].start;
 }
