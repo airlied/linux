@@ -580,6 +580,8 @@ void i915_vma_unpin_and_release(struct i915_vma **p_vma, unsigned int flags)
 	obj = vma->obj;
 
 	if (vma->bo) {
+
+		i915_vma_unpin(vma);
 		i915_ttm_bo_unpin(vma->bo);
 		i915_ttm_bo_kunmap(vma->bo);
 		i915_ttm_bo_unref(&vma->bo);
