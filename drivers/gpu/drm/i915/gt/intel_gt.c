@@ -348,8 +348,8 @@ static int intel_gt_init_scratch(struct intel_gt *gt, unsigned int size)
 
 	if (i915->use_ttm) {
 		uint32_t region = HAS_LMEM(i915) ? REGION_LMEM : REGION_STOLEN_SMEM;
-		ret = i915_ttm_bo_create_reserved(i915, size, 0, region,
-						  &bo, NULL, NULL);
+		ret = i915_ttm_bo_create_kernel(i915, size, 0, region,
+						&bo, NULL, NULL);
 		if (ret)
 			return ret;
 
