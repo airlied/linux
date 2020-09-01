@@ -578,14 +578,21 @@ void i915_vma_unpin_and_release(struct i915_vma **p_vma, unsigned int flags)
 		return;
 
 	obj = vma->obj;
-	GEM_BUG_ON(!obj);
 
-	i915_vma_unpin(vma);
+	if (vma->bo) {
+		i915_ttm_bo_unpin(vma->bo);
+		i915_ttm_bo_kunmap(vma->bo);
+		i915_ttm_bo_unref(&vma->bo);
+	} else {
+		GEM_BUG_ON(!obj);
 
-	if (flags & I915_VMA_RELEASE_MAP)
-		i915_gem_object_unpin_map(obj);
+		i915_vma_unpin(vma);
 
-	i915_gem_object_put(obj);
+		if (flags & I915_VMA_RELEASE_MAP)
+			i915_gem_object_unpin_map(obj);
+
+		i915_gem_object_put(obj);
+	}
 }
 
 bool i915_vma_misplaced(const struct i915_vma *vma,
