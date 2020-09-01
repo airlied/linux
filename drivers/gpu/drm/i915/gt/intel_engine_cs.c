@@ -40,6 +40,7 @@
 #include "intel_lrc.h"
 #include "intel_reset.h"
 #include "intel_ring.h"
+#include "ttm/i915_ttm.h"
 
 /* Haswell does have the CXT_SIZE register however it does not appear to be
  * valid. Now, docs explain in dwords what is in the context object. The full
@@ -611,8 +612,11 @@ static void cleanup_status_page(struct intel_engine_cs *engine)
 	if (!HWS_NEEDS_PHYSICAL(engine->i915))
 		i915_vma_unpin(vma);
 
-	i915_gem_object_unpin_map(vma->obj);
-	i915_gem_object_put(vma->obj);
+	if (vma->obj) {
+	  i915_gem_object_unpin_map(vma->obj);
+	  i915_gem_object_put(vma->obj);
+	} else
+	  i915_ttm_bo_unref(&vma->bo);
 }
 
 static int pin_ggtt_status_page(struct intel_engine_cs *engine,
@@ -642,6 +646,7 @@ static int pin_ggtt_status_page(struct intel_engine_cs *engine,
 static int init_status_page(struct intel_engine_cs *engine)
 {
 	struct drm_i915_gem_object *obj;
+	struct i915_ttm_bo *bo = NULL;
 	struct i915_vma *vma;
 	void *vaddr;
 	int ret;
@@ -653,26 +658,45 @@ static int init_status_page(struct intel_engine_cs *engine)
 	 * in GFP_DMA32 for i965, and no earlier physical address users had
 	 * access to more than 4G.
 	 */
-	if (HAS_LMEM(engine->i915)) {
-		obj = i915_gem_object_create_lmem(engine->i915,
-						  PAGE_SIZE,
-						  I915_BO_ALLOC_CONTIGUOUS |
-						  I915_BO_ALLOC_VOLATILE);
+	if (engine->i915->use_ttm) {
+		uint32_t region = HAS_LMEM(engine->i915) ? REGION_LMEM : REGION_SMEM;
+		ret = i915_ttm_bo_create_kernel(engine->i915, PAGE_SIZE, 0,
+						region, &bo, NULL, NULL);
+		if (ret)
+			return ret;
+		vma = i915_ttm_vma_instance(bo, &engine->gt->ggtt->vm, NULL);
+		if (IS_ERR(vma)) {
+			ret = PTR_ERR(vma);
+			goto err;
+		}
+
+		ret = i915_ttm_bo_pin(bo, region);
+		ret = i915_ttm_bo_kmap(bo, &vaddr);
+		engine->status_page.addr = vaddr;
+		engine->status_page.vma = vma;
+		return ret;
 	} else {
-		obj = i915_gem_object_create_internal(engine->i915, PAGE_SIZE);
-	}
-	if (IS_ERR(obj)) {
-		drm_err(&engine->i915->drm,
-			"Failed to allocate status page\n");
-		return PTR_ERR(obj);
-	}
+		if (HAS_LMEM(engine->i915)) {
+			obj = i915_gem_object_create_lmem(engine->i915,
+							  PAGE_SIZE,
+							  I915_BO_ALLOC_CONTIGUOUS |
+							  I915_BO_ALLOC_VOLATILE);
+		} else {
+			obj = i915_gem_object_create_internal(engine->i915, PAGE_SIZE);
+		}
+		if (IS_ERR(obj)) {
+			drm_err(&engine->i915->drm,
+				"Failed to allocate status page\n");
+			return PTR_ERR(obj);
+		}
+		i915_gem_object_set_cache_coherency(obj, I915_CACHE_LLC);
 
-	i915_gem_object_set_cache_coherency(obj, I915_CACHE_LLC);
+		vma = i915_vma_instance(obj, &engine->gt->ggtt->vm, NULL);
+		if (IS_ERR(vma)) {
+			ret = PTR_ERR(vma);
+			goto err;
+		}
 
-	vma = i915_vma_instance(obj, &engine->gt->ggtt->vm, NULL);
-	if (IS_ERR(vma)) {
-		ret = PTR_ERR(vma);
-		goto err;
 	}
 
 	vaddr = i915_gem_object_pin_map(obj, I915_MAP_WB);
