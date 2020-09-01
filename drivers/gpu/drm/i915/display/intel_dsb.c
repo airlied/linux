@@ -272,6 +272,10 @@ void intel_dsb_prepare(struct intel_crtc_state *crtc_state)
 	if (!HAS_DSB(i915))
 		return;
 
+	if (i915->use_ttm) {
+		if (!i915->ttm_mman.initialized)
+			return;
+	}
 	dsb = kmalloc(sizeof(*dsb), GFP_KERNEL);
 	if (!dsb) {
 		drm_err(&i915->drm, "DSB object creation failed\n");
