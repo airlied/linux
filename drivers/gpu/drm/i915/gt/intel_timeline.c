@@ -7,6 +7,7 @@
 #include "i915_drv.h"
 
 #include "gem/i915_gem_lmem.h"
+#include "ttm/i915_ttm.h"
 #include "i915_active.h"
 #include "i915_syncmap.h"
 #include "intel_gt.h"
@@ -32,6 +33,18 @@ static struct i915_vma *__hwsp_alloc(struct intel_gt *gt)
 	struct drm_i915_private *i915 = gt->i915;
 	struct drm_i915_gem_object *obj;
 	struct i915_vma *vma;
+
+	if (i915->use_ttm) {
+		struct i915_ttm_bo *bo = NULL;
+		uint32_t region = HAS_LMEM(i915) ? REGION_LMEM : REGION_SMEM;
+		int ret = i915_ttm_bo_create_kernel(i915, PAGE_SIZE, 0,
+						region, &bo, NULL, NULL);
+
+		vma = i915_ttm_vma_instance(bo, &gt->ggtt->vm, NULL);
+		if (IS_ERR(vma))
+			i915_ttm_bo_unref(&bo);
+		return vma;
+	}
 
 	if (HAS_LMEM(i915))
 		obj = i915_gem_object_create_lmem(i915, PAGE_SIZE,
@@ -179,11 +192,17 @@ cacheline_alloc(struct intel_timeline_hwsp *hwsp, unsigned int cacheline)
 	if (!cl)
 		return ERR_PTR(-ENOMEM);
 
-	vaddr = i915_gem_object_pin_map(hwsp->vma->obj, I915_MAP_WB);
-	if (IS_ERR(vaddr)) {
-		kfree(cl);
-		return ERR_CAST(vaddr);
+
+	if (hwsp->vma->bo) {
+		int ret = i915_ttm_bo_kmap(hwsp->vma->bo, &vaddr);
+	} else {
+		vaddr = i915_gem_object_pin_map(hwsp->vma->obj, I915_MAP_WB);
+		if (IS_ERR(vaddr)) {
+			kfree(cl);
+			return ERR_CAST(vaddr);
+		}
 	}
+		
 
 	i915_vma_get(hwsp->vma);
 	cl->hwsp = hwsp;
@@ -254,9 +273,15 @@ static int intel_timeline_init(struct intel_timeline *timeline,
 		vaddr = page_mask_bits(cl->vaddr);
 	} else {
 		timeline->hwsp_offset = offset;
-		vaddr = i915_gem_object_pin_map(hwsp->obj, I915_MAP_WB);
-		if (IS_ERR(vaddr))
-			return PTR_ERR(vaddr);
+		if (!hwsp->obj) {
+			int ret = i915_ttm_bo_kmap(hwsp->bo, &vaddr);
+			if (ret)
+				return ret;
+		} else {
+			vaddr = i915_gem_object_pin_map(hwsp->obj, I915_MAP_WB);
+			if (IS_ERR(vaddr))
+				return PTR_ERR(vaddr);
+		}
 	}
 
 	timeline->hwsp_seqno =
