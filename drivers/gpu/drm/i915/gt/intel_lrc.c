@@ -3531,9 +3531,39 @@ __execlists_update_reg_state(const struct intel_context *ce,
 	}
 }
 
+static void populate_lr_context(struct intel_context *ce,
+				struct intel_engine_cs *engine,
+				void *vaddr)
+{
+	bool inhibit = true;
+	struct drm_i915_gem_object *ctx_obj = ce->state->obj;
+
+	set_redzone(vaddr, engine);
+
+	if (engine->default_state) {
+		shmem_read(engine->default_state, 0,
+			   vaddr, engine->context_size);
+		__set_bit(CONTEXT_VALID_BIT, &ce->flags);
+		inhibit = false;
+	}
+
+	/* Clear the ppHWSP (inc. per-context counters) */
+	memset(vaddr, 0, PAGE_SIZE);
+
+	/*
+	 * The second page of the context object contains some registers which
+	 * must be set up prior to the first execution.
+	 */
+	execlists_init_reg_state(vaddr + LRC_STATE_OFFSET,
+				 ce, engine, ce->ring, inhibit);
+
+	__i915_gem_object_flush_map(ctx_obj, 0, engine->context_size);
+}
+
 static int
-execlists_context_pre_pin(struct intel_context *ce,
-			  struct i915_gem_ww_ctx *ww, void **vaddr)
+__execlists_context_pre_pin(struct intel_context *ce,
+			    struct intel_engine_cs *engine,
+			    struct i915_gem_ww_ctx *ww, void **vaddr)
 {
 	GEM_BUG_ON(!ce->state);
 	GEM_BUG_ON(!i915_vma_is_pinned(ce->state));
@@ -3541,8 +3571,20 @@ execlists_context_pre_pin(struct intel_context *ce,
 	*vaddr = i915_gem_object_pin_map(ce->state->obj,
 					i915_coherent_map_type(ce->engine->i915) |
 					I915_MAP_OVERRIDE);
+	if (IS_ERR(*vaddr))
+		return PTR_ERR(*vaddr);
 
-	return PTR_ERR_OR_ZERO(*vaddr);
+	if (!__test_and_set_bit(CONTEXT_INIT_BIT, &ce->flags))
+		populate_lr_context(ce, engine, *vaddr);
+
+	return 0;
+}
+
+static int
+execlists_context_pre_pin(struct intel_context *ce,
+			  struct i915_gem_ww_ctx *ww, void **vaddr)
+{
+	return __execlists_context_pre_pin(ce, ce->engine, ww, vaddr);
 }
 
 static int
@@ -5339,45 +5381,6 @@ static void execlists_init_reg_state(u32 *regs,
 	__reset_stop_ring(regs, engine);
 }
 
-static int
-populate_lr_context(struct intel_context *ce,
-		    struct drm_i915_gem_object *ctx_obj,
-		    struct intel_engine_cs *engine,
-		    struct intel_ring *ring)
-{
-	bool inhibit = true;
-	void *vaddr;
-
-	vaddr = i915_gem_object_pin_map(ctx_obj, I915_MAP_WB);
-	if (IS_ERR(vaddr)) {
-		drm_dbg(&engine->i915->drm, "Could not map object pages!\n");
-		return PTR_ERR(vaddr);
-	}
-
-	set_redzone(vaddr, engine);
-
-	if (engine->default_state) {
-		shmem_read(engine->default_state, 0,
-			   vaddr, engine->context_size);
-		__set_bit(CONTEXT_VALID_BIT, &ce->flags);
-		inhibit = false;
-	}
-
-	/* Clear the ppHWSP (inc. per-context counters) */
-	memset(vaddr, 0, PAGE_SIZE);
-
-	/*
-	 * The second page of the context object contains some registers which
-	 * must be set up prior to the first execution.
-	 */
-	execlists_init_reg_state(vaddr + LRC_STATE_OFFSET,
-				 ce, engine, ring, inhibit);
-
-	__i915_gem_object_flush_map(ctx_obj, 0, engine->context_size);
-	i915_gem_object_unpin_map(ctx_obj);
-	return 0;
-}
-
 static struct intel_timeline *pinned_timeline(struct intel_context *ce)
 {
 	struct intel_timeline *tl = fetch_and_zero(&ce->timeline);
@@ -5441,20 +5444,11 @@ static int __execlists_context_alloc(struct intel_context *ce,
 		goto error_deref_obj;
 	}
 
-	ret = populate_lr_context(ce, ctx_obj, engine, ring);
-	if (ret) {
-		drm_dbg(&engine->i915->drm,
-			"Failed to populate LRC: %d\n", ret);
-		goto error_ring_free;
-	}
-
 	ce->ring = ring;
 	ce->state = vma;
 
 	return 0;
 
-error_ring_free:
-	intel_ring_put(ring);
 error_deref_obj:
 	i915_gem_object_put(ctx_obj);
 	return ret;
@@ -5532,6 +5526,15 @@ static int virtual_context_alloc(struct intel_context *ce)
 	return __execlists_context_alloc(ce, ve->siblings[0]);
 }
 
+static int
+virtual_context_pre_pin(struct intel_context *ce,
+			  struct i915_gem_ww_ctx *ww, void **vaddr)
+{
+	struct virtual_engine *ve = container_of(ce, typeof(*ve), context);
+
+	return __execlists_context_pre_pin(ce, ve->siblings[0], ww, vaddr);
+}
+
 static int virtual_context_pin(struct intel_context *ce, void *vaddr)
 {
 	struct virtual_engine *ve = container_of(ce, typeof(*ve), context);
@@ -5565,7 +5568,7 @@ static void virtual_context_exit(struct intel_context *ce)
 static const struct intel_context_ops virtual_context_ops = {
 	.alloc = virtual_context_alloc,
 
-	.pre_pin = execlists_context_pre_pin,
+	.pre_pin = virtual_context_pre_pin,
 	.pin = virtual_context_pin,
 	.unpin = execlists_context_unpin,
 	.post_unpin = execlists_context_post_unpin,
