@@ -106,4 +106,6 @@ int intel_timeline_read_hwsp(struct i915_request *from,
 void intel_gt_init_timelines(struct intel_gt *gt);
 void intel_gt_fini_timelines(struct intel_gt *gt);
 
+I915_SELFTEST_DECLARE(int intel_timeline_pin_map(struct intel_timeline *tl));
+
 #endif
