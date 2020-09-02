@@ -7,8 +7,8 @@ static inline struct i915_ttm_vram_mgr *to_vram_mgr(struct ttm_resource_manager 
 }
 
 struct i915_ttm_vram_node {
-	struct ttm_resource gtt_res;
 	struct drm_mm_node *nodes;
+	struct ttm_resource gtt_res;
 };
 
 static inline struct drm_i915_private *vram_mgr_to_i915(struct ttm_resource_manager *man)
@@ -191,7 +191,7 @@ static int i915_ttm_vram_mgr_new(struct ttm_resource_manager *man,
 //	atomic64_add(vis_usage, &mgr->vis_usage);
 
 	mem->mm_node = node;
-	mem->start = node->gtt_res.start;
+	mem->start = node->nodes[0].start;
 
 	return 0;
 
@@ -280,10 +280,10 @@ int i915_ttm_vram_get_pages(struct i915_ttm_bo *bo)
 	while (pages) {
 		pages -= nodes->size;
 
-		sg_dma_address(sg) = nodes->start;
+		sg_dma_address(sg) = nodes->start << PAGE_SHIFT;
 
-		sg_dma_len(sg) = nodes->size;
-		sg->length = nodes->size;
+		sg_dma_len(sg) = nodes->size << PAGE_SHIFT;
+		sg->length = nodes->size << PAGE_SHIFT;
 		st->nents++;
 		++nodes;
 	}
@@ -292,7 +292,7 @@ int i915_ttm_vram_get_pages(struct i915_ttm_bo *bo)
 	return 0;
 }
 
-unsigned long i915_ttm_vram_obj_get_offset(struct ttm_resource *mem)
+unsigned long i915_ttm_vram_obj_get_gtt_offset(struct ttm_resource *mem)
 {
 	struct i915_ttm_vram_node *node = mem->mm_node;
 
@@ -302,5 +302,12 @@ unsigned long i915_ttm_vram_obj_get_offset(struct ttm_resource *mem)
 	}
 	if (!node)
 	    return 0;
-	return node->nodes[0].start;
+	return node->gtt_res.start;
+}
+
+bool i915_ttm_vram_obj_premap_allowed(struct ttm_resource *mem)
+{
+	struct i915_ttm_vram_node *node = mem->mm_node;
+
+	return node->nodes[0].size == mem->num_pages;
 }

@@ -20,4 +20,7 @@ int i915_ttm_set_tiling(struct i915_ttm_bo *bo, unsigned int tiling,
 
 
 bool i915_ttm_gtt_mgr_has_gart_addr(struct ttm_resource *mem);
+
+unsigned long i915_ttm_vram_obj_get_gtt_offset(struct ttm_resource *mem);
+bool i915_ttm_vram_obj_premap_allowed(struct ttm_resource *mem);
 #endif

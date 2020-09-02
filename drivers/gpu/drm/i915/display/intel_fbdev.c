@@ -349,8 +349,10 @@ static int intelfb_create(struct drm_fb_helper *helper,
 	} else {
 		bo = intel_fb_bo(&ifbdev->fb->base);
 
-		drm_dbg_kms(&dev_priv->drm, "yo yo 2");
-		info->fix.smem_start = (unsigned long)ggtt->gmadr.start + i915_ttm_bo_gpu_offset(bo);
+		if (bo->tbo.mem.mem_type == TTM_PL_VRAM)
+			info->fix.smem_start = dev_priv->mm.regions[INTEL_MEMORY_LOCAL]->io_start + (bo->tbo.mem.start << PAGE_SHIFT);
+		else
+			info->fix.smem_start = (unsigned long)ggtt->gmadr.start + i915_ttm_bo_gpu_offset(bo);
 		info->fix.smem_len = i915_ttm_bo_size(bo);
 		info->screen_base = i915_ttm_bo_kptr(bo);
 		info->screen_size = i915_ttm_bo_size(bo);

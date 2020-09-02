@@ -231,7 +231,7 @@ static int i915_ttm_io_mem_reserve(struct ttm_bo_device *bdev, struct ttm_resour
 		 * pages in ttm_resource.
 		 */
 		if (i915->ttm_mman.aper_base_kaddr &&
-		    (mm_node->size == mem->num_pages))
+		    i915_ttm_vram_obj_premap_allowed(mem))
 			mem->bus.addr = (u8 *)i915->ttm_mman.aper_base_kaddr +
 					mem->bus.offset;
 
@@ -1084,6 +1084,8 @@ u64 i915_ttm_bo_gpu_offset(struct i915_ttm_bo *bo)
 	WARN_ON_ONCE(bo->tbo.mem.mem_type == TTM_PL_VRAM &&
 		     !(bo->flags & I915_TTM_CREATE_VRAM_CONTIGUOUS));
 
+	if (bo->tbo.mem.mem_type == TTM_PL_VRAM)
+		return i915_ttm_vram_obj_get_gtt_offset(&bo->tbo.mem) << PAGE_SHIFT;
 	return bo->tbo.mem.start << PAGE_SHIFT;
 }
 
@@ -1260,12 +1262,17 @@ int i915_ttm_alloc_gtt(struct ttm_buffer_object *tbo)
 	uint64_t addr, flags;
 	int r;
 	u64 map_flag = 0;
+	unsigned long start;
 
 	if (!HAS_LMEM(i915))
 		map_flag = PIN_MAPPABLE;
 
-	if (tbo->mem.start != I915_TTM_BO_INVALID_OFFSET) {
-		return i915_vma_pin(gtt->vma, 0, 0, map_flag | PIN_OFFSET_FIXED | PIN_GLOBAL | (tbo->mem.start << PAGE_SHIFT));
+	if (tbo->mem.mem_type == TTM_PL_VRAM)
+		start = i915_ttm_vram_obj_get_gtt_offset(&tbo->mem);
+	else
+		start = tbo->mem.start;
+	if (start != I915_TTM_BO_INVALID_OFFSET) {
+		return i915_vma_pin(gtt->vma, 0, 0, map_flag | PIN_OFFSET_FIXED | PIN_GLOBAL | (start << PAGE_SHIFT));
 	}
 
 	/* allocate GART space */
@@ -1289,8 +1296,12 @@ int i915_ttm_alloc_gtt(struct ttm_buffer_object *tbo)
 		return r;
 
 	/* Bind pages */
-	gtt->offset = (u64)tmp.start << PAGE_SHIFT;
-	r = i915_vma_pin(gtt->vma, 0, 0, map_flag | PIN_OFFSET_FIXED | PIN_GLOBAL | (tmp.start << PAGE_SHIFT));
+	if (tbo->mem.mem_type == TTM_PL_VRAM)
+		start = i915_ttm_vram_obj_get_gtt_offset(&tmp);
+	else
+		start = tmp.start;
+	gtt->offset = (u64)start << PAGE_SHIFT;
+	r = i915_vma_pin(gtt->vma, 0, 0, map_flag | PIN_OFFSET_FIXED | PIN_GLOBAL | (start << PAGE_SHIFT));
 	if (unlikely(r)) {
 		ttm_bo_mem_put(tbo, &tmp);
 		return r;
