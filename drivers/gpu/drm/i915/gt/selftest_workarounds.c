@@ -386,6 +386,25 @@ err_obj:
 	return ERR_PTR(err);
 }
 
+static struct i915_vma *
+create_scratch_pinned(struct i915_address_space *vm, int count)
+{
+	struct i915_vma *vma = create_scratch(vm, count);
+	int err;
+
+	if (IS_ERR(vma))
+		return vma;
+
+	err = i915_vma_pin(vma, 0, 0,
+			   i915_vma_is_ggtt(vma) ? PIN_GLOBAL : PIN_USER);
+	if (err) {
+		i915_vma_put(vma);
+		return ERR_PTR(err);
+	}
+
+	return vma;
+}
+
 static u32 reg_write(u32 old, u32 new, u32 rsvd)
 {
 	if (rsvd == 0x0000ffff) {
@@ -489,7 +508,7 @@ static int check_dirty_whitelist(struct intel_context *ce)
 	int err = 0, i, v;
 	u32 *cs, *results;
 
-	scratch = create_scratch(ce->vm, 2 * ARRAY_SIZE(values) + 1);
+	scratch = create_scratch_pinned(ce->vm, 2 * ARRAY_SIZE(values) + 1);
 	if (IS_ERR(scratch))
 		return PTR_ERR(scratch);
 
@@ -1043,7 +1062,7 @@ static int live_isolated_whitelist(void *arg)
 
 		vm = i915_gem_context_get_vm_rcu(c);
 
-		client[i].scratch[0] = create_scratch(vm, 1024);
+		client[i].scratch[0] = create_scratch_pinned(vm, 1024);
 		if (IS_ERR(client[i].scratch[0])) {
 			err = PTR_ERR(client[i].scratch[0]);
 			i915_vm_put(vm);
@@ -1051,7 +1070,7 @@ static int live_isolated_whitelist(void *arg)
 			goto err;
 		}
 
-		client[i].scratch[1] = create_scratch(vm, 1024);
+		client[i].scratch[1] = create_scratch_pinned(vm, 1024);
 		if (IS_ERR(client[i].scratch[1])) {
 			err = PTR_ERR(client[i].scratch[1]);
 			i915_vma_unpin_and_release(&client[i].scratch[0], 0);
