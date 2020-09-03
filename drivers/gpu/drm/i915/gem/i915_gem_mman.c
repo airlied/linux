@@ -74,7 +74,7 @@ i915_gem_mmap_ioctl(struct drm_device *dev, void *data,
 	/* prime objects have no backing filp to GEM mmap
 	 * pages from.
 	 */
-	if (!obj->base.filp) {
+	if (!obj->base.base.filp) {
 		addr = -ENXIO;
 		goto err;
 	}
@@ -84,7 +84,7 @@ i915_gem_mmap_ioctl(struct drm_device *dev, void *data,
 		goto err;
 	}
 
-	addr = vm_mmap(obj->base.filp, 0, args->size,
+	addr = vm_mmap(obj->base.base.filp, 0, args->size,
 		       PROT_READ | PROT_WRITE, MAP_SHARED,
 		       args->offset);
 	if (IS_ERR_VALUE(addr))
@@ -99,7 +99,7 @@ i915_gem_mmap_ioctl(struct drm_device *dev, void *data,
 			goto err;
 		}
 		vma = find_vma(mm, addr);
-		if (vma && __vma_matches(vma, obj->base.filp, addr, args->size))
+		if (vma && __vma_matches(vma, obj->base.base.filp, addr, args->size))
 			vma->vm_page_prot =
 				pgprot_writecombine(vm_get_page_prot(vma->vm_flags));
 		else

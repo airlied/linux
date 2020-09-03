@@ -321,7 +321,7 @@ int i915_gem_object_copy_blt(struct drm_i915_gem_object *src,
 			     struct drm_i915_gem_object *dst,
 			     struct intel_context *ce)
 {
-	struct drm_gem_object *objs[] = { &src->base, &dst->base };
+	struct drm_gem_object *objs[] = { &src->base.base, &dst->base.base };
 	struct i915_address_space *vm = ce->vm;
 	struct i915_vma *vma[2], *batch;
 	struct ww_acquire_ctx acquire;

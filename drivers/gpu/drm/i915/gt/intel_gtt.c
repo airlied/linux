@@ -53,7 +53,7 @@ void __i915_vm_close(struct i915_address_space *vm)
 		struct drm_i915_gem_object *obj = vma->obj;
 
 		/* Keep the obj (and hence the vma) alive as _we_ destroy it */
-		if (!kref_get_unless_zero(&obj->base.refcount))
+		if (!kref_get_unless_zero(&obj->base.base.refcount))
 			continue;
 
 		atomic_and(~I915_VMA_PIN_MASK, &vma->flags);
@@ -183,7 +183,7 @@ static void poison_scratch_page(struct drm_i915_gem_object *scratch)
 	if (IS_ENABLED(CONFIG_DRM_I915_DEBUG_GEM))
 		val = POISON_FREE;
 
-	memset(vaddr, val, scratch->base.size);
+	memset(vaddr, val, i915_gem_object_size(scratch));
 }
 
 int setup_scratch_page(struct i915_address_space *vm)

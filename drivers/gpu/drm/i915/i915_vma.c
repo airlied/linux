@@ -1194,7 +1194,7 @@ void i915_vma_parked(struct intel_gt *gt)
 
 		/* XXX All to avoid keeping a reference on i915_vma itself */
 
-		if (!kref_get_unless_zero(&obj->base.refcount))
+		if (!kref_get_unless_zero(&obj->base.base.refcount))
 			continue;
 
 		if (!i915_vm_tryopen(vm)) {

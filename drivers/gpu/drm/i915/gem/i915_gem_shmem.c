@@ -73,7 +73,7 @@ rebuild_st:
 	 *
 	 * Fail silently without starting the shrinker
 	 */
-	mapping = obj->base.filp->f_mapping;
+	mapping = obj->base.base.filp->f_mapping;
 	mapping_set_unevictable(mapping);
 	noreclaim = mapping_gfp_constraint(mapping, ~__GFP_RECLAIM);
 	noreclaim |= __GFP_NORETRY | __GFP_NOWARN;
@@ -228,7 +228,7 @@ shmem_truncate(struct drm_i915_gem_object *obj)
 	 * To do this we must instruct the shmfs to drop all of its
 	 * backing pages, *now*.
 	 */
-	shmem_truncate_range(file_inode(obj->base.filp), 0, (loff_t)-1);
+	shmem_truncate_range(file_inode(obj->base.base.filp), 0, (loff_t)-1);
 	obj->mm.madv = __I915_MADV_PURGED;
 	obj->mm.pages = ERR_PTR(-EFAULT);
 }
@@ -252,7 +252,7 @@ shmem_writeback(struct drm_i915_gem_object *obj)
 	 * instead of invoking writeback so they are aged and paged out
 	 * as normal.
 	 */
-	mapping = obj->base.filp->f_mapping;
+	mapping = obj->base.base.filp->f_mapping;
 
 	/* Begin writeback on each dirty page */
 	for (i = 0; i < i915_gem_object_size(obj) >> PAGE_SHIFT; i++) {
@@ -310,7 +310,7 @@ shmem_put_pages(struct drm_i915_gem_object *obj, struct sg_table *pages)
 	if (i915_gem_object_needs_bit17_swizzle(obj))
 		i915_gem_object_save_bit_17_swizzle(obj, pages);
 
-	mapping_clear_unevictable(file_inode(obj->base.filp)->i_mapping);
+	mapping_clear_unevictable(file_inode(obj->base.base.filp)->i_mapping);
 
 	pagevec_init(&pvec);
 	for_each_sgt_page(page, sgt_iter, pages) {
@@ -335,7 +335,7 @@ static int
 shmem_pwrite(struct drm_i915_gem_object *obj,
 	     const struct drm_i915_gem_pwrite *arg)
 {
-	struct address_space *mapping = obj->base.filp->f_mapping;
+	struct address_space *mapping = obj->base.base.filp->f_mapping;
 	char __user *user_data = u64_to_user_ptr(arg->data_ptr);
 	u64 remain, offset;
 	unsigned int pg;
@@ -390,7 +390,7 @@ shmem_pwrite(struct drm_i915_gem_object *obj,
 		if (err)
 			return err;
 
-		err = pagecache_write_begin(obj->base.filp, mapping,
+		err = pagecache_write_begin(obj->base.base.filp, mapping,
 					    offset, len, 0,
 					    &page, &data);
 		if (err < 0)
@@ -402,7 +402,7 @@ shmem_pwrite(struct drm_i915_gem_object *obj,
 						      len);
 		kunmap_atomic(vaddr);
 
-		err = pagecache_write_end(obj->base.filp, mapping,
+		err = pagecache_write_end(obj->base.base.filp, mapping,
 					  offset, len, len - unwritten,
 					  page, data);
 		if (err < 0)
@@ -425,7 +425,7 @@ static void shmem_release(struct drm_i915_gem_object *obj)
 {
 	i915_gem_object_release_memory_region(obj);
 
-	fput(obj->base.filp);
+	fput(obj->base.base.filp);
 }
 
 const struct drm_i915_gem_object_ops i915_gem_shmem_ops = {
@@ -481,7 +481,7 @@ create_shmem(struct intel_memory_region *mem,
 	if (!obj)
 		return ERR_PTR(-ENOMEM);
 
-	ret = __create_shmem(i915, &obj->base, size);
+	ret = __create_shmem(i915, &obj->base.base, size);
 	if (ret)
 		goto fail;
 
@@ -492,7 +492,7 @@ create_shmem(struct intel_memory_region *mem,
 		mask |= __GFP_DMA32;
 	}
 
-	mapping = obj->base.filp->f_mapping;
+	mapping = obj->base.base.filp->f_mapping;
 	mapping_set_gfp_mask(mapping, mask);
 	GEM_BUG_ON(!(mapping_gfp_mask(mapping) & __GFP_RECLAIM));
 
@@ -553,7 +553,7 @@ i915_gem_object_create_shmem_from_data(struct drm_i915_private *dev_priv,
 
 	GEM_BUG_ON(obj->write_domain != I915_GEM_DOMAIN_CPU);
 
-	file = obj->base.filp;
+	file = obj->base.base.filp;
 	offset = 0;
 	do {
 		unsigned int len = min_t(typeof(size), size, PAGE_SIZE);

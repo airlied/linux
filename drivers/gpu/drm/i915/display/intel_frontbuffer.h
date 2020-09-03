@@ -58,7 +58,7 @@ void intel_frontbuffer_flip(struct drm_i915_private *i915,
 
 void intel_frontbuffer_put(struct intel_frontbuffer *front);
 
-#define front_to_i915(front) (front->obj ? to_i915(front->obj->base.dev) : to_i915_ttm_dev(front->bo->tbo.bdev))
+#define front_to_i915(front) (front->obj ? to_i915(front->obj->base.base.dev) : to_i915_ttm_dev(front->bo->tbo.bdev))
 
 static inline struct intel_frontbuffer *
 __intel_frontbuffer_get(const struct drm_i915_gem_object *obj)

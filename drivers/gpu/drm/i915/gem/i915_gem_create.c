@@ -101,7 +101,7 @@ i915_gem_create(struct drm_file *file,
 	}
 
 handle_create:
-	ret = drm_gem_handle_create(file, &obj->base, &handle);
+	ret = drm_gem_handle_create(file, &obj->base.base, &handle);
 out_put:
 	/* drop reference from allocate - handle holds it now */
 	i915_gem_object_put(obj);

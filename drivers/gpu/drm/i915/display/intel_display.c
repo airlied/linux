@@ -17194,7 +17194,7 @@ static int intel_user_framebuffer_create_handle(struct drm_framebuffer *fb,
 		return -EINVAL;
 	}
 
-	return drm_gem_handle_create(file, &obj->base, handle);
+	return drm_gem_handle_create(file, &obj->base.base, handle);
 }
 
 static int intel_user_framebuffer_dirty(struct drm_framebuffer *fb,
@@ -17355,7 +17355,7 @@ static int intel_framebuffer_init_ttm(struct drm_i915_private *dev_priv,
 		if (bo)
 			fb->obj[i] = &bo->tbo.base;
 		else
-			fb->obj[i] = &obj->base;
+			fb->obj[i] = &obj->base.base;
 	}
 
 	ret = intel_fill_fb_info(dev_priv, fb);

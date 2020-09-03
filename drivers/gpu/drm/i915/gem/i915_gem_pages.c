@@ -132,7 +132,7 @@ unlock:
 /* Immediately discard the backing storage */
 void i915_gem_object_truncate(struct drm_i915_gem_object *obj)
 {
-	drm_gem_free_mmap_offset(&obj->base);
+	drm_gem_free_mmap_offset(&obj->base.base);
 	if (obj->ops->truncate)
 		obj->ops->truncate(obj);
 }

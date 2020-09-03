@@ -292,7 +292,7 @@ __i915_gem_lmem_object_create(struct intel_memory_region *mem,
 	if (!obj)
 		return ERR_PTR(-ENOMEM);
 
-	drm_gem_private_object_init(&i915->drm, &obj->base, size);
+	drm_gem_private_object_init(&i915->drm, &obj->base.base, size);
 	i915_gem_object_init(obj, &i915_gem_lmem_obj_ops, &lock_class);
 
 	obj->read_domains = I915_GEM_DOMAIN_WC | I915_GEM_DOMAIN_GTT;

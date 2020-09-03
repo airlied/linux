@@ -34,7 +34,7 @@ struct file *shmem_create_from_object(struct drm_i915_gem_object *obj)
 	void *ptr;
 
 	if (obj->ops == &i915_gem_shmem_ops) {
-		file = obj->base.filp;
+		file = obj->base.base.filp;
 		atomic_long_inc(&file->f_count);
 		return file;
 	}

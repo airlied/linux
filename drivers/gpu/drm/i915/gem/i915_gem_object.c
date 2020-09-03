@@ -170,7 +170,7 @@ static void __i915_gem_free_object_rcu(struct rcu_head *head)
 		container_of(head, typeof(*obj), rcu);
 	struct drm_i915_private *i915 = to_i915(obj_to_dev(obj));
 
-	dma_resv_fini(&obj->base._resv);
+	dma_resv_fini(&obj->base.base._resv);
 	i915_gem_object_free(obj);
 
 	GEM_BUG_ON(!atomic_read(&i915->mm.free_count));
@@ -240,10 +240,10 @@ static void __i915_gem_free_objects(struct drm_i915_private *i915,
 		GEM_BUG_ON(i915_gem_object_has_pages(obj));
 		bitmap_free(obj->bit_17);
 
-		if (obj->base.import_attach)
-			drm_prime_gem_destroy(&obj->base, NULL);
+		if (obj->base.base.import_attach)
+			drm_prime_gem_destroy(&obj->base.base, NULL);
 
-		drm_gem_free_mmap_offset(&obj->base);
+		drm_gem_free_mmap_offset(&obj->base.base);
 
 		if (obj->ops->release)
 			obj->ops->release(obj);
