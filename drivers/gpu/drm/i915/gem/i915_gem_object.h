@@ -89,6 +89,12 @@ i915_gem_object_lookup(struct drm_file *file, u32 handle)
 	return obj;
 }
 
+static inline size_t
+i915_gem_object_size(struct drm_i915_gem_object *obj)
+{
+	return obj->base.size;
+}
+
 __deprecated
 struct drm_gem_object *
 drm_gem_object_lookup(struct drm_file *file, u32 handle);
