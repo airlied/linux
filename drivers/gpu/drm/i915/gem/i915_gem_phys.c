@@ -35,8 +35,8 @@ static int i915_gem_object_get_pages_phys(struct drm_i915_gem_object *obj)
 	 * to handle all possible callers, and given typical object sizes,
 	 * the alignment of the buddy allocation will naturally match.
 	 */
-	vaddr = dma_alloc_coherent(&obj->base.dev->pdev->dev,
-				   roundup_pow_of_two(obj->base.size),
+	vaddr = dma_alloc_coherent(&obj_to_dev(obj)->pdev->dev,
+				   roundup_pow_of_two(i915_gem_object_size(obj)),
 				   &dma, GFP_KERNEL);
 	if (!vaddr)
 		return -ENOMEM;
@@ -50,14 +50,14 @@ static int i915_gem_object_get_pages_phys(struct drm_i915_gem_object *obj)
 
 	sg = st->sgl;
 	sg->offset = 0;
-	sg->length = obj->base.size;
+	sg->length = i915_gem_object_size(obj);
 
 	sg_assign_page(sg, (struct page *)vaddr);
 	sg_dma_address(sg) = dma;
-	sg_dma_len(sg) = obj->base.size;
+	sg_dma_len(sg) = i915_gem_object_size(obj);
 
 	dst = vaddr;
-	for (i = 0; i < obj->base.size / PAGE_SIZE; i++) {
+	for (i = 0; i < i915_gem_object_size(obj) / PAGE_SIZE; i++) {
 		struct page *page;
 		void *src;
 
@@ -74,7 +74,7 @@ static int i915_gem_object_get_pages_phys(struct drm_i915_gem_object *obj)
 		dst += PAGE_SIZE;
 	}
 
-	intel_gt_chipset_flush(&to_i915(obj->base.dev)->gt);
+	intel_gt_chipset_flush(&to_i915(obj_to_dev(obj))->gt);
 
 	/* We're no longer struct page backed */
 	obj->flags &= ~I915_BO_ALLOC_STRUCT_PAGE;
@@ -85,8 +85,8 @@ static int i915_gem_object_get_pages_phys(struct drm_i915_gem_object *obj)
 err_st:
 	kfree(st);
 err_pci:
-	dma_free_coherent(&obj->base.dev->pdev->dev,
-			  roundup_pow_of_two(obj->base.size),
+	dma_free_coherent(&obj_to_dev(obj)->pdev->dev,
+			  roundup_pow_of_two(i915_gem_object_size(obj)),
 			  vaddr, dma);
 	return -ENOMEM;
 }
@@ -105,7 +105,7 @@ i915_gem_object_put_pages_phys(struct drm_i915_gem_object *obj,
 		void *src = vaddr;
 		int i;
 
-		for (i = 0; i < obj->base.size / PAGE_SIZE; i++) {
+		for (i = 0; i < i915_gem_object_size(obj) / PAGE_SIZE; i++) {
 			struct page *page;
 			char *dst;
 
@@ -131,8 +131,8 @@ i915_gem_object_put_pages_phys(struct drm_i915_gem_object *obj,
 	sg_free_table(pages);
 	kfree(pages);
 
-	dma_free_coherent(&obj->base.dev->pdev->dev,
-			  roundup_pow_of_two(obj->base.size),
+	dma_free_coherent(&obj_to_dev(obj)->pdev->dev,
+			  roundup_pow_of_two(i915_gem_object_size(obj)),
 			  vaddr, dma);
 }
 
@@ -171,7 +171,7 @@ int i915_gem_object_attach_phys(struct drm_i915_gem_object *obj, int align)
 
 	assert_object_held(obj);
 
-	if (align > obj->base.size)
+	if (align > i915_gem_object_size(obj))
 		return -EINVAL;
 
 	if (obj->ops != &i915_gem_shmem_ops)

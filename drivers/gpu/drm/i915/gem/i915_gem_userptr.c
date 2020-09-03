@@ -73,7 +73,7 @@ static bool i915_gem_userptr_invalidate(struct mmu_interval_notifier *mni,
 
 	/* drop the lazy reference we kept */
 	if (!obj->userptr.page_ref && obj->userptr.pvec) {
-		unpin_user_pages(obj->userptr.pvec, obj->base.size >> PAGE_SHIFT);
+		unpin_user_pages(obj->userptr.pvec, i915_gem_object_size(obj) >> PAGE_SHIFT);
 		kvfree(obj->userptr.pvec);
 		obj->userptr.pvec = NULL;
 	}
@@ -81,7 +81,7 @@ static bool i915_gem_userptr_invalidate(struct mmu_interval_notifier *mni,
 	spin_unlock(&i915->mm.notifier_lock);
 
 	/* we will unbind on next submission, still have userptr pins */
-	r = dma_resv_wait_timeout_rcu(obj->base.resv, true, false,
+	r = dma_resv_wait_timeout_rcu(i915_gem_object_resv(obj), true, false,
 				      MAX_SCHEDULE_TIMEOUT);
 	if (r <= 0)
 		drm_err(&i915->drm, "(%ld) failed to wait for idle\n", r);
@@ -97,7 +97,7 @@ static int
 i915_gem_userptr_init__mmu_notifier(struct drm_i915_gem_object *obj)
 {
 	return mmu_interval_notifier_insert(&obj->userptr.notifier, current->mm,
-					    obj->userptr.ptr, obj->base.size,
+					    obj->userptr.ptr, i915_gem_object_size(obj),
 					    &i915_gem_userptr_notifier_ops);
 }
 
@@ -115,7 +115,7 @@ static void i915_gem_object_userptr_drop_ref(struct drm_i915_gem_object *obj, bo
 	spin_unlock(&i915->mm.notifier_lock);
 
 	if (pvec) {
-		const unsigned long num_pages = obj->base.size >> PAGE_SHIFT;
+		const unsigned long num_pages = i915_gem_object_size(obj) >> PAGE_SHIFT;
 
 		unpin_user_pages(pvec, num_pages);
 		kfree(pvec);
@@ -125,7 +125,7 @@ static void i915_gem_object_userptr_drop_ref(struct drm_i915_gem_object *obj, bo
 static int i915_gem_userptr_get_pages(struct drm_i915_gem_object *obj)
 {
 	struct drm_i915_private *i915 = to_i915(obj->base.dev);
-	const unsigned long num_pages = obj->base.size >> PAGE_SHIFT;
+	const unsigned long num_pages = i915_gem_object_size(obj) >> PAGE_SHIFT;
 	unsigned int max_segment = i915_sg_segment_size();
 	struct sg_table *st;
 	unsigned int sg_page_sizes;
@@ -264,7 +264,7 @@ static int i915_gem_object_userptr_unbind(struct drm_i915_gem_object *obj, bool 
 int i915_gem_object_userptr_submit_init(struct drm_i915_gem_object *obj)
 {
 	struct drm_i915_private *i915 = to_i915(obj->base.dev);
-	const unsigned long num_pages = obj->base.size >> PAGE_SHIFT;
+	const unsigned long num_pages = i915_gem_object_size(obj) >> PAGE_SHIFT;
 	struct page **pvec;
 	unsigned int gup_flags = 0;
 	unsigned long notifier_seq;
@@ -378,7 +378,7 @@ i915_gem_userptr_release(struct drm_i915_gem_object *obj)
 	GEM_WARN_ON(obj->userptr.page_ref);
 
 	if (obj->userptr.pvec) {
-		unpin_user_pages(obj->userptr.pvec, obj->base.size >> PAGE_SHIFT);
+		unpin_user_pages(obj->userptr.pvec, i915_gem_object_size(obj) >> PAGE_SHIFT);
 		kvfree(obj->userptr.pvec);
 		obj->userptr.pvec = NULL;
 	}
@@ -497,7 +497,7 @@ i915_gem_userptr_ioctl(struct drm_device *dev,
 	if (args->user_size >> PAGE_SHIFT > INT_MAX)
 		return -E2BIG;
 
-	if (overflows_type(args->user_size, obj->base.size))
+	if (overflows_type(args->user_size, i915_gem_object_size(obj)))
 		return -E2BIG;
 
 	if (!args->user_size)

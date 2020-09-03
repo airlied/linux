@@ -267,12 +267,12 @@ retry:
 		goto out;
 
 	err = i915_sw_fence_await_reservation(&w->wait,
-					      vma->obj->base.resv, NULL,
+					      i915_gem_object_resv(vma->obj), NULL,
 					      true, 0, I915_FENCE_GFP);
 	if (err)
 		goto err_unpin_vma;
 
-	dma_resv_add_excl_fence(vma->obj->base.resv, &w->dma);
+	dma_resv_add_excl_fence(i915_gem_object_resv(vma->obj), &w->dma);
 
 err_unpin_vma:
 	if (err)

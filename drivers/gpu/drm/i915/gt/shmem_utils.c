@@ -43,7 +43,7 @@ struct file *shmem_create_from_object(struct drm_i915_gem_object *obj)
 	if (IS_ERR(ptr))
 		return ERR_CAST(ptr);
 
-	file = shmem_create_from_data("", ptr, obj->base.size);
+	file = shmem_create_from_data("", ptr, i915_gem_object_size(obj));
 	i915_gem_object_unpin_map(obj);
 
 	return file;

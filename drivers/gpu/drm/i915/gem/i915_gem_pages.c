@@ -14,7 +14,7 @@ void __i915_gem_object_set_pages(struct drm_i915_gem_object *obj,
 				 struct sg_table *pages,
 				 unsigned int sg_page_sizes)
 {
-	struct drm_i915_private *i915 = to_i915(obj->base.dev);
+	struct drm_i915_private *i915 = to_i915(obj_to_dev(obj));
 	unsigned long supported = INTEL_INFO(i915)->page_sizes;
 	int i;
 
@@ -71,7 +71,7 @@ void __i915_gem_object_set_pages(struct drm_i915_gem_object *obj,
 		spin_lock_irqsave(&i915->mm.obj_lock, flags);
 
 		i915->mm.shrink_count++;
-		i915->mm.shrink_memory += obj->base.size;
+		i915->mm.shrink_memory += i915_gem_object_size(obj);
 
 		if (obj->mm.madv != I915_MADV_WILLNEED)
 			list = &i915->mm.purge_list;
@@ -86,7 +86,7 @@ void __i915_gem_object_set_pages(struct drm_i915_gem_object *obj,
 
 int ____i915_gem_object_get_pages(struct drm_i915_gem_object *obj)
 {
-	struct drm_i915_private *i915 = to_i915(obj->base.dev);
+	struct drm_i915_private *i915 = to_i915(obj_to_dev(obj));
 	int err;
 
 	assert_object_held_shared(obj);
@@ -251,7 +251,7 @@ int __i915_gem_object_put_pages(struct drm_i915_gem_object *obj)
 static void *i915_gem_object_map_page(struct drm_i915_gem_object *obj,
 		enum i915_map_type type)
 {
-	unsigned long n_pages = obj->base.size >> PAGE_SHIFT, i;
+	unsigned long n_pages = i915_gem_object_size(obj) >> PAGE_SHIFT, i;
 	struct page *stack[32], **pages = stack, *page;
 	struct sgt_iter iter;
 	pgprot_t pgprot;
@@ -322,7 +322,7 @@ static void *i915_gem_object_map_pfn(struct drm_i915_gem_object *obj,
 {
 	resource_size_t iomap = obj->mm.region->iomap.base -
 		obj->mm.region->region.start;
-	unsigned long n_pfn = obj->base.size >> PAGE_SHIFT;
+	unsigned long n_pfn = i915_gem_object_size(obj) >> PAGE_SHIFT;
 	unsigned long stack[32], *pfns = stack, i;
 	struct sgt_iter iter;
 	dma_addr_t addr;
@@ -436,8 +436,8 @@ void __i915_gem_object_flush_map(struct drm_i915_gem_object *obj,
 	void *ptr;
 
 	GEM_BUG_ON(!i915_gem_object_has_pinned_pages(obj));
-	GEM_BUG_ON(range_overflows_t(typeof(obj->base.size),
-				     offset, size, obj->base.size));
+	GEM_BUG_ON(range_overflows_t(typeof(i915_gem_object_size(obj)),
+				     offset, size, i915_gem_object_size(obj)));
 
 	wmb(); /* let all previous writes be visible to coherent partners */
 	obj->mm.dirty = true;
@@ -450,7 +450,7 @@ void __i915_gem_object_flush_map(struct drm_i915_gem_object *obj,
 		return;
 
 	drm_clflush_virt_range(ptr + offset, size);
-	if (size == obj->base.size) {
+	if (size == i915_gem_object_size(obj)) {
 		obj->write_domain &= ~I915_GEM_DOMAIN_CPU;
 		obj->cache_dirty = false;
 	}
@@ -483,7 +483,7 @@ __i915_gem_object_get_sg(struct drm_i915_gem_object *obj,
 	unsigned int idx, count;
 
 	might_sleep();
-	GEM_BUG_ON(n >= obj->base.size >> PAGE_SHIFT);
+	GEM_BUG_ON(n >= i915_gem_object_size(obj) >> PAGE_SHIFT);
 	GEM_BUG_ON(!i915_gem_object_has_pinned_pages(obj));
 
 	/* As we iterate forward through the sg, we record each entry in a
@@ -492,7 +492,7 @@ __i915_gem_object_get_sg(struct drm_i915_gem_object *obj,
 	 *
 	 * Initial lookup is O(N), but this is amortized to O(1) for
 	 * sequential page access (where each new request is consecutive
-	 * to the previous one). Repeated lookups are O(lg(obj->base.size)),
+	 * to the previous one). Repeated lookups are O(lg(i915_gem_object_size(obj))),
 	 * i.e. O(1) with a large constant!
 	 */
 	if (n < READ_ONCE(iter->sg_idx))

@@ -57,7 +57,7 @@ static void vgpu_unpin_dma_address(struct intel_vgpu *vgpu,
 static int vgpu_gem_get_pages(
 		struct drm_i915_gem_object *obj)
 {
-	struct drm_i915_private *dev_priv = to_i915(obj->base.dev);
+	struct drm_i915_private *dev_priv = to_i915(obj_to_dev(obj));
 	struct intel_vgpu *vgpu;
 	struct sg_table *st;
 	struct scatterlist *sg;
@@ -78,7 +78,7 @@ static int vgpu_gem_get_pages(
 	if (unlikely(!st))
 		return -ENOMEM;
 
-	page_num = obj->base.size >> PAGE_SHIFT;
+	page_num = i915_gem_object_size(obj) >> PAGE_SHIFT;
 	ret = sg_alloc_table(st, page_num, GFP_KERNEL);
 	if (ret) {
 		kfree(st);

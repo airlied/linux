@@ -96,7 +96,7 @@ void __i915_vm_close(struct i915_address_space *vm)
 int i915_vm_lock_objects(struct i915_address_space *vm,
 			 struct i915_gem_ww_ctx *ww)
 {
-	if (vm->scratch[0]->base.resv == &vm->resv) {
+	if (i915_gem_object_resv(vm->scratch[0]) == &vm->resv) {
 		return i915_gem_object_lock(vm->scratch[0], ww);
 	} else {
 		struct i915_ppgtt *ppgtt = i915_vm_to_ppgtt(vm);
@@ -219,7 +219,7 @@ static void poison_scratch_page(struct drm_i915_gem_object *scratch)
 	if (IS_ENABLED(CONFIG_DRM_I915_DEBUG_GEM))
 		val = POISON_FREE;
 
-	memset(vaddr, val, scratch->base.size);
+	memset(vaddr, val, i915_gem_object_size(scratch));
 }
 
 int setup_scratch_page(struct i915_address_space *vm)
