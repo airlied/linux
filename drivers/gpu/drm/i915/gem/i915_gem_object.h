@@ -95,6 +95,16 @@ i915_gem_object_size(struct drm_i915_gem_object *obj)
 	return obj->base.size;
 }
 
+static inline struct drm_device *obj_to_dev(struct drm_i915_gem_object *obj)
+{
+	return obj->base.dev;
+}
+
+static inline struct dma_resv *i915_gem_object_resv(struct drm_i915_gem_object *obj)
+{
+	return obj->base.resv;
+}
+
 __deprecated
 struct drm_gem_object *
 drm_gem_object_lookup(struct drm_file *file, u32 handle);

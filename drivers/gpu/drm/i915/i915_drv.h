@@ -1240,6 +1240,11 @@ static inline struct drm_i915_private *to_i915(const struct drm_device *dev)
 	return container_of(dev, struct drm_i915_private, drm);
 }
 
+static inline struct drm_i915_private *obj_to_i915(const struct drm_i915_gem_object *obj)
+{
+	return container_of(obj->base.dev, struct drm_i915_private, drm);
+}
+
 static inline struct drm_i915_private *kdev_to_i915(struct device *kdev)
 {
 	return dev_get_drvdata(kdev);
