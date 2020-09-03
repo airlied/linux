@@ -5327,7 +5327,7 @@ static int context_clear_lmem(struct drm_i915_gem_object *ctx_obj)
 	if (IS_ERR(vaddr))
 		return PTR_ERR(vaddr);
 
-	memset64(vaddr, 0, ctx_obj->base.size / sizeof(u64));
+	memset64(vaddr, 0, i915_gem_object_size(ctx_obj) / sizeof(u64));
 
 	i915_gem_object_unpin_map(ctx_obj);
 

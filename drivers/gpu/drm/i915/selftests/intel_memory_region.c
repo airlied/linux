@@ -270,9 +270,9 @@ static int igt_mock_contiguous(void *arg)
 	if (IS_ERR(obj))
 		return PTR_ERR(obj);
 
-	if (obj->base.size != target) {
-		pr_err("%s obj->base.size(%zx) != target(%llx)\n", __func__,
-		       obj->base.size, target);
+	if (i915_gem_object_size(obj) != target) {
+		pr_err("%s i915_gem_object_size(obj)(%zx) != target(%llx)\n", __func__,
+		       i915_gem_object_size(obj), target);
 		err = -EINVAL;
 		goto err_close_objects;
 	}
@@ -360,7 +360,7 @@ static int igt_gpu_write_dw(struct intel_context *ce,
 
 static int igt_cpu_check(struct drm_i915_gem_object *obj, u32 dword, u32 val)
 {
-	unsigned long n = obj->base.size >> PAGE_SHIFT;
+	unsigned long n = i915_gem_object_size(obj) >> PAGE_SHIFT;
 	u32 *ptr;
 	int err;
 
@@ -544,7 +544,7 @@ static int igt_lmem_create_cleared_cpu(void *arg)
 
 		val = prandom_u32_state(&prng);
 
-		for (n = 0; n < obj->base.size >> PAGE_SHIFT; ++n) {
+		for (n = 0; n < i915_gem_object_size(obj) >> PAGE_SHIFT; ++n) {
 			memset32(vaddr + n * PAGE_SIZE, val,
 				 PAGE_SIZE / sizeof(u32));
 		}
@@ -712,7 +712,7 @@ static int igt_lmem_write_cpu(void *arg)
 
 		align = max_t(u32, sizeof(u32), rounddown_pow_of_two(align));
 
-		offset = igt_random_offset(&prng, 0, obj->base.size,
+		offset = igt_random_offset(&prng, 0, i915_gem_object_size(obj),
 					   size, align);
 
 		val = prandom_u32_state(&prng);

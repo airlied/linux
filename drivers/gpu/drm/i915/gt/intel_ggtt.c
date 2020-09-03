@@ -1254,7 +1254,7 @@ intel_rotate_pages(struct intel_rotation_info *rot_info,
 		   struct drm_i915_gem_object *obj)
 {
 	unsigned int size = intel_rotation_info_size(rot_info);
-	struct drm_i915_private *i915 = to_i915(obj->base.dev);
+	struct drm_i915_private *i915 = to_i915(obj_to_dev(obj));
 	struct sg_table *st;
 	struct scatterlist *sg;
 	int ret = -ENOMEM;
@@ -1285,7 +1285,7 @@ err_sg_alloc:
 err_st_alloc:
 
 	drm_dbg(&i915->drm, "Failed to create rotated mapping for object size %zu! (%ux%u tiles, %u pages)\n",
-		obj->base.size, rot_info->plane[0].width,
+		i915_gem_object_size(obj), rot_info->plane[0].width,
 		rot_info->plane[0].height, size);
 
 	return ERR_PTR(ret);
@@ -1338,7 +1338,7 @@ intel_remap_pages(struct intel_remapped_info *rem_info,
 		  struct drm_i915_gem_object *obj)
 {
 	unsigned int size = intel_remapped_info_size(rem_info);
-	struct drm_i915_private *i915 = to_i915(obj->base.dev);
+	struct drm_i915_private *i915 = to_i915(obj_to_dev(obj));
 	struct sg_table *st;
 	struct scatterlist *sg;
 	int ret = -ENOMEM;
@@ -1371,7 +1371,7 @@ err_sg_alloc:
 err_st_alloc:
 
 	drm_dbg(&i915->drm, "Failed to create remapped mapping for object size %zu! (%ux%u tiles, %u pages)\n",
-		obj->base.size, rem_info->plane[0].width,
+		i915_gem_object_size(obj), rem_info->plane[0].width,
 		rem_info->plane[0].height, size);
 
 	return ERR_PTR(ret);

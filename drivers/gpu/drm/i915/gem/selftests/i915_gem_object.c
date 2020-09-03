@@ -50,11 +50,11 @@ static int igt_gem_huge(void *arg)
 	err = i915_gem_object_pin_pages(obj);
 	if (err) {
 		pr_err("Failed to allocate %u pages (%lu total), err=%d\n",
-		       nreal, obj->base.size / PAGE_SIZE, err);
+		       nreal, i915_gem_object_size(obj) / PAGE_SIZE, err);
 		goto out;
 	}
 
-	for (n = 0; n < obj->base.size / PAGE_SIZE; n++) {
+	for (n = 0; n < i915_gem_object_size(obj) / PAGE_SIZE; n++) {
 		if (i915_gem_object_get_page(obj, n) !=
 		    i915_gem_object_get_page(obj, n % nreal)) {
 			pr_err("Page lookup mismatch at index %u [%u]\n",

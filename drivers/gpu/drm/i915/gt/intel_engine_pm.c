@@ -40,7 +40,7 @@ static int __engine_unpark(struct intel_wakeref *wf)
 
 			map = i915_gem_object_pin_map(obj, type);
 			if (!IS_ERR(map)) {
-				memset(map, CONTEXT_REDZONE, obj->base.size);
+				memset(map, CONTEXT_REDZONE, i915_gem_object_size(obj));
 				i915_gem_object_flush_map(obj);
 				i915_gem_object_unpin_map(obj);
 			}

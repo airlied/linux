@@ -204,12 +204,12 @@ i915_gem_shrink(struct drm_i915_private *i915,
 				mutex_lock(&obj->mm.lock);
 				if (!i915_gem_object_has_pages(obj)) {
 					try_to_writeback(obj, shrink);
-					count += obj->base.size >> PAGE_SHIFT;
+					count += i915_gem_object_size(obj) >> PAGE_SHIFT;
 				}
 				mutex_unlock(&obj->mm.lock);
 			}
 
-			scanned += obj->base.size >> PAGE_SHIFT;
+			scanned += i915_gem_object_size(obj) >> PAGE_SHIFT;
 			i915_gem_object_put(obj);
 
 			spin_lock_irqsave(&i915->mm.obj_lock, flags);
@@ -339,9 +339,9 @@ i915_gem_shrinker_oom(struct notifier_block *nb, unsigned long event, void *ptr)
 	spin_lock_irqsave(&i915->mm.obj_lock, flags);
 	list_for_each_entry(obj, &i915->mm.shrink_list, mm.link) {
 		if (!can_release_pages(obj))
-			unevictable += obj->base.size >> PAGE_SHIFT;
+			unevictable += i915_gem_object_size(obj) >> PAGE_SHIFT;
 		else
-			available += obj->base.size >> PAGE_SHIFT;
+			available += i915_gem_object_size(obj) >> PAGE_SHIFT;
 	}
 	spin_unlock_irqrestore(&i915->mm.obj_lock, flags);
 
@@ -447,7 +447,7 @@ void i915_gem_object_make_unshrinkable(struct drm_i915_gem_object *obj)
 	    !list_empty(&obj->mm.link)) {
 		list_del_init(&obj->mm.link);
 		i915->mm.shrink_count--;
-		i915->mm.shrink_memory -= obj->base.size;
+		i915->mm.shrink_memory -= i915_gem_object_size(obj);
 	}
 	spin_unlock_irqrestore(&i915->mm.obj_lock, flags);
 }
@@ -472,7 +472,7 @@ static void __i915_gem_object_make_shrinkable(struct drm_i915_gem_object *obj,
 
 		list_add_tail(&obj->mm.link, head);
 		i915->mm.shrink_count++;
-		i915->mm.shrink_memory += obj->base.size;
+		i915->mm.shrink_memory += i915_gem_object_size(obj);
 
 	}
 	spin_unlock_irqrestore(&i915->mm.obj_lock, flags);

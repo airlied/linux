@@ -121,8 +121,9 @@ vma_create(struct drm_i915_gem_object *obj,
 	vma->vm = i915_vm_get(vm);
 	vma->ops = &vm->vma_ops;
 	vma->obj = obj;
-	vma->resv = obj->base.resv;
-	vma->size = obj->base.size;
+	vma->resv = i915_gem_object_resv(obj);
+	vma->size = i915_gem_object_size(obj);
+
 	vma->display_alignment = I915_GTT_MIN_ALIGNMENT;
 
 	i915_active_init(&vma->active, __i915_vma_active, __i915_vma_retire);
@@ -142,10 +143,10 @@ vma_create(struct drm_i915_gem_object *obj,
 			GEM_BUG_ON(range_overflows_t(u64,
 						     view->partial.offset,
 						     view->partial.size,
-						     obj->base.size >> PAGE_SHIFT));
+						     i915_gem_object_size(obj) >> PAGE_SHIFT));
 			vma->size = view->partial.size;
 			vma->size <<= PAGE_SHIFT;
-			GEM_BUG_ON(vma->size > obj->base.size);
+			GEM_BUG_ON(vma->size > i915_gem_object_size(obj));
 		} else if (view->type == I915_GGTT_VIEW_ROTATED) {
 			vma->size = intel_rotation_info_size(&view->rotated);
 			vma->size <<= PAGE_SHIFT;
@@ -461,7 +462,7 @@ void __iomem *i915_vma_pin_iomap(struct i915_vma *vma)
 	if (ptr == NULL) {
 		if (i915_gem_object_is_devmem(vma->obj))
 			ptr = i915_gem_object_lmem_io_map(vma->obj, 0,
-							  vma->obj->base.size);
+							  i915_gem_object_size(vma->obj));
 		else
 			ptr = io_mapping_map_wc(&i915_vm_to_ggtt(vma->vm)->iomap,
 						vma->node.start,

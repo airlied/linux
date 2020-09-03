@@ -1039,7 +1039,7 @@ static void reloc_gpu_flush(struct i915_execbuffer *eb, struct reloc_cache *cach
 {
 	struct drm_i915_gem_object *obj = cache->rq->batch->obj;
 
-	GEM_BUG_ON(cache->rq_size >= obj->base.size / sizeof(u32));
+	GEM_BUG_ON(cache->rq_size >= i915_gem_object_size(obj) / sizeof(u32));
 	cache->rq_cmd[cache->rq_size] = MI_BATCH_BUFFER_END;
 
 	__i915_gem_object_flush_map(obj, 0, sizeof(u32) * (cache->rq_size + 1));

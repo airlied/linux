@@ -24,7 +24,7 @@ i915_gem_object_get_pages_buddy(struct drm_i915_gem_object *obj)
 {
 	struct intel_memory_region *mem = obj->mm.region;
 	struct list_head *blocks = &obj->mm.blocks;
-	resource_size_t size = obj->base.size;
+	resource_size_t size = i915_gem_object_size(obj);
 	resource_size_t prev_end;
 	struct i915_buddy_block *block;
 	unsigned int flags;
@@ -133,7 +133,7 @@ void i915_gem_object_init_memory_region(struct drm_i915_gem_object *obj,
 	obj->mm.region = intel_memory_region_get(mem);
 
 	obj->flags |= flags;
-	if (obj->base.size <= mem->min_page_size)
+	if (i915_gem_object_size(obj) <= mem->min_page_size)
 		obj->flags |= I915_BO_ALLOC_CONTIGUOUS;
 
 	mutex_lock(&mem->objects.lock);
@@ -190,7 +190,7 @@ i915_gem_object_create_region(struct intel_memory_region *mem,
 	if (size >> PAGE_SHIFT > INT_MAX)
 		return ERR_PTR(-E2BIG);
 
-	if (overflows_type(size, obj->base.size))
+	if (overflows_type(size, i915_gem_object_size(obj)))
 		return ERR_PTR(-E2BIG);
 
 	obj = mem->ops->create_object(mem, size, flags);

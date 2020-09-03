@@ -26,7 +26,7 @@ static int wrap_ktime_compare(const void *A, const void *B)
 
 static int __perf_fill_blt(struct drm_i915_gem_object *obj)
 {
-	struct drm_i915_private *i915 = to_i915(obj->base.dev);
+	struct drm_i915_private *i915 = to_i915(obj_to_dev(obj));
 	int inst = 0;
 
 	do {
@@ -68,8 +68,8 @@ static int __perf_fill_blt(struct drm_i915_gem_object *obj)
 		sort(t, ARRAY_SIZE(t), sizeof(*t), wrap_ktime_compare, NULL);
 		pr_info("%s: blt %zd KiB fill: %lld MiB/s\n",
 			engine->name,
-			obj->base.size >> 10,
-			div64_u64(mul_u32_u32(4 * obj->base.size,
+			i915_gem_object_size(obj) >> 10,
+			div64_u64(mul_u32_u32(4 * i915_gem_object_size(obj),
 					      1000 * 1000 * 1000),
 				  t[1] + 2 * t[2] + t[3]) >> 20);
 	} while (1);

@@ -102,7 +102,7 @@ static int pool_active(struct i915_active *ref)
 {
 	struct intel_gt_buffer_pool_node *node =
 		container_of(ref, typeof(*node), active);
-	struct dma_resv *resv = node->obj->base.resv;
+	struct dma_resv *resv = i915_gem_object_resv(node->obj);
 	int err;
 
 	if (dma_resv_trylock(resv)) {
@@ -126,7 +126,7 @@ static void pool_retire(struct i915_active *ref)
 	struct intel_gt_buffer_pool_node *node =
 		container_of(ref, typeof(*node), active);
 	struct intel_gt_buffer_pool *pool = node->pool;
-	struct list_head *list = bucket_for_size(pool, node->obj->base.size);
+	struct list_head *list = bucket_for_size(pool, i915_gem_object_size(node->obj));
 	unsigned long flags;
 
 	i915_gem_object_unpin_pages(node->obj);
@@ -186,7 +186,7 @@ intel_gt_get_buffer_pool(struct intel_gt *gt, size_t size)
 	list_for_each_entry_rcu(node, list, link) {
 		unsigned long age;
 
-		if (node->obj->base.size < size)
+		if (i915_gem_object_size(node->obj) < size)
 			continue;
 
 		age = READ_ONCE(node->age);

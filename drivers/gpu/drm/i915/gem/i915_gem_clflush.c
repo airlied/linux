@@ -107,10 +107,10 @@ bool i915_gem_clflush_object(struct drm_i915_gem_object *obj,
 		clflush = clflush_work_create(obj);
 	if (clflush) {
 		i915_sw_fence_await_reservation(&clflush->base.chain,
-						obj->base.resv, NULL, true,
-						i915_fence_timeout(to_i915(obj->base.dev)),
+						i915_gem_object_resv(obj), NULL, true,
+						i915_fence_timeout(to_i915(obj_to_dev(obj))),
 						I915_FENCE_GFP);
-		dma_resv_add_excl_fence(obj->base.resv, &clflush->base.dma);
+		dma_resv_add_excl_fence(i915_gem_object_resv(obj), &clflush->base.dma);
 		dma_fence_work_commit(&clflush->base);
 	} else if (obj->mm.pages) {
 		__do_clflush(obj);
