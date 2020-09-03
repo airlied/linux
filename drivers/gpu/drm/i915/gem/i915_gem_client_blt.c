@@ -290,12 +290,12 @@ int i915_gem_schedule_fill_pages_blt(struct drm_i915_gem_object *obj,
 
 	i915_gem_object_lock(obj);
 	err = i915_sw_fence_await_reservation(&work->wait,
-					      obj->base.resv, NULL, true, 0,
+					      i915_gem_object_resv(obj), NULL, true, 0,
 					      I915_FENCE_GFP);
 	if (err < 0) {
 		dma_fence_set_error(&work->dma, err);
 	} else {
-		dma_resv_add_excl_fence(obj->base.resv, &work->dma);
+		dma_resv_add_excl_fence(i915_gem_object_resv(obj), &work->dma);
 		err = 0;
 	}
 	i915_gem_object_unlock(obj);

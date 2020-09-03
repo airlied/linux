@@ -126,9 +126,9 @@ vma_create(struct drm_i915_gem_object *obj,
 	vma->obj = obj;
 	vma->bo = bo;
 	if (obj) {
-		vma->resv = obj->base.resv;
-		vma->size = obj->base.size;
-		size = obj->base.size;
+		vma->resv = i915_gem_object_resv(obj);
+		vma->size = i915_gem_object_size(obj);
+		size = i915_gem_object_size(obj);
 	} else {
 		size = i915_ttm_bo_size(bo);
 		vma->size = size;
@@ -519,7 +519,7 @@ void __iomem *i915_vma_pin_iomap(struct i915_vma *vma)
 	if (ptr == NULL) {
 		if (i915_gem_object_is_devmem(vma->obj))
 			ptr = i915_gem_object_lmem_io_map(vma->obj, 0,
-							  vma->obj->base.size);
+							  i915_gem_object_size(vma->obj));
 		else
 			ptr = io_mapping_map_wc(&i915_vm_to_ggtt(vma->vm)->iomap,
 						vma->node.start,

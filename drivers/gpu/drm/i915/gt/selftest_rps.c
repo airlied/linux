@@ -73,7 +73,7 @@ create_spin_counter(struct intel_engine_cs *engine,
 	if (IS_ERR(obj))
 		return ERR_CAST(obj);
 
-	end = obj->base.size / sizeof(u32) - 1;
+	end = i915_gem_object_size(obj) / sizeof(u32) - 1;
 
 	vma = i915_vma_instance(obj, vm, NULL);
 	if (IS_ERR(vma)) {

@@ -439,12 +439,12 @@ static bool intel_fbdev_init_bios(struct drm_device *dev,
 			continue;
 		}
 
-		if (obj->base.size > max_size) {
+		if (i915_gem_object_size(obj) > max_size) {
 			drm_dbg_kms(&i915->drm,
 				    "found possible fb from plane %c\n",
 				    pipe_name(intel_crtc->pipe));
 			fb = to_intel_framebuffer(crtc->primary->state->fb);
-			max_size = obj->base.size;
+			max_size = i915_gem_object_size(obj);
 		}
 	}
 

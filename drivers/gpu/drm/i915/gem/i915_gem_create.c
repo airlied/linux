@@ -54,7 +54,7 @@ i915_gem_create(struct drm_file *file,
 		return PTR_ERR(obj);
 
 	if (!i915_gem_object_has_struct_page(obj)) {
-		struct drm_i915_private *i915 = to_i915(obj->base.dev);
+		struct drm_i915_private *i915 = to_i915(obj_to_dev(obj));
 		struct intel_engine_cs *engine;
 
 		engine = intel_engine_lookup_user(i915,

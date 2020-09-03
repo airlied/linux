@@ -97,15 +97,15 @@ static int igt_dmabuf_import(void *arg)
 		goto out_dmabuf;
 	}
 
-	if (obj->base.dev != &i915->drm) {
+	if (obj_to_dev(obj) != &i915->drm) {
 		pr_err("i915_gem_prime_import created a non-i915 object!\n");
 		err = -EINVAL;
 		goto out_obj;
 	}
 
-	if (obj->base.size != PAGE_SIZE) {
+	if (i915_gem_object_size(obj) != PAGE_SIZE) {
 		pr_err("i915_gem_prime_import is wrong size found %lld, expected %ld\n",
-		       (long long)obj->base.size, PAGE_SIZE);
+		       (long long)i915_gem_object_size(obj), PAGE_SIZE);
 		err = -EINVAL;
 		goto out_obj;
 	}

@@ -90,17 +90,17 @@ i915_gem_object_lookup(struct drm_file *file, u32 handle)
 }
 
 static inline size_t
-i915_gem_object_size(struct drm_i915_gem_object *obj)
+i915_gem_object_size(const struct drm_i915_gem_object *obj)
 {
 	return obj->base.size;
 }
 
-static inline struct drm_device *obj_to_dev(struct drm_i915_gem_object *obj)
+static inline struct drm_device *obj_to_dev(const struct drm_i915_gem_object *obj)
 {
 	return obj->base.dev;
 }
 
-static inline struct dma_resv *i915_gem_object_resv(struct drm_i915_gem_object *obj)
+static inline struct dma_resv *i915_gem_object_resv(const struct drm_i915_gem_object *obj)
 {
 	return obj->base.resv;
 }

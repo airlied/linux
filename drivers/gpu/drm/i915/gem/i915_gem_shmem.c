@@ -27,9 +27,9 @@ static void check_release_pagevec(struct pagevec *pvec)
 
 static int shmem_get_pages(struct drm_i915_gem_object *obj)
 {
-	struct drm_i915_private *i915 = to_i915(obj->base.dev);
+	struct drm_i915_private *i915 = to_i915(obj_to_dev(obj));
 	struct intel_memory_region *mem = obj->mm.region;
-	const unsigned long page_count = obj->base.size / PAGE_SIZE;
+	const unsigned long page_count = i915_gem_object_size(obj) / PAGE_SIZE;
 	unsigned long i;
 	struct address_space *mapping;
 	struct sg_table *st;
@@ -54,7 +54,7 @@ static int shmem_get_pages(struct drm_i915_gem_object *obj)
 	 * If there's no chance of allocating enough pages for the whole
 	 * object, bail early.
 	 */
-	if (obj->base.size > resource_size(&mem->region))
+	if (i915_gem_object_size(obj) > resource_size(&mem->region))
 		return -ENOMEM;
 
 	st = kmalloc(sizeof(*st), GFP_KERNEL);
@@ -255,7 +255,7 @@ shmem_writeback(struct drm_i915_gem_object *obj)
 	mapping = obj->base.filp->f_mapping;
 
 	/* Begin writeback on each dirty page */
-	for (i = 0; i < obj->base.size >> PAGE_SHIFT; i++) {
+	for (i = 0; i < i915_gem_object_size(obj) >> PAGE_SHIFT; i++) {
 		struct page *page;
 
 		page = find_lock_entry(mapping, i);

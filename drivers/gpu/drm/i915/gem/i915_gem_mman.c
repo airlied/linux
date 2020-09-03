@@ -79,7 +79,7 @@ i915_gem_mmap_ioctl(struct drm_device *dev, void *data,
 		goto err;
 	}
 
-	if (range_overflows(args->offset, args->size, (u64)obj->base.size)) {
+	if (range_overflows(args->offset, args->size, (u64)i915_gem_object_size(obj))) {
 		addr = -EINVAL;
 		goto err;
 	}
@@ -196,10 +196,10 @@ compute_partial_view(const struct drm_i915_gem_object *obj,
 	view.partial.offset = rounddown(page_offset, chunk);
 	view.partial.size =
 		min_t(unsigned int, chunk,
-		      (obj->base.size >> PAGE_SHIFT) - view.partial.offset);
+		      (i915_gem_object_size(obj) >> PAGE_SHIFT) - view.partial.offset);
 
 	/* If the partial covers the entire object, just create a normal VMA. */
-	if (chunk >= obj->base.size >> PAGE_SHIFT)
+	if (chunk >= i915_gem_object_size(obj) >> PAGE_SHIFT)
 		view.type = I915_GGTT_VIEW_NORMAL;
 
 	return view;
@@ -279,7 +279,7 @@ static vm_fault_t vm_fault_gtt(struct vm_fault *vmf)
 	struct vm_area_struct *area = vmf->vma;
 	struct i915_mmap_offset *mmo = area->vm_private_data;
 	struct drm_i915_gem_object *obj = mmo->obj;
-	struct drm_device *dev = obj->base.dev;
+	struct drm_device *dev = obj_to_dev(obj);
 	struct drm_i915_private *i915 = to_i915(dev);
 	struct intel_runtime_pm *rpm = &i915->runtime_pm;
 	struct i915_ggtt *ggtt = &i915->ggtt;
@@ -409,7 +409,7 @@ vm_access(struct vm_area_struct *area, unsigned long addr,
 		return -EACCES;
 
 	addr -= area->vm_start;
-	if (addr >= obj->base.size)
+	if (addr >= i915_gem_object_size(obj))
 		return -EINVAL;
 
 	/* As this is primarily for debugging, let's focus on simplicity */
@@ -451,7 +451,7 @@ void __i915_gem_object_release_mmap_gtt(struct drm_i915_gem_object *obj)
  */
 void i915_gem_object_release_mmap_gtt(struct drm_i915_gem_object *obj)
 {
-	struct drm_i915_private *i915 = to_i915(obj->base.dev);
+	struct drm_i915_private *i915 = to_i915(obj_to_dev(obj));
 	intel_wakeref_t wakeref;
 
 	/*
@@ -502,7 +502,7 @@ void i915_gem_object_release_mmap_offset(struct drm_i915_gem_object *obj)
 
 		spin_unlock(&obj->mmo.lock);
 		drm_vma_node_unmap(&mmo->vma_node,
-				   obj->base.dev->anon_inode->i_mapping);
+				   obj_to_dev(obj)->anon_inode->i_mapping);
 		spin_lock(&obj->mmo.lock);
 	}
 	spin_unlock(&obj->mmo.lock);
@@ -551,7 +551,7 @@ insert_mmo(struct drm_i915_gem_object *obj, struct i915_mmap_offset *mmo)
 
 		if (pos->mmap_type == mmo->mmap_type) {
 			spin_unlock(&obj->mmo.lock);
-			drm_vma_offset_remove(obj->base.dev->vma_offset_manager,
+			drm_vma_offset_remove(obj_to_dev(obj)->vma_offset_manager,
 					      &mmo->vma_node);
 			kfree(mmo);
 			return pos;
@@ -574,7 +574,7 @@ i915_gem_mmap_offset_attach(struct drm_i915_gem_object *obj,
 			    enum i915_mmap_type mmap_type,
 			    struct drm_file *file)
 {
-	struct drm_i915_private *i915 = to_i915(obj->base.dev);
+	struct drm_i915_private *i915 = to_i915(obj_to_dev(obj));
 	struct i915_mmap_offset *mmo;
 	int err;
 
@@ -590,8 +590,8 @@ i915_gem_mmap_offset_attach(struct drm_i915_gem_object *obj,
 	mmo->mmap_type = mmap_type;
 	drm_vma_node_reset(&mmo->vma_node);
 
-	err = drm_vma_offset_add(obj->base.dev->vma_offset_manager,
-				 &mmo->vma_node, obj->base.size / PAGE_SIZE);
+	err = drm_vma_offset_add(obj_to_dev(obj)->vma_offset_manager,
+				 &mmo->vma_node, i915_gem_object_size(obj) / PAGE_SIZE);
 	if (likely(!err))
 		goto insert;
 
@@ -601,8 +601,8 @@ i915_gem_mmap_offset_attach(struct drm_i915_gem_object *obj,
 		goto err;
 
 	i915_gem_drain_freed_objects(i915);
-	err = drm_vma_offset_add(obj->base.dev->vma_offset_manager,
-				 &mmo->vma_node, obj->base.size / PAGE_SIZE);
+	err = drm_vma_offset_add(obj_to_dev(obj)->vma_offset_manager,
+				 &mmo->vma_node, i915_gem_object_size(obj) / PAGE_SIZE);
 	if (err)
 		goto err;
 
@@ -835,7 +835,7 @@ int i915_gem_update_vma_info(struct i915_mmap_offset *mmo,
 		vma->vm_flags &= ~VM_MAYWRITE;
 	}
 
-	anon = mmap_singleton(to_i915(mmo->obj->base.dev));
+	anon = mmap_singleton(to_i915(obj_to_dev(mmo->obj)));
 	if (IS_ERR(anon))
 		return PTR_ERR(anon);
 

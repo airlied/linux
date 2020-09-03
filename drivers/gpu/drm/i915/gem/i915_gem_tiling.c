@@ -180,7 +180,7 @@ static int
 i915_gem_object_fence_prepare(struct drm_i915_gem_object *obj,
 			      int tiling_mode, unsigned int stride)
 {
-	struct i915_ggtt *ggtt = &to_i915(obj->base.dev)->ggtt;
+	struct i915_ggtt *ggtt = &to_i915(obj_to_dev(obj))->ggtt;
 	struct i915_vma *vma, *vn;
 	LIST_HEAD(unbind);
 	int ret = 0;
@@ -219,7 +219,7 @@ int
 i915_gem_object_set_tiling(struct drm_i915_gem_object *obj,
 			   unsigned int tiling, unsigned int stride)
 {
-	struct drm_i915_private *i915 = to_i915(obj->base.dev);
+	struct drm_i915_private *i915 = to_i915(obj_to_dev(obj));
 	struct i915_vma *vma;
 	int err;
 
@@ -303,7 +303,7 @@ i915_gem_object_set_tiling(struct drm_i915_gem_object *obj,
 	/* Try to preallocate memory required to save swizzling on put-pages */
 	if (i915_gem_object_needs_bit17_swizzle(obj)) {
 		if (!obj->bit_17) {
-			obj->bit_17 = bitmap_zalloc(obj->base.size >> PAGE_SHIFT,
+			obj->bit_17 = bitmap_zalloc(i915_gem_object_size(obj) >> PAGE_SHIFT,
 						    GFP_KERNEL);
 		}
 	} else {

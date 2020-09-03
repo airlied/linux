@@ -44,9 +44,9 @@ static bool assert_vma(struct i915_vma *vma,
 		ok = false;
 	}
 
-	if (vma->size != obj->base.size) {
+	if (vma->size != i915_gem_object_size(obj)) {
 		pr_err("VMA created with wrong size, found %llu, expected %zu\n",
-		       vma->size, obj->base.size);
+		       vma->size, i915_gem_object_size(obj));
 		ok = false;
 	}
 
@@ -787,7 +787,7 @@ static int igt_vma_partial(void *arg)
 		if (err)
 			goto out_object;
 
-		if (!assert_pin(vma, NULL, obj->base.size, p->name)) {
+		if (!assert_pin(vma, NULL, i915_gem_object_size(obj), p->name)) {
 			pr_err("(%s) inconsistent full pin\n", p->name);
 			err = -EINVAL;
 			goto out_object;

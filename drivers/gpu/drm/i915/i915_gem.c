@@ -114,7 +114,7 @@ i915_gem_get_aperture_ioctl(struct drm_device *dev, void *data,
 int i915_gem_object_unbind(struct drm_i915_gem_object *obj,
 			   unsigned long flags)
 {
-	struct intel_runtime_pm *rpm = &to_i915(obj->base.dev)->runtime_pm;
+	struct intel_runtime_pm *rpm = &to_i915(obj_to_dev(obj))->runtime_pm;
 	LIST_HEAD(still_in_list);
 	intel_wakeref_t wakeref;
 	struct i915_vma *vma;
@@ -199,7 +199,7 @@ i915_gem_phys_pwrite(struct drm_i915_gem_object *obj,
 		return -EFAULT;
 
 	drm_clflush_virt_range(vaddr, args->size);
-	intel_gt_chipset_flush(&to_i915(obj->base.dev)->gt);
+	intel_gt_chipset_flush(&to_i915(obj_to_dev(obj))->gt);
 
 	i915_gem_object_flush_frontbuffer(obj, ORIGIN_CPU);
 	return 0;
@@ -293,7 +293,7 @@ static int
 i915_gem_gtt_pread(struct drm_i915_gem_object *obj,
 		   const struct drm_i915_gem_pread *args)
 {
-	struct drm_i915_private *i915 = to_i915(obj->base.dev);
+	struct drm_i915_private *i915 = to_i915(obj_to_dev(obj));
 	struct i915_ggtt *ggtt = &i915->ggtt;
 	intel_wakeref_t wakeref;
 	struct drm_mm_node node;
@@ -415,7 +415,7 @@ i915_gem_pread_ioctl(struct drm_device *dev, void *data,
 		return -ENOENT;
 
 	/* Bounds check source.  */
-	if (range_overflows_t(u64, args->offset, args->size, obj->base.size)) {
+	if (range_overflows_t(u64, args->offset, args->size, i915_gem_object_size(obj))) {
 		ret = -EINVAL;
 		goto out;
 	}
@@ -485,7 +485,7 @@ static int
 i915_gem_gtt_pwrite_fast(struct drm_i915_gem_object *obj,
 			 const struct drm_i915_gem_pwrite *args)
 {
-	struct drm_i915_private *i915 = to_i915(obj->base.dev);
+	struct drm_i915_private *i915 = to_i915(obj_to_dev(obj));
 	struct i915_ggtt *ggtt = &i915->ggtt;
 	struct intel_runtime_pm *rpm = &i915->runtime_pm;
 	intel_wakeref_t wakeref;
@@ -715,7 +715,7 @@ i915_gem_pwrite_ioctl(struct drm_device *dev, void *data,
 		return -ENOENT;
 
 	/* Bounds check destination. */
-	if (range_overflows_t(u64, args->offset, args->size, obj->base.size)) {
+	if (range_overflows_t(u64, args->offset, args->size, i915_gem_object_size(obj))) {
 		ret = -EINVAL;
 		goto err;
 	}
@@ -865,7 +865,7 @@ i915_gem_object_ggtt_pin(struct drm_i915_gem_object *obj,
 			 u64 alignment,
 			 u64 flags)
 {
-	struct drm_i915_private *i915 = to_i915(obj->base.dev);
+	struct drm_i915_private *i915 = to_i915(obj_to_dev(obj));
 	struct i915_ggtt *ggtt = &i915->ggtt;
 	struct i915_vma *vma;
 	int ret;
@@ -880,7 +880,7 @@ i915_gem_object_ggtt_pin(struct drm_i915_gem_object *obj,
 		 * the object in and out of the Global GTT and
 		 * waste a lot of cycles under the mutex.
 		 */
-		if (obj->base.size > ggtt->mappable_end)
+		if (i915_gem_object_size(obj) > ggtt->mappable_end)
 			return ERR_PTR(-E2BIG);
 
 		/*
@@ -900,7 +900,7 @@ i915_gem_object_ggtt_pin(struct drm_i915_gem_object *obj,
 		 * we could try to minimise harm to others.
 		 */
 		if (flags & PIN_NONBLOCK &&
-		    obj->base.size > ggtt->mappable_end / 2)
+		    i915_gem_object_size(obj) > ggtt->mappable_end / 2)
 			return ERR_PTR(-ENOSPC);
 	}
 

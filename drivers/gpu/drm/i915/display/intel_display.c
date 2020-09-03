@@ -3138,10 +3138,10 @@ intel_fill_fb_info(struct drm_i915_private *dev_priv,
 		max_size = max(max_size, offset + size);
 	}
 
-	if (mul_u32_u32(max_size, tile_size) > obj->base.size) {
+	if (mul_u32_u32(max_size, tile_size) > i915_gem_object_size(obj)) {
 		drm_dbg_kms(&dev_priv->drm,
 			    "fb too big for bo (need %llu bytes, have %zu bytes)\n",
-			    mul_u32_u32(max_size, tile_size), obj->base.size);
+			    mul_u32_u32(max_size, tile_size), i915_gem_object_size(obj));
 		return -EINVAL;
 	}
 
@@ -16020,7 +16020,7 @@ intel_prepare_plane_fb(struct drm_plane *_plane,
 		 */
 		if (needs_modeset(crtc_state)) {
 			ret = i915_sw_fence_await_reservation(&state->commit_ready,
-							      old_obj->base.resv, NULL,
+							      i915_gem_object_resv(old_obj), NULL,
 							      false, 0,
 							      GFP_KERNEL);
 			if (ret < 0)
@@ -16068,14 +16068,14 @@ intel_prepare_plane_fb(struct drm_plane *_plane,
 		struct dma_fence *fence;
 
 		ret = i915_sw_fence_await_reservation(&state->commit_ready,
-						      obj->base.resv, NULL,
+						      i915_gem_object_resv(obj), NULL,
 						      false,
 						      i915_fence_timeout(dev_priv),
 						      GFP_KERNEL);
 		if (ret < 0)
 			goto unpin_fb;
 
-		fence = dma_resv_get_excl_rcu(obj->base.resv);
+		fence = dma_resv_get_excl_rcu(i915_gem_object_resv(obj));
 		if (fence) {
 			add_rps_boost_after_vblank(new_plane_state->hw.crtc,
 						   fence);
@@ -17186,7 +17186,7 @@ static int intel_user_framebuffer_create_handle(struct drm_framebuffer *fb,
 						unsigned int *handle)
 {
 	struct drm_i915_gem_object *obj = intel_fb_obj(fb);
-	struct drm_i915_private *i915 = to_i915(obj->base.dev);
+	struct drm_i915_private *i915 = to_i915(obj_to_dev(obj));
 
 	if (obj->userptr.mm) {
 		drm_dbg(&i915->drm,
@@ -17379,7 +17379,7 @@ static int intel_framebuffer_init(struct intel_framebuffer *intel_fb,
 				  struct drm_i915_gem_object *obj,
 				  struct drm_mode_fb_cmd2 *mode_cmd)
 {
-	struct drm_i915_private *i915 = to_i915(obj->base.dev);
+	struct drm_i915_private *i915 = to_i915(obj_to_dev(obj));
 	return intel_framebuffer_init_ttm(i915, intel_fb, NULL, obj, mode_cmd);
 }
 

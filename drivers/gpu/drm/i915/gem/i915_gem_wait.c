@@ -140,7 +140,7 @@ i915_gem_object_wait_priority(struct drm_i915_gem_object *obj,
 		unsigned int count, i;
 		int ret;
 
-		ret = dma_resv_get_fences_rcu(obj->base.resv,
+		ret = dma_resv_get_fences_rcu(i915_gem_object_resv(obj),
 							&excl, &count, &shared);
 		if (ret)
 			return ret;
@@ -152,7 +152,7 @@ i915_gem_object_wait_priority(struct drm_i915_gem_object *obj,
 
 		kfree(shared);
 	} else {
-		excl = dma_resv_get_excl_rcu(obj->base.resv);
+		excl = dma_resv_get_excl_rcu(i915_gem_object_resv(obj));
 	}
 
 	if (excl) {
@@ -176,7 +176,7 @@ i915_gem_object_wait(struct drm_i915_gem_object *obj,
 	might_sleep();
 	GEM_BUG_ON(timeout < 0);
 
-	timeout = i915_gem_object_wait_reservation(obj->base.resv,
+	timeout = i915_gem_object_wait_reservation(i915_gem_object_resv(obj),
 						   flags, timeout);
 	return timeout < 0 ? timeout : 0;
 }

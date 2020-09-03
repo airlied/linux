@@ -426,7 +426,7 @@ static int gpu_fill(struct intel_context *ce,
 	struct i915_vma *vma;
 	int err;
 
-	GEM_BUG_ON(obj->base.size > ce->vm->total);
+	GEM_BUG_ON(i915_gem_object_size(obj) > ce->vm->total);
 	GEM_BUG_ON(!intel_engine_can_store_dword(ce->engine));
 
 	vma = i915_vma_instance(obj, ce->vm, NULL);
@@ -457,7 +457,7 @@ static int gpu_fill(struct intel_context *ce,
 
 static int cpu_fill(struct drm_i915_gem_object *obj, u32 value)
 {
-	const bool has_llc = HAS_LLC(to_i915(obj->base.dev));
+	const bool has_llc = HAS_LLC(to_i915(obj_to_dev(obj)));
 	unsigned int n, m, need_flush;
 	int err;
 
