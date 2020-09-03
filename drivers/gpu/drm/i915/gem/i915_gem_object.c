@@ -75,7 +75,7 @@ void i915_gem_object_init(struct drm_i915_gem_object *obj,
 	mutex_init(&obj->mm.get_page.lock);
 
 	if (IS_ENABLED(CONFIG_LOCKDEP) && i915_gem_object_is_shrinkable(obj))
-		i915_gem_shrinker_taints_mutex(to_i915(obj->base.dev),
+		i915_gem_shrinker_taints_mutex(to_i915(obj_to_dev(obj)),
 					       &obj->mm.lock);
 }
 
@@ -92,7 +92,7 @@ void i915_gem_object_set_cache_coherency(struct drm_i915_gem_object *obj,
 	if (cache_level != I915_CACHE_NONE)
 		obj->cache_coherent = (I915_BO_CACHE_COHERENT_FOR_READ |
 				       I915_BO_CACHE_COHERENT_FOR_WRITE);
-	else if (HAS_LLC(to_i915(obj->base.dev)))
+	else if (HAS_LLC(to_i915(obj_to_dev(obj))))
 		obj->cache_coherent = I915_BO_CACHE_COHERENT_FOR_READ;
 	else
 		obj->cache_coherent = 0;
@@ -162,7 +162,7 @@ static void __i915_gem_free_object_rcu(struct rcu_head *head)
 {
 	struct drm_i915_gem_object *obj =
 		container_of(head, typeof(*obj), rcu);
-	struct drm_i915_private *i915 = to_i915(obj->base.dev);
+	struct drm_i915_private *i915 = to_i915(obj_to_dev(obj));
 
 	dma_resv_fini(&obj->base._resv);
 	i915_gem_object_free(obj);
@@ -186,7 +186,7 @@ static void __i915_gem_object_free_mmaps(struct drm_i915_gem_object *obj)
 		rbtree_postorder_for_each_entry_safe(mmo, mn,
 						     &obj->mmo.offsets,
 						     offset) {
-			drm_vma_offset_remove(obj->base.dev->vma_offset_manager,
+			drm_vma_offset_remove(obj_to_dev(obj)->vma_offset_manager,
 					      &mmo->vma_node);
 			kfree(mmo);
 		}
@@ -269,7 +269,7 @@ static void __i915_gem_free_work(struct work_struct *work)
 void i915_gem_free_object(struct drm_gem_object *gem_obj)
 {
 	struct drm_i915_gem_object *obj = to_intel_bo(gem_obj);
-	struct drm_i915_private *i915 = to_i915(obj->base.dev);
+	struct drm_i915_private *i915 = to_i915(obj_to_dev(obj));
 
 	GEM_BUG_ON(i915_gem_object_is_framebuffer(obj));
 

@@ -110,14 +110,14 @@ i915_gem_busy_ioctl(struct drm_device *dev, void *data,
 	 *
 	 */
 retry:
-	seq = raw_read_seqcount(&obj->base.resv->seq);
+	seq = raw_read_seqcount(&i915_gem_object_resv(obj)->seq);
 
 	/* Translate the exclusive fence to the READ *and* WRITE engine */
 	args->busy =
-		busy_check_writer(rcu_dereference(obj->base.resv->fence_excl));
+		busy_check_writer(rcu_dereference(i915_gem_object_resv(obj)->fence_excl));
 
 	/* Translate shared fences to READ set of engines */
-	list = rcu_dereference(obj->base.resv->fence);
+	list = rcu_dereference(i915_gem_object_resv(obj)->fence);
 	if (list) {
 		unsigned int shared_count = list->shared_count, i;
 
@@ -129,7 +129,7 @@ retry:
 		}
 	}
 
-	if (args->busy && read_seqcount_retry(&obj->base.resv->seq, seq))
+	if (args->busy && read_seqcount_retry(&i915_gem_object_resv(obj)->seq, seq))
 		goto retry;
 
 	err = 0;

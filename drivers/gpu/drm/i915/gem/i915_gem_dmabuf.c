@@ -138,7 +138,7 @@ static int i915_gem_dmabuf_mmap(struct dma_buf *dma_buf,
 	struct drm_i915_gem_object *obj = dma_buf_to_obj(dma_buf);
 	int ret;
 
-	if (obj->base.size < vma->vm_end - vma->vm_start)
+	if (i915_gem_object_size(obj) < vma->vm_end - vma->vm_start)
 		return -EINVAL;
 
 	/* shmem */
@@ -221,7 +221,7 @@ struct dma_buf *i915_gem_prime_export(struct drm_gem_object *gem_obj, int flags)
 	exp_info.size = gem_obj->size;
 	exp_info.flags = flags;
 	exp_info.priv = gem_obj;
-	exp_info.resv = obj->base.resv;
+	exp_info.resv = i915_gem_object_resv(obj);
 
 	if (obj->ops->dmabuf_export) {
 		int ret = obj->ops->dmabuf_export(obj);
@@ -274,7 +274,7 @@ struct drm_gem_object *i915_gem_prime_import(struct drm_device *dev,
 	if (dma_buf->ops == &i915_dmabuf_ops) {
 		obj = dma_buf_to_obj(dma_buf);
 		/* is it from our device? */
-		if (obj->base.dev == dev) {
+		if (obj_to_dev(obj) == dev) {
 			/*
 			 * Importing dmabuf exported from out own gem increases
 			 * refcount on gem itself instead of f_count of dmabuf.

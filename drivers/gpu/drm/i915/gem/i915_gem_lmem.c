@@ -11,7 +11,7 @@
 int i915_gem_object_lmem_pread(struct drm_i915_gem_object *obj,
 			       const struct drm_i915_gem_pread *arg)
 {
-	struct drm_i915_private *i915 = to_i915(obj->base.dev);
+	struct drm_i915_private *i915 = to_i915(obj_to_dev(obj));
 	struct intel_runtime_pm *rpm = &i915->runtime_pm;
 	intel_wakeref_t wakeref;
 	struct dma_fence *fence;
@@ -97,7 +97,7 @@ out_unpin:
 int i915_gem_object_lmem_pwrite(struct drm_i915_gem_object *obj,
 				const struct drm_i915_gem_pwrite *arg)
 {
-	struct drm_i915_private *i915 = to_i915(obj->base.dev);
+	struct drm_i915_private *i915 = to_i915(obj_to_dev(obj));
 	struct intel_runtime_pm *rpm = &i915->runtime_pm;
 	intel_wakeref_t wakeref;
 	struct dma_fence *fence;

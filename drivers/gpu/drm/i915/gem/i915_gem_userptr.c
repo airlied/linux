@@ -240,7 +240,7 @@ i915_gem_userptr_init__mmu_notifier(struct drm_i915_gem_object *obj,
 	mo->mn = mn;
 	mo->obj = obj;
 	mo->it.start = obj->userptr.ptr;
-	mo->it.last = obj->userptr.ptr + obj->base.size - 1;
+	mo->it.last = obj->userptr.ptr + i915_gem_object_size(obj) - 1;
 	RB_CLEAR_NODE(&mo->it.rb);
 
 	obj->userptr.mmu_object = mo;
@@ -312,7 +312,7 @@ __i915_mm_struct_find(struct drm_i915_private *i915, struct mm_struct *real)
 static int
 i915_gem_userptr_init__mm_struct(struct drm_i915_gem_object *obj)
 {
-	struct drm_i915_private *i915 = to_i915(obj->base.dev);
+	struct drm_i915_private *i915 = to_i915(obj_to_dev(obj));
 	struct i915_mm_struct *mm, *new;
 	int ret = 0;
 
@@ -335,7 +335,7 @@ i915_gem_userptr_init__mm_struct(struct drm_i915_gem_object *obj)
 		return -ENOMEM;
 
 	kref_init(&new->kref);
-	new->i915 = to_i915(obj->base.dev);
+	new->i915 = to_i915(obj_to_dev(obj));
 	new->mm = current->mm;
 	new->mn = NULL;
 
@@ -444,7 +444,7 @@ __i915_gem_userptr_get_pages_worker(struct work_struct *_work)
 {
 	struct get_pages_work *work = container_of(_work, typeof(*work), work);
 	struct drm_i915_gem_object *obj = work->obj;
-	const unsigned long npages = obj->base.size >> PAGE_SHIFT;
+	const unsigned long npages = i915_gem_object_size(obj) >> PAGE_SHIFT;
 	unsigned long pinned;
 	struct page **pvec;
 	int ret;
@@ -548,14 +548,14 @@ __i915_gem_userptr_get_pages_schedule(struct drm_i915_gem_object *obj)
 	get_task_struct(work->task);
 
 	INIT_WORK(&work->work, __i915_gem_userptr_get_pages_worker);
-	queue_work(to_i915(obj->base.dev)->mm.userptr_wq, &work->work);
+	queue_work(to_i915(obj_to_dev(obj))->mm.userptr_wq, &work->work);
 
 	return ERR_PTR(-EAGAIN);
 }
 
 static int i915_gem_userptr_get_pages(struct drm_i915_gem_object *obj)
 {
-	const unsigned long num_pages = obj->base.size >> PAGE_SHIFT;
+	const unsigned long num_pages = i915_gem_object_size(obj) >> PAGE_SHIFT;
 	struct mm_struct *mm = obj->userptr.mm->mm;
 	struct page **pvec;
 	struct sg_table *pages;
@@ -784,7 +784,7 @@ i915_gem_userptr_ioctl(struct drm_device *dev,
 	if (args->user_size >> PAGE_SHIFT > INT_MAX)
 		return -E2BIG;
 
-	if (overflows_type(args->user_size, obj->base.size))
+	if (overflows_type(args->user_size, i915_gem_object_size(obj)))
 		return -E2BIG;
 
 	if (!args->user_size)
