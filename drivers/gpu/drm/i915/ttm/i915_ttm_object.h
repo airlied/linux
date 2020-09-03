@@ -15,8 +15,6 @@ int i915_ttm_bo_unpin(struct i915_ttm_bo *bo);
 bool i915_ttm_bo_is_i915_ttm_bo(struct ttm_buffer_object *bo);
 
 int i915_ttm_alloc_gtt(struct ttm_buffer_object *tbo);
-int i915_ttm_set_tiling(struct i915_ttm_bo *bo, unsigned int tiling,
-			unsigned int stride);
 
 
 bool i915_ttm_gtt_mgr_has_gart_addr(struct ttm_resource *mem);

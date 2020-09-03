@@ -366,19 +366,6 @@ i915_gem_create_ioctl(struct drm_device *dev, void *data,
 	int ret;
 
 
-	if (i915->use_ttm) {
-		struct drm_gem_object *gobj;
-		int ret = i915_ttm_gem_object_create(i915, args->size, 0, 0, 0,
-						     ttm_bo_type_device, NULL, &gobj);
-		if (ret)
-			return -ENOMEM;
-		ret = drm_gem_handle_create(file, gobj, &args->handle);
-		drm_gem_object_put(gobj);
-		if (ret)
-			return ret;
-		return 0;
-	}
-
 	i915_gem_flush_free_objects(i915);
 
 	ret = i915_user_extensions(u64_to_user_ptr(args->extensions),

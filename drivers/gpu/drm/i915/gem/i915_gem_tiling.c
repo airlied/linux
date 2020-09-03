@@ -374,45 +374,28 @@ i915_gem_set_tiling_ioctl(struct drm_device *dev, void *data,
 		}
 	}
 
-	if (!dev_priv->use_ttm) {
-		struct drm_i915_gem_object *obj;		
-		obj = i915_gem_object_lookup(file, args->handle);
-		if (!obj)
-			return -ENOENT;
+	struct drm_i915_gem_object *obj;		
+	obj = i915_gem_object_lookup(file, args->handle);
+	if (!obj)
+		return -ENOENT;
 
-		/*
-		 * The tiling mode of proxy objects is handled by its generator, and
-		 * not allowed to be changed by userspace.
-		 */
-		if (i915_gem_object_is_proxy(obj)) {
-			err = -ENXIO;
-			goto err;
-		}
-
-
-		err = i915_gem_object_set_tiling(obj, args->tiling_mode, args->stride);
-
-		/* We have to maintain this existing ABI... */
-		args->stride = i915_gem_object_get_stride(obj);
-		args->tiling_mode = i915_gem_object_get_tiling(obj);
-err:
-		i915_gem_object_put(obj);		
-	} else {
-		struct drm_gem_object *gobj;
-		struct i915_ttm_bo *bo;
-		gobj = drm_gem_object_lookup(file, args->handle);
-		if (!gobj)
-			return -ENOENT;
-
-		bo = ttm_gem_to_i915_bo(gobj);
-
-		err = i915_ttm_set_tiling(bo, args->tiling_mode, args->stride);
-
-		args->stride = i915_ttm_get_stride(bo);
-		args->tiling_mode = i915_ttm_get_tiling(bo);
-		drm_gem_object_put(gobj);		
+	/*
+	 * The tiling mode of proxy objects is handled by its generator, and
+	 * not allowed to be changed by userspace.
+	 */
+	if (i915_gem_object_is_proxy(obj)) {
+		err = -ENXIO;
+		goto err;
 	}
 
+
+	err = i915_gem_object_set_tiling(obj, args->tiling_mode, args->stride);
+
+	/* We have to maintain this existing ABI... */
+	args->stride = i915_gem_object_get_stride(obj);
+	args->tiling_mode = i915_gem_object_get_tiling(obj);
+err:
+	i915_gem_object_put(obj);		
 
 	return err;
 }
@@ -442,30 +425,16 @@ i915_gem_get_tiling_ioctl(struct drm_device *dev, void *data,
 	if (!dev_priv->ggtt.num_fences)
 		return -EOPNOTSUPP;
 
-	if (dev_priv->use_ttm) {
-		struct drm_gem_object *gobj;
-		struct i915_ttm_bo *bo;
-		gobj = drm_gem_object_lookup(file, args->handle);
-		if (gobj) {
-			bo = ttm_gem_to_i915_bo(gobj);		
-			args->tiling_mode = bo->tiling_and_stride & TILING_MASK;
-			err = 0;
-			drm_gem_object_put(gobj);			
-		}
-		if (unlikely(err))
-			return err;
-	} else {
-		rcu_read_lock();
-		obj = i915_gem_object_lookup_rcu(file, args->handle);
-		if (obj) {
-			args->tiling_mode =
-				READ_ONCE(obj->tiling_and_stride) & TILING_MASK;
-			err = 0;
-		}
-		rcu_read_unlock();
-		if (unlikely(err))
-			return err;
+	rcu_read_lock();
+	obj = i915_gem_object_lookup_rcu(file, args->handle);
+	if (obj) {
+		args->tiling_mode =
+			READ_ONCE(obj->tiling_and_stride) & TILING_MASK;
+		err = 0;
 	}
+	rcu_read_unlock();
+	if (unlikely(err))
+		return err;
 
 	switch (args->tiling_mode) {
 	case I915_TILING_X:

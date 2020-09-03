@@ -17236,15 +17236,10 @@ static int intel_framebuffer_init_ttm(struct drm_i915_private *dev_priv,
 	if (!intel_fb->frontbuffer)
 		return -ENOMEM;
 
-	if (obj) {
-		i915_gem_object_lock(obj);
-		tiling = i915_gem_object_get_tiling(obj);
-		stride = i915_gem_object_get_stride(obj);
-		i915_gem_object_unlock(obj);
-	} else {
-		tiling = i915_ttm_get_tiling(bo);
-		stride = i915_ttm_get_stride(bo);
-	}
+	i915_gem_object_lock(obj);
+	tiling = i915_gem_object_get_tiling(obj);
+	stride = i915_gem_object_get_stride(obj);
+	i915_gem_object_unlock(obj);
 
 	if (mode_cmd->flags & DRM_MODE_FB_MODIFIERS) {
 		/*

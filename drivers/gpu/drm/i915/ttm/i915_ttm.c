@@ -1238,16 +1238,6 @@ int i915_ttm_create_bo_pages(struct i915_ttm_bo *bo)
 	return ret;
 }
 
-int i915_ttm_set_tiling(struct i915_ttm_bo *bo, unsigned int tiling,
-			unsigned int stride)
-{
-	if ((tiling | stride) == bo->tiling_and_stride)
-		return 0;
-
-	bo->tiling_and_stride = tiling | stride;
-	return 0;
-}
-
 /**
  * amdgpu_ttm_alloc_gart - Allocate GART memory for buffer object
  */

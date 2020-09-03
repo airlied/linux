@@ -78,9 +78,6 @@ struct i915_ttm_bo {
 	/* bridge to i915 vma */
 	struct sg_table *pages;
 	struct i915_page_sizes page_sizes;
-
-  	/** Current tiling stride for the object, if it's tiled. */
-	unsigned int tiling_and_stride;
 };
 
 static inline struct i915_ttm_bo *ttm_to_i915_bo(struct ttm_buffer_object *tbo)
@@ -93,16 +90,5 @@ static inline struct i915_ttm_bo *ttm_gem_to_i915_bo(struct drm_gem_object *gem)
 	return container_of(gem, struct i915_ttm_bo, tbo.base);
 }
 
-static inline unsigned int
-i915_ttm_get_tiling(const struct i915_ttm_bo *bo)
-{
-	return bo->tiling_and_stride & TILING_MASK;
-}
-
-static inline unsigned int
-i915_ttm_get_stride(const struct i915_ttm_bo *bo)
-{
-	return bo->tiling_and_stride & STRIDE_MASK;
-}
 #endif
 
