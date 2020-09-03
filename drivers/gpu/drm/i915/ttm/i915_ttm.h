@@ -6,7 +6,8 @@
  * No relocations are to be supported.
  * EXEC_OBJECT_PINNED is assumed to be true.
  */
-
+#include "drm/ttm/ttm_bo_driver.h"
+#include "drm/ttm/ttm_execbuf_util.h"
 #include "i915_ttm_object_types.h"
 #include "i915_ttm_bo_list.h"
 #define I915_TTM_BO_INVALID_OFFSET     LONG_MAX

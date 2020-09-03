@@ -224,25 +224,17 @@ static void frontbuffer_release(struct kref *ref)
 	struct drm_i915_gem_object *obj = front->obj;
 	struct i915_vma *vma;
 
-	if (obj) {
-		spin_lock(&obj->vma.lock);
-		for_each_ggtt_vma(vma, obj)
-			vma->display_alignment = I915_GTT_MIN_ALIGNMENT;
-		spin_unlock(&obj->vma.lock);
+	spin_lock(&obj->vma.lock);
+	for_each_ggtt_vma(vma, obj)
+		vma->display_alignment = I915_GTT_MIN_ALIGNMENT;
+	spin_unlock(&obj->vma.lock);
 
-		RCU_INIT_POINTER(obj->frontbuffer, NULL);
-	} else {
-		struct i915_ttm_bo *bo = front->bo;
-		RCU_INIT_POINTER(bo->frontbuffer, NULL);
-	}
+	RCU_INIT_POINTER(obj->frontbuffer, NULL);
 	spin_unlock(&front_to_i915(front)->fb_tracking.lock);
 
 	i915_active_fini(&front->write);
 
-	if (obj)
-		i915_gem_object_put(obj);
-	else
-		i915_ttm_bo_unref(&front->bo);
+	i915_gem_object_put(obj);
 	kfree_rcu(front, rcu);
 }
 
@@ -287,42 +279,6 @@ void intel_frontbuffer_put(struct intel_frontbuffer *front)
 	kref_put_lock(&front->ref,
 		      frontbuffer_release,
 		      &i915->fb_tracking.lock);
-}
-
-struct intel_frontbuffer *
-intel_frontbuffer_get_ttm(struct i915_ttm_bo *bo)
-{
-	struct drm_i915_private *i915 = to_i915_ttm_dev(bo->tbo.bdev);
-	struct intel_frontbuffer *front;
-
-	front = __intel_frontbuffer_get_ttm(bo);
-	if (front)
-		return front;
-
-	front = kmalloc(sizeof(*front), GFP_KERNEL);
-	if (!front)
-		return NULL;
-
-	front->bo = bo;
-	front->obj = NULL;
-	kref_init(&front->ref);
-	atomic_set(&front->bits, 0);
-	i915_active_init(&front->write,
-			 frontbuffer_active,
-			 i915_active_may_sleep(frontbuffer_retire));
-
-	spin_lock(&i915->fb_tracking.lock);
-	if (rcu_access_pointer(bo->frontbuffer)) {
-		kfree(front);
-		front = rcu_dereference_protected(bo->frontbuffer, true);
-		kref_get(&front->ref);
-	} else {
-		i915_ttm_bo_ref(bo);
-		rcu_assign_pointer(bo->frontbuffer, front);
-	}
-	spin_unlock(&i915->fb_tracking.lock);
-
-	return front;
 }
 
 /**

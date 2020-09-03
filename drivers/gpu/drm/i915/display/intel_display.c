@@ -153,9 +153,6 @@ static void ilk_pch_clock_get(struct intel_crtc *crtc,
 static int intel_framebuffer_init(struct intel_framebuffer *ifb,
 				  struct drm_i915_gem_object *obj,
 				  struct drm_mode_fb_cmd2 *mode_cmd);
-static int intel_framebuffer_init_bo(struct intel_framebuffer *intel_fb,
-				     struct i915_ttm_bo *bo,
-				     struct drm_mode_fb_cmd2 *mode_cmd);
 
 static void intel_set_pipe_timings(const struct intel_crtc_state *crtc_state);
 static void intel_set_pipe_src_size(const struct intel_crtc_state *crtc_state);
@@ -11874,28 +11871,6 @@ err:
 	return ERR_PTR(ret);
 }
 
-struct drm_framebuffer *
-intel_framebuffer_create_ttm(struct i915_ttm_bo *bo,
-			     struct drm_mode_fb_cmd2 *mode_cmd)
-{
-	struct intel_framebuffer *intel_fb;
-	int ret;
-
-	intel_fb = kzalloc(sizeof(*intel_fb), GFP_KERNEL);
-	if (!intel_fb)
-		return ERR_PTR(-ENOMEM);
-
-	ret = intel_framebuffer_init_bo(intel_fb, bo, mode_cmd);
-	if (ret)
-		goto err;
-
-	return &intel_fb->base;
-
-err:
-	kfree(intel_fb);
-	return ERR_PTR(ret);
-}
-
 static int intel_modeset_disable_planes(struct drm_atomic_state *state,
 					struct drm_crtc *crtc)
 {
@@ -16040,7 +16015,8 @@ intel_prepare_plane_fb(struct drm_plane *_plane,
 	if (!obj)
 		return 0;
 
-	if (dev_priv->use_ttm) {
+	if (0) {
+#if 0
 		struct i915_ttm_bo *bo = intel_fb_bo(new_plane_state->hw.fb);
 
 		ret = i915_ttm_bo_pin(bo, bo->preferred_regions);
@@ -16049,6 +16025,7 @@ intel_prepare_plane_fb(struct drm_plane *_plane,
 
 		ret = i915_ttm_alloc_gtt(&bo->tbo);
 		new_plane_state->gpu_offset = i915_ttm_bo_gpu_offset(bo);
+#endif
 	} else {
 		ret = i915_gem_object_pin_pages(obj);
 		if (ret)
@@ -16102,8 +16079,7 @@ intel_prepare_plane_fb(struct drm_plane *_plane,
 	return 0;
 
 unpin_fb:
-	if (!dev_priv->use_ttm)
-		intel_plane_unpin_fb(new_plane_state);
+	intel_plane_unpin_fb(new_plane_state);
 
 	return ret;
 }
@@ -16308,13 +16284,15 @@ intel_legacy_cursor_update(struct drm_plane *_plane,
 	if (ret)
 		goto out_free;
 
-	if (dev_priv->use_ttm) {
+	if (0) {//dev_priv->use_ttm) {
+#if 0
 		struct i915_ttm_bo *bo = intel_fb_bo(new_plane_state->hw.fb);
 		ret = i915_ttm_bo_pin(bo, bo->preferred_regions);
 		if (ret)
 			goto out_free;
 		ret = i915_ttm_alloc_gtt(&bo->tbo);
 		new_plane_state->gpu_offset = i915_ttm_bo_gpu_offset(bo);
+#endif
 	} else {
 		ret = intel_plane_pin_fb(new_plane_state);
 		if (ret)
@@ -17217,22 +17195,18 @@ static const struct drm_framebuffer_funcs intel_fb_funcs = {
 	.dirty = intel_user_framebuffer_dirty,
 };
 
-static int intel_framebuffer_init_ttm(struct drm_i915_private *dev_priv,
-				      struct intel_framebuffer *intel_fb,
-				      struct i915_ttm_bo *bo,
-				      struct drm_i915_gem_object *obj,
-				      struct drm_mode_fb_cmd2 *mode_cmd)
+static int intel_framebuffer_init(struct intel_framebuffer *intel_fb,
+				  struct drm_i915_gem_object *obj,
+				  struct drm_mode_fb_cmd2 *mode_cmd)
 {
+	struct drm_i915_private *dev_priv = to_i915(obj_to_dev(obj));  
 	struct drm_framebuffer *fb = &intel_fb->base;
 	u32 max_stride;
 	unsigned int tiling = 0, stride = 0;
 	int ret = -EINVAL;
 	int i;
 
-	if (bo)
-		intel_fb->frontbuffer = intel_frontbuffer_get_ttm(bo);
-	else
-		intel_fb->frontbuffer = intel_frontbuffer_get(obj);
+	intel_fb->frontbuffer = intel_frontbuffer_get(obj);
 	if (!intel_fb->frontbuffer)
 		return -ENOMEM;
 
@@ -17347,10 +17321,7 @@ static int intel_framebuffer_init_ttm(struct drm_i915_private *dev_priv,
 			}
 		}
 
-		if (bo)
-			fb->obj[i] = &bo->tbo.base;
-		else
-			fb->obj[i] = &obj->base.base;
+		fb->obj[i] = &obj->base.base;
 	}
 
 	ret = intel_fill_fb_info(dev_priv, fb);
@@ -17370,22 +17341,6 @@ err:
 	return ret;
 }
 
-static int intel_framebuffer_init(struct intel_framebuffer *intel_fb,
-				  struct drm_i915_gem_object *obj,
-				  struct drm_mode_fb_cmd2 *mode_cmd)
-{
-	struct drm_i915_private *i915 = to_i915(obj_to_dev(obj));
-	return intel_framebuffer_init_ttm(i915, intel_fb, NULL, obj, mode_cmd);
-}
-
-static int intel_framebuffer_init_bo(struct intel_framebuffer *intel_fb,
-				     struct i915_ttm_bo *bo,
-				     struct drm_mode_fb_cmd2 *mode_cmd)
-{
-	struct drm_i915_private *i915 = to_i915_ttm_dev(bo->tbo.bdev);
-	return intel_framebuffer_init_ttm(i915, intel_fb, bo, NULL, mode_cmd);
-}
-
 static struct drm_framebuffer *
 intel_user_framebuffer_create(struct drm_device *dev,
 			      struct drm_file *filp,
@@ -17396,23 +17351,12 @@ intel_user_framebuffer_create(struct drm_device *dev,
 	struct drm_i915_gem_object *obj;
 	struct drm_mode_fb_cmd2 mode_cmd = *user_mode_cmd;
 
-	if (dev_priv->use_ttm) {
-		struct drm_gem_object *gobj;
-		struct i915_ttm_bo *bo;
-		gobj = drm_gem_object_lookup(filp, mode_cmd.handles[0]);
-		if (gobj == NULL)
-			return ERR_PTR(-ENOENT);
-		bo = ttm_gem_to_i915_bo(gobj);
-		fb = intel_framebuffer_create_ttm(bo, &mode_cmd);
-		drm_gem_object_put(gobj);
-	} else {
-		obj = i915_gem_object_lookup(filp, mode_cmd.handles[0]);
-		if (!obj)
-			return ERR_PTR(-ENOENT);
+	obj = i915_gem_object_lookup(filp, mode_cmd.handles[0]);
+	if (!obj)
+		return ERR_PTR(-ENOENT);
 
-		fb = intel_framebuffer_create(obj, &mode_cmd);
-		i915_gem_object_put(obj);
-	}
+	fb = intel_framebuffer_create(obj, &mode_cmd);
+	i915_gem_object_put(obj);
 
 	return fb;
 }

@@ -11,7 +11,7 @@
 #include "intel_engine.h"
 #include "intel_ring.h"
 #include "intel_timeline.h"
-#include "ttm/i915_ttm.h"
+
 unsigned int intel_ring_update_space(struct intel_ring *ring)
 {
 	unsigned int space;
@@ -46,15 +46,11 @@ int intel_ring_pin(struct intel_ring *ring)
 		goto err_unpin;
 
 	printk(KERN_ERR "ring pin %p\n", vma->obj);
-	if (vma->obj) {
-		if (i915_vma_is_map_and_fenceable(vma))
-			addr = (void __force *)i915_vma_pin_iomap(vma);
-		else
-			addr = i915_gem_object_pin_map(vma->obj,
-						       i915_coherent_map_type(vma->vm->i915));
-	} else {
-		ret = i915_ttm_bo_kmap(vma->bo, &addr);
-	}
+	if (i915_vma_is_map_and_fenceable(vma))
+		addr = (void __force *)i915_vma_pin_iomap(vma);
+	else
+		addr = i915_gem_object_pin_map(vma->obj,
+					       i915_coherent_map_type(vma->vm->i915));
 	if (IS_ERR(addr)) {
 		ret = PTR_ERR(addr);
 		goto err_ring;
@@ -110,44 +106,29 @@ static struct i915_vma *create_ring_vma(struct i915_ggtt *ggtt, int size)
 	struct i915_vma *vma;
 
 	obj = ERR_PTR(-ENODEV);
-	if (i915->use_ttm) {
-		uint32_t region = HAS_LMEM(i915) ? REGION_LMEM : REGION_SMEM;
-		struct i915_ttm_bo *bo = NULL;
-		int ret;
-		printk(KERN_ERR "creating ring %d\n", size);
-		ret = i915_ttm_bo_create_kernel(i915, size, 0, region,
-						&bo, NULL, NULL);
-		if (ret)
-			return NULL;
 
-		printk(KERN_ERR "created ring %p\n", bo);
-		vma = i915_ttm_vma_instance(bo, vm, NULL);
-		if (IS_ERR(vma))
-			return NULL;
+	if (HAS_LMEM(i915)) {
+		obj = i915_gem_object_create_lmem(i915, size,
+						  I915_BO_ALLOC_CONTIGUOUS |
+						  I915_BO_ALLOC_VOLATILE);
 	} else {
-		if (HAS_LMEM(i915)) {
-			obj = i915_gem_object_create_lmem(i915, size,
-							  I915_BO_ALLOC_CONTIGUOUS |
-							  I915_BO_ALLOC_VOLATILE);
-		} else {
-			if (i915_ggtt_has_aperture(ggtt))
-				obj = i915_gem_object_create_stolen(i915, size);
-			if (IS_ERR(obj))
-				obj = i915_gem_object_create_internal(i915, size);
-		}
+		if (i915_ggtt_has_aperture(ggtt))
+			obj = i915_gem_object_create_stolen(i915, size);
 		if (IS_ERR(obj))
-			return ERR_CAST(obj);
-		/*
-		 * Mark ring buffers as read-only from GPU side (so no stray overwrites)
-		 * if supported by the platform's GGTT.
-		 */
-		if (vm->has_read_only)
-			i915_gem_object_set_readonly(obj);
-		
-		vma = i915_vma_instance(obj, vm, NULL);
-		if (IS_ERR(vma))
-			goto err;
+			obj = i915_gem_object_create_internal(i915, size);
 	}
+	if (IS_ERR(obj))
+		return ERR_CAST(obj);
+	/*
+	 * Mark ring buffers as read-only from GPU side (so no stray overwrites)
+	 * if supported by the platform's GGTT.
+	 */
+	if (vm->has_read_only)
+		i915_gem_object_set_readonly(obj);
+		
+	vma = i915_vma_instance(obj, vm, NULL);
+	if (IS_ERR(vma))
+		goto err;
 
 	return vma;
 

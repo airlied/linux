@@ -601,13 +601,13 @@ i915_ttm_do_execbuffer(struct drm_device *dev,
 
 	i915_ttm_bo_list_for_each_entry(e, eb.bo_list) {
 		struct i915_ttm_bo *bo = ttm_to_i915_bo(e->tv.bo);
-
+#if 0//TODO
 		/* find VMA */
 		e->vma = i915_ttm_vma_instance(bo, eb.context->vm, NULL);
 		if (IS_ERR(e->vma)) {
 			DRM_ERROR("vma creation failed\n");
 		}
-
+#endif
 	}
 
 	reserved_buffers = true;

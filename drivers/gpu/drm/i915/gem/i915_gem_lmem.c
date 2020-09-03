@@ -7,7 +7,7 @@
 #include "gem/i915_gem_region.h"
 #include "gem/i915_gem_lmem.h"
 #include "i915_drv.h"
-
+#include "ttm/i915_ttm.h"
 int i915_gem_object_lmem_pread(struct drm_i915_gem_object *obj,
 			       const struct drm_i915_gem_pread *arg)
 {
@@ -275,6 +275,10 @@ i915_gem_object_create_lmem(struct drm_i915_private *i915,
 			    resource_size_t size,
 			    unsigned int flags)
 {
+	if (i915->use_ttm) {
+		return i915_ttm_object_create_region(&i915->mm.regions[INTEL_REGION_LMEM], 1, ttm_bo_type_kernel,
+						     size);
+	}
 	return i915_gem_object_create_region(i915->mm.regions[INTEL_REGION_LMEM],
 					     size, flags);
 }

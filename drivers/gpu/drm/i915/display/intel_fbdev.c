@@ -196,53 +196,22 @@ static int intelfb_alloc(struct drm_fb_helper *helper,
 	/* If the FB is too big, just don't use it since fbdev is not very
 	 * important and we should probably use that space with FBC or other
 	 * features. */
-	if (dev_priv->use_ttm) {
-		int r;
-		struct drm_gem_object *gobj;
-		uint32_t region = 0;
-
-		if (HAS_LMEM(dev_priv))
-			region = REGION_LMEM;
-		else if (size * 2 < dev_priv->stolen_usable_size)
-			region = REGION_STOLEN_SMEM;
-		else
-			region = REGION_SMEM;
-try_again:
-		r = i915_ttm_fb_create_pinned_object(dev_priv, size,
-						     region,
-						     &gobj);
-		if (r) {
-			if (r == -ENOMEM && region == REGION_STOLEN_SMEM) {
-				region = REGION_SMEM;
-				goto try_again;
-			}
-
-			return r;
-		}
-
-		bo = ttm_gem_to_i915_bo(gobj);
-		drm_info(&dev_priv->drm, "created TTM bo for fbdev %d\n", size);
-
-		fb = intel_framebuffer_create_ttm(bo, &mode_cmd);
-		i915_ttm_bo_unref(&bo);
+	obj = ERR_PTR(-ENODEV);
+	if (HAS_LMEM(dev_priv)) {
+		obj = i915_gem_object_create_lmem(dev_priv, size,
+						  I915_BO_ALLOC_CONTIGUOUS);
 	} else {
-		obj = ERR_PTR(-ENODEV);
-		if (HAS_LMEM(dev_priv)) {
-			obj = i915_gem_object_create_lmem(dev_priv, size,
-							  I915_BO_ALLOC_CONTIGUOUS);
-		} else {
-			if (size * 2 < dev_priv->stolen_usable_size)
-				obj = i915_gem_object_create_stolen(dev_priv, size);
-			if (IS_ERR(obj))
-				obj = i915_gem_object_create_shmem(dev_priv, size);
-		}
-		if (IS_ERR(obj)) {
-			drm_err(&dev_priv->drm, "failed to allocate framebuffer\n");
-			return PTR_ERR(obj);
-		}
-		fb = intel_framebuffer_create(obj, &mode_cmd);
-		i915_gem_object_put(obj);
+		if (size * 2 < dev_priv->stolen_usable_size)
+			obj = i915_gem_object_create_stolen(dev_priv, size);
+		if (IS_ERR(obj))
+			obj = i915_gem_object_create_shmem(dev_priv, size);
 	}
+	if (IS_ERR(obj)) {
+		drm_err(&dev_priv->drm, "failed to allocate framebuffer\n");
+		return PTR_ERR(obj);
+	}
+	fb = intel_framebuffer_create(obj, &mode_cmd);
+	i915_gem_object_put(obj);
 	if (IS_ERR(fb))
 		return PTR_ERR(fb);
 

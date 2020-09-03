@@ -3875,41 +3875,28 @@ gen10_init_indirectctx_bb(struct intel_engine_cs *engine, u32 *batch)
 static int lrc_setup_wa_ctx(struct intel_engine_cs *engine)
 {
 	struct drm_i915_gem_object *obj;
-	struct i915_ttm_bo *bo = NULL;
 	struct i915_vma *vma;
 	int err;
 
-	if (engine->i915->use_ttm) {
-		uint32_t region = HAS_LMEM(engine->i915) ? REGION_LMEM : REGION_SMEM;
-		int ret = i915_ttm_bo_create_kernel(engine->i915, CTX_WA_BB_OBJ_SIZE, 0, region,
-						    &bo, NULL, NULL);
-		if (ret)
-			return ret;
-	  
-		vma = i915_ttm_vma_instance(bo, &engine->gt->ggtt->vm, NULL);
-	} else {
-		obj = i915_gem_object_create_shmem(engine->i915, CTX_WA_BB_OBJ_SIZE);
-		if (IS_ERR(obj))
-			return PTR_ERR(obj);
+	obj = i915_gem_object_create_shmem(engine->i915, CTX_WA_BB_OBJ_SIZE);
+	if (IS_ERR(obj))
+		return PTR_ERR(obj);
 
-		vma = i915_vma_instance(obj, &engine->gt->ggtt->vm, NULL);
-		if (IS_ERR(vma)) {
-			err = PTR_ERR(vma);
-			goto err;
-		}
-
-		err = i915_ggtt_pin(vma, 0, PIN_HIGH);
-		if (err)
-			goto err;
+	vma = i915_vma_instance(obj, &engine->gt->ggtt->vm, NULL);
+	if (IS_ERR(vma)) {
+		err = PTR_ERR(vma);
+		goto err;
 	}
+
+	err = i915_ggtt_pin(vma, 0, PIN_HIGH);
+	if (err)
+		goto err;
+
 	engine->wa_ctx.vma = vma;
 	return 0;
 
 err:
-	if (bo)
-		i915_ttm_bo_unref(&bo);
-	if (obj)
-		i915_gem_object_put(obj);
+	i915_gem_object_put(obj);
 	return err;
 }
 
@@ -5296,23 +5283,16 @@ static void execlists_init_reg_state(u32 *regs,
 static int
 populate_lr_context(struct intel_context *ce,
 		    struct drm_i915_gem_object *ctx_obj,
-		    struct i915_ttm_bo *ctx_bo,
 		    struct intel_engine_cs *engine,
 		    struct intel_ring *ring)
 {
 	bool inhibit = true;
 	void *vaddr;
 
-	if (ctx_bo) {
-		int ret = i915_ttm_bo_kmap(ctx_bo, &vaddr);
-		if (ret)
-			return ret;
-	} else {
-		vaddr = i915_gem_object_pin_map(ctx_obj, I915_MAP_WB);
-		if (IS_ERR(vaddr)) {
-			drm_dbg(&engine->i915->drm, "Could not map object pages!\n");
-			return PTR_ERR(vaddr);
-		}
+	vaddr = i915_gem_object_pin_map(ctx_obj, I915_MAP_WB);
+	if (IS_ERR(vaddr)) {
+		drm_dbg(&engine->i915->drm, "Could not map object pages!\n");
+		return PTR_ERR(vaddr);
 	}
 
 	set_redzone(vaddr, engine);
@@ -5334,12 +5314,8 @@ populate_lr_context(struct intel_context *ce,
 	execlists_init_reg_state(vaddr + LRC_STATE_OFFSET,
 				 ce, engine, ring, inhibit);
 
-	if (ctx_bo) {
-		i915_ttm_bo_kunmap(ctx_bo);
-	} else {
-		__i915_gem_object_flush_map(ctx_obj, 0, engine->context_size);
-		i915_gem_object_unpin_map(ctx_obj);
-	}
+	__i915_gem_object_flush_map(ctx_obj, 0, engine->context_size);
+	i915_gem_object_unpin_map(ctx_obj);
 	return 0;
 }
 
@@ -5371,7 +5347,6 @@ static int __execlists_context_alloc(struct intel_context *ce,
 {
 	struct drm_i915_gem_object *ctx_obj;
 	struct intel_ring *ring;
-	struct i915_ttm_bo *ctx_bo = NULL;
 	struct i915_vma *vma;
 	u32 context_size;
 	int ret;
@@ -5387,35 +5362,22 @@ static int __execlists_context_alloc(struct intel_context *ce,
 		context_size += PAGE_SIZE;
 	}
 
-	if (engine->i915->use_ttm) {
-		uint32_t region = HAS_LMEM(engine->i915) ? REGION_LMEM : REGION_SMEM;
-		int ret;
-
-		ret = i915_ttm_bo_create_kernel(engine->i915, context_size, 0, region,
-						&ctx_bo, NULL, NULL);
-		if (ret)
-			return ret;
-
-		vma = i915_ttm_vma_instance(ctx_bo, &engine->gt->ggtt->vm, NULL);
+	if (HAS_LMEM(engine->i915)) {
+		ctx_obj = i915_gem_object_create_lmem(engine->i915,
+						      context_size,
+						      I915_BO_ALLOC_CONTIGUOUS);
 	} else {
-		if (HAS_LMEM(engine->i915)) {
-			ctx_obj = i915_gem_object_create_lmem(engine->i915,
-							      context_size,
-							      I915_BO_ALLOC_CONTIGUOUS);
-		} else {
-			ctx_obj = i915_gem_object_create_shmem(engine->i915, context_size);
-		}
-		if (IS_ERR(ctx_obj))
-			return PTR_ERR(ctx_obj);
-
-		if (HAS_LMEM(engine->i915)) {
-			ret = context_clear_lmem(ctx_obj);
-			if (ret)
-				goto error_deref_obj;
-		}
-		vma = i915_vma_instance(ctx_obj, &engine->gt->ggtt->vm, NULL);
-		
+		ctx_obj = i915_gem_object_create_shmem(engine->i915, context_size);
 	}
+	if (IS_ERR(ctx_obj))
+		return PTR_ERR(ctx_obj);
+	
+	if (HAS_LMEM(engine->i915)) {
+		ret = context_clear_lmem(ctx_obj);
+		if (ret)
+			goto error_deref_obj;
+	}
+	vma = i915_vma_instance(ctx_obj, &engine->gt->ggtt->vm, NULL);
 	if (IS_ERR(vma)) {
 		ret = PTR_ERR(vma);
 		goto error_deref_obj;
@@ -5446,7 +5408,7 @@ static int __execlists_context_alloc(struct intel_context *ce,
 		goto error_deref_obj;
 	}
 
-	ret = populate_lr_context(ce, ctx_obj, ctx_bo, engine, ring);
+	ret = populate_lr_context(ce, ctx_obj, engine, ring);
 	if (ret) {
 		drm_dbg(&engine->i915->drm,
 			"Failed to populate LRC: %d\n", ret);
@@ -5461,10 +5423,7 @@ static int __execlists_context_alloc(struct intel_context *ce,
 error_ring_free:
 	intel_ring_put(ring);
 error_deref_obj:
-	if (ctx_obj)
-		i915_gem_object_put(ctx_obj);
-	else
-		i915_ttm_bo_unref(&ctx_bo);
+	i915_gem_object_put(ctx_obj);
 	return ret;
 }
 

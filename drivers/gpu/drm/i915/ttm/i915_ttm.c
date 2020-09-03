@@ -329,8 +329,8 @@ static struct ttm_tt *i915_ttm_tt_create(struct ttm_buffer_object *tbo,
 	gtt->ttm.ttm.func = &i915_ttm_backend_func;
 	gtt->bo = bo;
 
-	gtt->vma = i915_ttm_vma_instance(bo,
-					 &i915->ggtt.vm, NULL);
+//	gtt->vma = i915_vma_instance(obj,
+//TODO					 &i915->ggtt.vm, NULL);
 
 	/* flags to disallows mapping */
 	if (bo->allowed_regions == REGION_STOLEN_SMEM)
@@ -1395,11 +1395,15 @@ struct drm_i915_gem_object *i915_ttm_object_create_region(struct intel_memory_re
 							  enum ttm_bo_type type,
 							  unsigned long size)
 {
-	struct drm_i915_private *i915 = placements[0]->i915;
+	struct drm_i915_private *i915;
 	struct drm_i915_gem_object *obj;
 	unsigned long page_align = 0;
 	int r;
 
+	if (!placements[0])
+		return NULL;
+
+	i915 = placements[0]->i915;
 	obj = i915_gem_object_alloc();
 	if (!obj)
 		return ERR_PTR(-ENOMEM);

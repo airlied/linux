@@ -284,53 +284,31 @@ void intel_dsb_prepare(struct intel_crtc_state *crtc_state)
 
 	wakeref = intel_runtime_pm_get(&i915->runtime_pm);
 
-	if (i915->use_ttm) {
-		uint32_t region = HAS_LMEM(i915) ? REGION_LMEM : REGION_SMEM;
-		int ret;
-		ret = i915_ttm_bo_create_kernel(i915, DSB_BUF_SIZE, 0, region,
-						&bo, NULL, NULL);
-		if (ret)
-			return;
+	if (HAS_LMEM(i915))
+		obj = i915_gem_object_create_lmem(i915, DSB_BUF_SIZE, 0);
+	else
+		obj = i915_gem_object_create_internal(i915, DSB_BUF_SIZE);
+	
+	if (IS_ERR(obj)) {
+		drm_err(&i915->drm, "Gem object creation failed\n");
+		kfree(dsb);
+		goto out;
+	}
 
-		ret = i915_ttm_bo_pin(bo, region);
-		if (ret)
-			return;
-		ret = i915_ttm_bo_kmap(bo, (void **)&buf);
-		if (ret)
-			return;
+	vma = i915_gem_object_ggtt_pin(obj, NULL, 0, 0, 0);
+	if (IS_ERR(vma)) {
+		drm_err(&i915->drm, "Vma creation failed\n");
+		i915_gem_object_put(obj);
+		kfree(dsb);
+		goto out;
+	}
 
-		vma = i915_ttm_vma_instance(bo, &i915->ggtt.vm, NULL);
-		if (IS_ERR(vma)) {
-			i915_ttm_bo_unref(&bo);
-			kfree(dsb);
-		}
-	} else {
-		if (HAS_LMEM(i915))
-			obj = i915_gem_object_create_lmem(i915, DSB_BUF_SIZE, 0);
-		else
-			obj = i915_gem_object_create_internal(i915, DSB_BUF_SIZE);
-
-		if (IS_ERR(obj)) {
-			drm_err(&i915->drm, "Gem object creation failed\n");
-			kfree(dsb);
-			goto out;
-		}
-
-		vma = i915_gem_object_ggtt_pin(obj, NULL, 0, 0, 0);
-		if (IS_ERR(vma)) {
-			drm_err(&i915->drm, "Vma creation failed\n");
-			i915_gem_object_put(obj);
-			kfree(dsb);
-			goto out;
-		}
-
-		buf = i915_gem_object_pin_map(vma->obj, I915_MAP_WC);
-		if (IS_ERR(buf)) {
-			drm_err(&i915->drm, "Command buffer creation failed\n");
-			i915_vma_unpin_and_release(&vma, I915_VMA_RELEASE_MAP);
-			kfree(dsb);
-			goto out;
-		}
+	buf = i915_gem_object_pin_map(vma->obj, I915_MAP_WC);
+	if (IS_ERR(buf)) {
+		drm_err(&i915->drm, "Command buffer creation failed\n");
+		i915_vma_unpin_and_release(&vma, I915_VMA_RELEASE_MAP);
+		kfree(dsb);
+		goto out;
 	}
 
 	dsb->id = DSB1;

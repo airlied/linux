@@ -37,17 +37,11 @@
 #include "i915_active.h"
 #include "i915_request.h"
 #include "i915_vma_types.h"
-#include "ttm/i915_ttm_object.h"
 
 struct i915_vma *
 i915_vma_instance(struct drm_i915_gem_object *obj,
 		  struct i915_address_space *vm,
 		  const struct i915_ggtt_view *view);
-
-struct i915_vma *
-i915_ttm_vma_instance(struct i915_ttm_bo *bo,
-		      struct i915_address_space *vm,
-		      const struct i915_ggtt_view *view);
 
 void i915_vma_unpin_and_release(struct i915_vma **p_vma, unsigned int flags);
 #define I915_VMA_RELEASE_MAP BIT(0)
@@ -117,9 +111,10 @@ static inline bool i915_vma_is_closed(const struct i915_vma *vma)
 
 static inline u32 i915_ggtt_offset(const struct i915_vma *vma)
 {
-	if (vma->bo) {
-		return i915_ttm_bo_gpu_offset(vma->bo);
-	}
+  //	if (vma->bo) {
+	  //TODO
+  //		return i915_ttm_bo_gpu_offset(vma->bo);
+  //	}
 	GEM_BUG_ON(!i915_vma_is_ggtt(vma));
 	GEM_BUG_ON(!drm_mm_node_allocated(&vma->node));
 	GEM_BUG_ON(upper_32_bits(vma->node.start));

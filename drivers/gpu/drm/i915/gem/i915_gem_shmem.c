@@ -13,7 +13,7 @@
 #include "i915_gem_object.h"
 #include "i915_scatterlist.h"
 #include "i915_trace.h"
-
+#include "ttm/i915_ttm.h"
 /*
  * Move pages to appropriate lru and release the pagevec, decrementing the
  * ref count of those pages.
@@ -533,6 +533,10 @@ struct drm_i915_gem_object *
 i915_gem_object_create_shmem(struct drm_i915_private *i915,
 			     resource_size_t size)
 {
+	if (i915->use_ttm) {
+		return i915_ttm_object_create_region(&i915->mm.regions[INTEL_REGION_SMEM], 1, ttm_bo_type_kernel,
+						     size);
+	}
 	return i915_gem_object_create_region(i915->mm.regions[INTEL_REGION_SMEM],
 					     size, 0);
 }

@@ -342,53 +342,39 @@ static int intel_gt_init_scratch(struct intel_gt *gt, unsigned int size)
 {
 	struct drm_i915_private *i915 = gt->i915;
 	struct drm_i915_gem_object *obj = NULL;
-	struct i915_ttm_bo *bo = NULL;
 	struct i915_vma *vma;
 	int ret;
 
-	if (i915->use_ttm) {
-		uint32_t region = HAS_LMEM(i915) ? REGION_LMEM : REGION_STOLEN_SMEM;
-		ret = i915_ttm_bo_create_kernel(i915, size, 0, region,
-						&bo, NULL, NULL);
-		if (ret)
-			return ret;
-
-		vma = i915_ttm_vma_instance(bo, &gt->ggtt->vm, NULL);
-		gt->scratch = vma;
+	if (HAS_LMEM(i915)) {
+		obj = i915_gem_object_create_lmem(i915, size,
+						  I915_BO_ALLOC_CONTIGUOUS |
+						  I915_BO_ALLOC_VOLATILE);
 	} else {
-		if (HAS_LMEM(i915)) {
-				     obj = i915_gem_object_create_lmem(i915, size,
-								       I915_BO_ALLOC_CONTIGUOUS |
-								       I915_BO_ALLOC_VOLATILE);
-		} else {
-			obj = i915_gem_object_create_stolen(i915, size);
-			if (IS_ERR(obj))
-			  obj = i915_gem_object_create_internal(i915, size);
-		}
-		if (IS_ERR(obj)) {
-			DRM_ERROR("Failed to allocate scratch page\n");
-			return PTR_ERR(obj);
-		}
-		vma = i915_vma_instance(obj, &gt->ggtt->vm, NULL);
-
-		if (IS_ERR(vma)) {
-			ret = PTR_ERR(vma);
-			goto err_unref;
-		}
-		
-		ret = i915_ggtt_pin(vma, 0, PIN_HIGH);
-		if (ret)
-			goto err_unref;
-		gt->scratch = i915_vma_make_unshrinkable(vma);
+		obj = i915_gem_object_create_stolen(i915, size);
+		if (IS_ERR(obj))
+			obj = i915_gem_object_create_internal(i915, size);
 	}
+	if (IS_ERR(obj)) {
+		DRM_ERROR("Failed to allocate scratch page\n");
+		return PTR_ERR(obj);
+	}
+	vma = i915_vma_instance(obj, &gt->ggtt->vm, NULL);
+
+	if (IS_ERR(vma)) {
+		ret = PTR_ERR(vma);
+		goto err_unref;
+	}
+		
+	ret = i915_ggtt_pin(vma, 0, PIN_HIGH);
+	if (ret)
+		goto err_unref;
+	gt->scratch = i915_vma_make_unshrinkable(vma);
 
 	return 0;
 
 err_unref:
 	if (obj)
 		i915_gem_object_put(obj);
-	if (bo)
-		i915_ttm_bo_unref(&bo);
 	return ret;
 }
 

@@ -39,7 +39,6 @@
 #include "i915_trace.h"
 #include "i915_vma.h"
 
-#include "ttm/i915_ttm.h"
 static struct i915_global_vma {
 	struct i915_global base;
 	struct kmem_cache *slab_vmas;
@@ -103,7 +102,6 @@ static void __i915_vma_retire(struct i915_active *ref)
 
 static struct i915_vma *
 vma_create(struct drm_i915_gem_object *obj,
-	   struct i915_ttm_bo *bo,
 	   struct i915_address_space *vm,
 	   const struct i915_ggtt_view *view)
 {
@@ -124,14 +122,10 @@ vma_create(struct drm_i915_gem_object *obj,
 	vma->vm = i915_vm_get(vm);
 	vma->ops = &vm->vma_ops;
 	vma->obj = obj;
-	vma->bo = bo;
 	if (obj) {
 		vma->resv = i915_gem_object_resv(obj);
 		vma->size = i915_gem_object_size(obj);
 		size = i915_gem_object_size(obj);
-	} else {
-		size = i915_ttm_bo_size(bo);
-		vma->size = size;
 	}
 	vma->display_alignment = I915_GTT_MIN_ALIGNMENT;
 
@@ -170,10 +164,7 @@ vma_create(struct drm_i915_gem_object *obj,
 
 	GEM_BUG_ON(!IS_ALIGNED(vma->size, I915_GTT_PAGE_SIZE));
 
-	if (obj)
-		vmas = &obj->vma;
-	else
-		vmas = &bo->vma;
+	vmas = &obj->vma;
 	spin_lock(&vmas->lock);
 
 	if (i915_is_ggtt(vm)) {
@@ -306,43 +297,7 @@ i915_vma_instance(struct drm_i915_gem_object *obj,
 
 	/* vma_create() will resolve the race if another creates the vma */
 	if (unlikely(!vma))
-		vma = vma_create(obj, NULL, vm, view);
-
-	GEM_BUG_ON(!IS_ERR(vma) && i915_vma_compare(vma, vm, view));
-	return vma;
-}
-
-
-/**
- * i915_vma_instance - return the singleton instance of the VMA
- * @obj: parent &struct drm_i915_gem_object to be mapped
- * @vm: address space in which the mapping is located
- * @view: additional mapping requirements
- *
- * i915_vma_instance() looks up an existing VMA of the @obj in the @vm with
- * the same @view characteristics. If a match is not found, one is created.
- * Once created, the VMA is kept until either the object is freed, or the
- * address space is closed.
- *
- * Returns the vma, or an error pointer.
- */
-struct i915_vma *
-i915_ttm_vma_instance(struct i915_ttm_bo *bo,
-		      struct i915_address_space *vm,
-		      const struct i915_ggtt_view *view)
-{
-	struct i915_vma *vma;
-
-	GEM_BUG_ON(view && !i915_is_ggtt(vm));
-	GEM_BUG_ON(!atomic_read(&vm->open));
-
-	spin_lock(&bo->vma.lock);
-	vma = vma_lookup(&bo->vma, vm, view);
-	spin_unlock(&bo->vma.lock);
-
-	/* vma_create() will resolve the race if another creates the vma */
-	if (unlikely(!vma))
-		vma = vma_create(NULL, bo, vm, view);
+		vma = vma_create(obj, vm, view);
 
 	GEM_BUG_ON(!IS_ERR(vma) && i915_vma_compare(vma, vm, view));
 	return vma;
@@ -579,22 +534,14 @@ void i915_vma_unpin_and_release(struct i915_vma **p_vma, unsigned int flags)
 
 	obj = vma->obj;
 
-	if (vma->bo) {
+	GEM_BUG_ON(!obj);
 
-		i915_vma_unpin(vma);
-		i915_ttm_bo_unpin(vma->bo);
-		i915_ttm_bo_kunmap(vma->bo);
-		i915_ttm_bo_unref(&vma->bo);
-	} else {
-		GEM_BUG_ON(!obj);
+	i915_vma_unpin(vma);
 
-		i915_vma_unpin(vma);
+	if (flags & I915_VMA_RELEASE_MAP)
+		i915_gem_object_unpin_map(obj);
 
-		if (flags & I915_VMA_RELEASE_MAP)
-			i915_gem_object_unpin_map(obj);
-
-		i915_gem_object_put(obj);
-	}
+	i915_gem_object_put(obj);
 }
 
 bool i915_vma_misplaced(const struct i915_vma *vma,
@@ -1287,20 +1234,10 @@ int i915_vma_move_to_active(struct i915_vma *vma,
 	if (unlikely(err))
 		return err;
 
-	if (vma->bo) {
-		if (flags & EXEC_OBJECT_NEEDS_FENCE && vma->fence)
-			i915_active_add_request(&vma->fence->active, rq);
-		return err;
-	}
-
-
 	if (flags & EXEC_OBJECT_WRITE) {
 		struct intel_frontbuffer *front;
 
-		if (obj)
-			front = __intel_frontbuffer_get(obj);
-		else
-			front = __intel_frontbuffer_get_ttm(vma->bo);
+		front = __intel_frontbuffer_get(obj);
 		if (unlikely(front)) {
 			if (intel_frontbuffer_invalidate(front, ORIGIN_CS))
 				i915_active_add_request(&front->write, rq);
