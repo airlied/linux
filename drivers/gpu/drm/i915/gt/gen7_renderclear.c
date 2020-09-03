@@ -387,7 +387,7 @@ int gen7_setup_clear_gpr_bb(struct intel_engine_cs * const engine,
 	if (!vma)
 		return bv.max_size;
 
-	GEM_BUG_ON(vma->obj->base.size < bv.max_size);
+	GEM_BUG_ON(i915_gem_object_size(vma->obj) < bv.max_size);
 
 	batch = i915_gem_object_pin_map(vma->obj, I915_MAP_WC);
 	if (IS_ERR(batch))

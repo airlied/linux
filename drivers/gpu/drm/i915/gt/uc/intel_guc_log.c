@@ -149,7 +149,7 @@ static void guc_move_to_next_buf(struct intel_guc_log *log)
 	smp_wmb();
 
 	/* All data has been written, so now move the offset of sub buffer. */
-	relay_reserve(log->relay.channel, log->vma->obj->base.size);
+	relay_reserve(log->relay.channel, i915_gem_object_size(log->vma->obj));
 
 	/* Switch to the next sub buffer */
 	relay_flush(log->relay.channel);
@@ -751,7 +751,7 @@ int intel_guc_log_dump(struct intel_guc_log *log, struct drm_printer *p,
 		return PTR_ERR(map);
 	}
 
-	for (i = 0; i < obj->base.size / sizeof(u32); i += 4)
+	for (i = 0; i < i915_gem_object_size(obj) / sizeof(u32); i += 4)
 		drm_printf(p, "0x%08x 0x%08x 0x%08x 0x%08x\n",
 			   *(map + i), *(map + i + 1),
 			   *(map + i + 2), *(map + i + 3));

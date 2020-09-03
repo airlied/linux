@@ -56,20 +56,20 @@ static int fake_get_pages(struct drm_i915_gem_object *obj)
 	struct sg_table *pages;
 	struct scatterlist *sg;
 	unsigned int sg_page_sizes;
-	typeof(obj->base.size) rem;
+	typeof(i915_gem_object_size(obj)) rem;
 
 	pages = kmalloc(sizeof(*pages), GFP);
 	if (!pages)
 		return -ENOMEM;
 
-	rem = round_up(obj->base.size, BIT(31)) >> 31;
+	rem = round_up(i915_gem_object_size(obj), BIT(31)) >> 31;
 	if (sg_alloc_table(pages, rem, GFP)) {
 		kfree(pages);
 		return -ENOMEM;
 	}
 
 	sg_page_sizes = 0;
-	rem = obj->base.size;
+	rem = i915_gem_object_size(obj);
 	for (sg = pages->sgl; sg; sg = sg_next(sg)) {
 		unsigned long len = min_t(typeof(rem), rem, BIT(31));
 
@@ -112,7 +112,7 @@ fake_dma_object(struct drm_i915_private *i915, u64 size)
 	GEM_BUG_ON(!size);
 	GEM_BUG_ON(!IS_ALIGNED(size, I915_GTT_PAGE_SIZE));
 
-	if (overflows_type(size, obj->base.size))
+	if (overflows_type(size, i915_gem_object_size(obj)))
 		return ERR_PTR(-E2BIG);
 
 	obj = i915_gem_object_alloc();
@@ -273,7 +273,7 @@ static int lowlevel_hole(struct i915_address_space *vm,
 			break;
 		}
 
-		GEM_BUG_ON(obj->base.size != BIT_ULL(size));
+		GEM_BUG_ON(i915_gem_object_size(obj) != BIT_ULL(size));
 
 		if (i915_gem_object_pin_pages(obj)) {
 			i915_gem_object_put(obj);
@@ -415,9 +415,9 @@ static int fill_hole(struct i915_address_space *vm,
 						continue;
 
 					if (p->step < 0) {
-						if (offset < hole_start + obj->base.size)
+						if (offset < hole_start + i915_gem_object_size(obj))
 							break;
-						offset -= obj->base.size;
+						offset -= i915_gem_object_size(obj);
 					}
 
 					err = i915_vma_pin(vma, 0, 0, offset | flags);
@@ -439,9 +439,9 @@ static int fill_hole(struct i915_address_space *vm,
 					i915_vma_unpin(vma);
 
 					if (p->step > 0) {
-						if (offset + obj->base.size > hole_end)
+						if (offset + i915_gem_object_size(obj) > hole_end)
 							break;
-						offset += obj->base.size;
+						offset += i915_gem_object_size(obj);
 					}
 				}
 
@@ -452,9 +452,9 @@ static int fill_hole(struct i915_address_space *vm,
 						continue;
 
 					if (p->step < 0) {
-						if (offset < hole_start + obj->base.size)
+						if (offset < hole_start + i915_gem_object_size(obj))
 							break;
-						offset -= obj->base.size;
+						offset -= i915_gem_object_size(obj);
 					}
 
 					if (!drm_mm_node_allocated(&vma->node) ||
@@ -475,9 +475,9 @@ static int fill_hole(struct i915_address_space *vm,
 					}
 
 					if (p->step > 0) {
-						if (offset + obj->base.size > hole_end)
+						if (offset + i915_gem_object_size(obj) > hole_end)
 							break;
-						offset += obj->base.size;
+						offset += i915_gem_object_size(obj);
 					}
 				}
 
@@ -488,9 +488,9 @@ static int fill_hole(struct i915_address_space *vm,
 						continue;
 
 					if (p->step < 0) {
-						if (offset < hole_start + obj->base.size)
+						if (offset < hole_start + i915_gem_object_size(obj))
 							break;
-						offset -= obj->base.size;
+						offset -= i915_gem_object_size(obj);
 					}
 
 					err = i915_vma_pin(vma, 0, 0, offset | flags);
@@ -512,9 +512,9 @@ static int fill_hole(struct i915_address_space *vm,
 					i915_vma_unpin(vma);
 
 					if (p->step > 0) {
-						if (offset + obj->base.size > hole_end)
+						if (offset + i915_gem_object_size(obj) > hole_end)
 							break;
-						offset += obj->base.size;
+						offset += i915_gem_object_size(obj);
 					}
 				}
 
@@ -525,9 +525,9 @@ static int fill_hole(struct i915_address_space *vm,
 						continue;
 
 					if (p->step < 0) {
-						if (offset < hole_start + obj->base.size)
+						if (offset < hole_start + i915_gem_object_size(obj))
 							break;
-						offset -= obj->base.size;
+						offset -= i915_gem_object_size(obj);
 					}
 
 					if (!drm_mm_node_allocated(&vma->node) ||
@@ -548,9 +548,9 @@ static int fill_hole(struct i915_address_space *vm,
 					}
 
 					if (p->step > 0) {
-						if (offset + obj->base.size > hole_end)
+						if (offset + i915_gem_object_size(obj) > hole_end)
 							break;
-						offset += obj->base.size;
+						offset += i915_gem_object_size(obj);
 					}
 				}
 			}
@@ -606,8 +606,8 @@ static int walk_hole(struct i915_address_space *vm,
 		}
 
 		for (addr = hole_start;
-		     addr + obj->base.size < hole_end;
-		     addr += obj->base.size) {
+		     addr + i915_gem_object_size(obj) < hole_end;
+		     addr += i915_gem_object_size(obj)) {
 			err = i915_vma_pin(vma, 0, 0, addr | flags);
 			if (err) {
 				pr_err("%s bind failed at %llx + %llx [hole %llx- %llx] with err=%d\n",
@@ -1348,7 +1348,7 @@ static int igt_gtt_reserve(void *arg)
 
 		mutex_lock(&ggtt->vm.mutex);
 		err = i915_gem_gtt_reserve(&ggtt->vm, &vma->node,
-					   obj->base.size,
+					   i915_gem_object_size(obj),
 					   total,
 					   obj->cache_level,
 					   0);
@@ -1400,7 +1400,7 @@ static int igt_gtt_reserve(void *arg)
 
 		mutex_lock(&ggtt->vm.mutex);
 		err = i915_gem_gtt_reserve(&ggtt->vm, &vma->node,
-					   obj->base.size,
+					   i915_gem_object_size(obj),
 					   total,
 					   obj->cache_level,
 					   0);
@@ -1447,7 +1447,7 @@ static int igt_gtt_reserve(void *arg)
 
 		mutex_lock(&ggtt->vm.mutex);
 		err = i915_gem_gtt_reserve(&ggtt->vm, &vma->node,
-					   obj->base.size,
+					   i915_gem_object_size(obj),
 					   offset,
 					   obj->cache_level,
 					   0);
@@ -1564,7 +1564,7 @@ static int igt_gtt_insert(void *arg)
 
 		mutex_lock(&ggtt->vm.mutex);
 		err = i915_gem_gtt_insert(&ggtt->vm, &vma->node,
-					  obj->base.size, 0, obj->cache_level,
+					  i915_gem_object_size(obj), 0, obj->cache_level,
 					  0, ggtt->vm.total,
 					  0);
 		mutex_unlock(&ggtt->vm.mutex);
@@ -1624,7 +1624,7 @@ static int igt_gtt_insert(void *arg)
 
 		mutex_lock(&ggtt->vm.mutex);
 		err = i915_gem_gtt_insert(&ggtt->vm, &vma->node,
-					  obj->base.size, 0, obj->cache_level,
+					  i915_gem_object_size(obj), 0, obj->cache_level,
 					  0, ggtt->vm.total,
 					  0);
 		mutex_unlock(&ggtt->vm.mutex);
@@ -1673,7 +1673,7 @@ static int igt_gtt_insert(void *arg)
 
 		mutex_lock(&ggtt->vm.mutex);
 		err = i915_gem_gtt_insert(&ggtt->vm, &vma->node,
-					  obj->base.size, 0, obj->cache_level,
+					  i915_gem_object_size(obj), 0, obj->cache_level,
 					  0, ggtt->vm.total,
 					  0);
 		mutex_unlock(&ggtt->vm.mutex);

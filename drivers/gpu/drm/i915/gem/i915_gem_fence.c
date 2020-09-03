@@ -72,12 +72,12 @@ i915_gem_object_lock_fence(struct drm_i915_gem_object *obj)
 		       0, 0);
 
 	if (i915_sw_fence_await_reservation(&stub->chain,
-					    obj->base.resv, NULL, true,
-					    i915_fence_timeout(to_i915(obj->base.dev)),
+					    i915_gem_object_resv(obj), NULL, true,
+					    i915_fence_timeout(to_i915(obj_to_dev(obj))),
 					    I915_FENCE_GFP) < 0)
 		goto err;
 
-	dma_resv_add_excl_fence(obj->base.resv, &stub->dma);
+	dma_resv_add_excl_fence(i915_gem_object_resv(obj), &stub->dma);
 
 	return &stub->dma;
 

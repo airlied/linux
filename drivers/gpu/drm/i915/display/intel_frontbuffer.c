@@ -164,7 +164,7 @@ void __intel_fb_invalidate(struct intel_frontbuffer *front,
 			   enum fb_op_origin origin,
 			   unsigned int frontbuffer_bits)
 {
-	struct drm_i915_private *i915 = to_i915(front->obj->base.dev);
+	struct drm_i915_private *i915 = to_i915(obj_to_dev(front->obj));
 
 	if (origin == ORIGIN_CS) {
 		spin_lock(&i915->fb_tracking.lock);
@@ -183,7 +183,7 @@ void __intel_fb_flush(struct intel_frontbuffer *front,
 		      enum fb_op_origin origin,
 		      unsigned int frontbuffer_bits)
 {
-	struct drm_i915_private *i915 = to_i915(front->obj->base.dev);
+	struct drm_i915_private *i915 = to_i915(obj_to_dev(front->obj));
 
 	if (origin == ORIGIN_CS) {
 		spin_lock(&i915->fb_tracking.lock);
@@ -217,7 +217,7 @@ static void frontbuffer_retire(struct i915_active *ref)
 }
 
 static void frontbuffer_release(struct kref *ref)
-	__releases(&to_i915(front->obj->base.dev)->fb_tracking.lock)
+	__releases(&to_i915(obj_to_dev(front->obj))->fb_tracking.lock)
 {
 	struct intel_frontbuffer *front =
 		container_of(ref, typeof(*front), ref);
@@ -230,7 +230,7 @@ static void frontbuffer_release(struct kref *ref)
 	spin_unlock(&obj->vma.lock);
 
 	RCU_INIT_POINTER(obj->frontbuffer, NULL);
-	spin_unlock(&to_i915(obj->base.dev)->fb_tracking.lock);
+	spin_unlock(&to_i915(obj_to_dev(obj))->fb_tracking.lock);
 
 	i915_active_fini(&front->write);
 
@@ -241,7 +241,7 @@ static void frontbuffer_release(struct kref *ref)
 struct intel_frontbuffer *
 intel_frontbuffer_get(struct drm_i915_gem_object *obj)
 {
-	struct drm_i915_private *i915 = to_i915(obj->base.dev);
+	struct drm_i915_private *i915 = to_i915(obj_to_dev(obj));
 	struct intel_frontbuffer *front;
 
 	front = __intel_frontbuffer_get(obj);
@@ -277,7 +277,7 @@ void intel_frontbuffer_put(struct intel_frontbuffer *front)
 {
 	kref_put_lock(&front->ref,
 		      frontbuffer_release,
-		      &to_i915(front->obj->base.dev)->fb_tracking.lock);
+		      &to_i915(obj_to_dev(front->obj))->fb_tracking.lock);
 }
 
 /**
@@ -304,13 +304,13 @@ void intel_frontbuffer_track(struct intel_frontbuffer *old,
 		     BITS_PER_TYPE(atomic_t));
 
 	if (old) {
-		drm_WARN_ON(old->obj->base.dev,
+		drm_WARN_ON(obj_to_dev(old->obj),
 			    !(atomic_read(&old->bits) & frontbuffer_bits));
 		atomic_andnot(frontbuffer_bits, &old->bits);
 	}
 
 	if (new) {
-		drm_WARN_ON(new->obj->base.dev,
+		drm_WARN_ON(obj_to_dev(new->obj),
 			    atomic_read(&new->bits) & frontbuffer_bits);
 		atomic_or(frontbuffer_bits, &new->bits);
 	}

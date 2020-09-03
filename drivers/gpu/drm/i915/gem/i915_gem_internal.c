@@ -32,7 +32,7 @@ static void internal_free_pages(struct sg_table *st)
 
 static int i915_gem_object_get_pages_internal(struct drm_i915_gem_object *obj)
 {
-	struct drm_i915_private *i915 = to_i915(obj->base.dev);
+	struct drm_i915_private *i915 = to_i915(obj_to_dev(obj));
 	struct sg_table *st;
 	struct scatterlist *sg;
 	unsigned int sg_page_sizes;
@@ -66,7 +66,7 @@ create_st:
 	if (!st)
 		return -ENOMEM;
 
-	npages = obj->base.size / PAGE_SIZE;
+	npages = i915_gem_object_size(obj) / PAGE_SIZE;
 	if (sg_alloc_table(st, npages, GFP_KERNEL)) {
 		kfree(st);
 		return -ENOMEM;
@@ -170,7 +170,7 @@ i915_gem_object_create_internal(struct drm_i915_private *i915,
 	GEM_BUG_ON(!size);
 	GEM_BUG_ON(!IS_ALIGNED(size, PAGE_SIZE));
 
-	if (overflows_type(size, obj->base.size))
+	if (overflows_type(size, i915_gem_object_size(obj)))
 		return ERR_PTR(-E2BIG);
 
 	obj = i915_gem_object_alloc();

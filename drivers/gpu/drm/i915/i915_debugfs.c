@@ -126,7 +126,7 @@ stringify_page_sizes(unsigned int page_sizes, char *buf, size_t len)
 void
 i915_debugfs_describe_obj(struct seq_file *m, struct drm_i915_gem_object *obj)
 {
-	struct drm_i915_private *dev_priv = to_i915(obj->base.dev);
+	struct drm_i915_private *dev_priv = to_i915(obj_to_dev(obj));
 	struct intel_engine_cs *engine;
 	struct i915_vma *vma;
 	int pin_count = 0;
@@ -136,7 +136,7 @@ i915_debugfs_describe_obj(struct seq_file *m, struct drm_i915_gem_object *obj)
 		   get_tiling_flag(obj),
 		   get_global_flag(obj),
 		   get_pin_mapped_flag(obj),
-		   obj->base.size / 1024,
+		   i915_gem_object_size(obj) / 1024,
 		   obj->read_domains,
 		   obj->write_domain,
 		   i915_cache_level_str(dev_priv, obj->cache_level),
@@ -237,7 +237,7 @@ static int per_file_stats(int id, void *ptr, void *data)
 		return 0;
 
 	stats->count++;
-	stats->total += obj->base.size;
+	stats->total += i915_gem_object_size(obj);
 
 	spin_lock(&obj->vma.lock);
 	if (!stats->vm) {

@@ -89,6 +89,22 @@ i915_gem_object_lookup(struct drm_file *file, u32 handle)
 	return obj;
 }
 
+static inline size_t
+i915_gem_object_size(const struct drm_i915_gem_object *obj)
+{
+	return obj->base.size;
+}
+
+static inline struct drm_device *obj_to_dev(const struct drm_i915_gem_object *obj)
+{
+	return obj->base.dev;
+}
+
+static inline struct dma_resv *i915_gem_object_resv(const struct drm_i915_gem_object *obj)
+{
+	return obj->base.resv;
+}
+
 __deprecated
 struct drm_gem_object *
 drm_gem_object_lookup(struct drm_file *file, u32 handle);
@@ -117,9 +133,9 @@ static inline int __i915_gem_object_lock(struct drm_i915_gem_object *obj,
 	int ret;
 
 	if (intr)
-		ret = dma_resv_lock_interruptible(obj->base.resv, ww ? &ww->ctx : NULL);
+		ret = dma_resv_lock_interruptible(i915_gem_object_resv(obj), ww ? &ww->ctx : NULL);
 	else
-		ret = dma_resv_lock(obj->base.resv, ww ? &ww->ctx : NULL);
+		ret = dma_resv_lock(i915_gem_object_resv(obj), ww ? &ww->ctx : NULL);
 
 	if (!ret && ww)
 		list_add_tail(&obj->obj_link, &ww->obj_list);
@@ -147,12 +163,12 @@ static inline int i915_gem_object_lock_interruptible(struct drm_i915_gem_object 
 
 static inline bool i915_gem_object_trylock(struct drm_i915_gem_object *obj)
 {
-	return dma_resv_trylock(obj->base.resv);
+	return dma_resv_trylock(i915_gem_object_resv(obj));
 }
 
 static inline void i915_gem_object_unlock(struct drm_i915_gem_object *obj)
 {
-	dma_resv_unlock(obj->base.resv);
+	dma_resv_unlock(i915_gem_object_resv(obj));
 }
 
 struct dma_fence *
@@ -445,7 +461,7 @@ i915_gem_object_last_write_engine(struct drm_i915_gem_object *obj)
 	struct dma_fence *fence;
 
 	rcu_read_lock();
-	fence = dma_resv_get_excl_rcu(obj->base.resv);
+	fence = dma_resv_get_excl_rcu(i915_gem_object_resv(obj));
 	rcu_read_unlock();
 
 	if (fence && dma_fence_is_i915(fence) && !dma_fence_is_signaled(fence))
