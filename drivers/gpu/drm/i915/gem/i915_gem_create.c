@@ -36,6 +36,7 @@ i915_gem_create(struct drm_file *file,
 		u64 *size_p,
 		u32 *handle_p)
 {
+	struct drm_i915_private *i915 = placements[0]->i915;
 	struct drm_i915_gem_object *obj;
 	u32 handle;
 	u64 size;
@@ -48,10 +49,17 @@ i915_gem_create(struct drm_file *file,
 	/* For most of the ABI (e.g. mmap) we think in system pages */
 	GEM_BUG_ON(!IS_ALIGNED(size, PAGE_SIZE));
 
-	/* Allocate the new object */
-	obj = i915_gem_object_create_region(placements[0], size, 0);
-	if (IS_ERR(obj))
-		return PTR_ERR(obj);
+	
+	if (i915->use_ttm) {
+		obj = i915_ttm_object_create_region(placements, n_placements, ttm_bo_type_device, size);
+		if (IS_ERR(obj))
+			return PTR_ERR(obj);
+	} else {
+		/* Allocate the new object */
+		obj = i915_gem_object_create_region(placements[0], size, 0);
+		if (IS_ERR(obj))
+			return PTR_ERR(obj);
+	}
 
 	if (!i915_gem_object_has_struct_page(obj)) {
 		struct drm_i915_private *i915 = to_i915(obj_to_dev(obj));

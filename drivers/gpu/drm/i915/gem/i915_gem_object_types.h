@@ -11,6 +11,7 @@
 #include <uapi/drm/i915_drm.h>
 
 #include <drm/ttm/ttm_bo_api.h>
+#include <drm/ttm/ttm_placement.h>
 #include "i915_vma_types.h"
 #include "i915_active.h"
 #include "i915_selftest.h"
@@ -84,6 +85,7 @@ struct i915_mmap_offset {
 	struct rb_node offset;
 };
 
+#define I915_TTM_MAX_PLACEMENTS	3
 struct drm_i915_gem_object {
 	struct ttm_buffer_object base;
 
@@ -107,6 +109,13 @@ struct drm_i915_gem_object {
 		struct llist_node freed;
 	};
 
+	struct {
+		struct ttm_place placements[I915_TTM_MAX_PLACEMENTS];
+		struct ttm_placement placement;
+		struct ttm_bo_kmap_obj kmap;
+		u32 preferred_regions;
+		u32 allowed_regions;	
+	} ttm;
 	/**
 	 * Whether the object is currently in the GGTT mmap.
 	 */

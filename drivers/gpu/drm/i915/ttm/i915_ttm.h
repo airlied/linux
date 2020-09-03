@@ -126,4 +126,9 @@ int i915_ttm_stolen_mgr_init(struct drm_i915_private *i915);
 void i915_ttm_stolen_mgr_fini(struct drm_i915_private *i915);
 
 int i915_ttm_stolen_get_pages(struct i915_ttm_bo *bo);
+
+struct drm_i915_gem_object *i915_ttm_object_create_region(struct intel_memory_region **placements,
+							  int n_placements,
+							  enum ttm_bo_type type,
+							  unsigned long size);
 #endif
