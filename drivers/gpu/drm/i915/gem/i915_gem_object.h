@@ -105,6 +105,11 @@ static inline struct dma_resv *i915_gem_object_resv(const struct drm_i915_gem_ob
 	return obj->base.base.resv;
 }
 
+static inline bool i915_gem_object_is_ttm(const struct drm_i915_gem_object *obj)
+{
+	return obj->base.bdev != NULL;
+}
+
 __deprecated
 struct drm_gem_object *
 drm_gem_object_lookup(struct drm_file *file, u32 handle);

@@ -111,60 +111,6 @@ static const struct fb_ops intelfb_ops = {
 	.fb_blank = intel_fbdev_blank,
 };
 
-
-static void i915_ttm_fb_destroy_pinned_object(struct drm_gem_object *gobj)
-{
-	struct i915_ttm_bo *bo = ttm_gem_to_i915_bo(gobj);
-	int ret;
-
-	ret = i915_ttm_bo_reserve(bo, true);
-	if (likely(ret == 0)) {
-		i915_ttm_bo_kunmap(bo);
-		i915_ttm_bo_unpin(bo);
-		i915_ttm_bo_unreserve(bo);
-	}
-	drm_gem_object_put(gobj);
-}
-
-static int i915_ttm_fb_create_pinned_object(struct drm_i915_private *dev_priv,
-					    uint32_t size,
-					    u32 region,
-					    struct drm_gem_object **gobj_p)
-{
-	struct drm_gem_object *gobj;
-	struct i915_ttm_bo *bo;
-	int ret;
-	ret = i915_ttm_gem_object_create(dev_priv, size, 0,
-					 region, I915_TTM_CREATE_VRAM_CONTIGUOUS,
-					 ttm_bo_type_kernel, NULL, &gobj);
-	if (ret)
-		return ret;
-
-	bo = ttm_gem_to_i915_bo(gobj);
-
-	ret = i915_ttm_bo_reserve(bo, false);
-	if (ret != 0)
-		goto out_unref;
-
-	ret = i915_ttm_bo_pin(bo, region);
-	if (ret) {
-		i915_ttm_bo_unreserve(bo);
-		goto out_unref;
-	}
-
-	ret = i915_ttm_bo_kmap(bo, NULL);
-	i915_ttm_bo_unreserve(bo);
-	if (ret)
-		goto out_unref;
-
-	*gobj_p = gobj;
-	return 0;
-out_unref:
-	i915_ttm_fb_destroy_pinned_object(gobj);
-	*gobj_p = NULL;
-	return ret;
-}
-
 static int intelfb_alloc(struct drm_fb_helper *helper,
 			 struct drm_fb_helper_surface_size *sizes)
 {

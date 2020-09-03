@@ -78,18 +78,9 @@ static inline unsigned i915_ttm_mem_type_to_region(u32 mem_type)
 	return 0;
 }
 
-int i915_ttm_bo_create_reserved(struct drm_i915_private *i915,
-				unsigned long size, int align,
-				u32 region, struct i915_ttm_bo **bo_ptr,
-				u64 *gpu_addr, void **cpu_addr);
-
 uint32_t i915_ttm_bo_get_preferred_pin_region(struct drm_i915_private *i915,
 					      uint32_t region);
 
-int i915_ttm_bo_create_kernel(struct drm_i915_private *i915,
-			      unsigned long size, int align,
-			      u32 region, struct i915_ttm_bo **bo_ptr,
-			      u64 *gpu_addr, void **cpu_addr);
 int i915_ttm_gem_object_create(struct drm_i915_private *i915, unsigned long size,
 			       int alignment, u32 initial_region,
 			       u64 flags, enum ttm_bo_type type,
@@ -132,4 +123,9 @@ struct drm_i915_gem_object *i915_ttm_object_create_region(struct intel_memory_re
 							  int n_placements,
 							  enum ttm_bo_type type,
 							  unsigned long size);
+
+static inline struct drm_i915_gem_object *ttm_to_i915_gem(struct ttm_buffer_object *tbo)
+{
+	return container_of(tbo, struct drm_i915_gem_object, base);
+}
 #endif

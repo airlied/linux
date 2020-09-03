@@ -515,14 +515,16 @@ fail:
 static void i915_ttm_bo_destroy(struct ttm_buffer_object *tbo)
 {
 	struct drm_i915_private *i915 = to_i915_ttm_dev(tbo->bdev);
-	struct i915_ttm_bo *bo = ttm_to_i915_bo(tbo);
+	struct drm_i915_gem_object *obj = ttm_to_i915_gem(tbo);
 
-	drm_gem_object_release(&bo->tbo.base);
+	drm_gem_object_release(&obj->base.base);
+#if 0
 	if (bo->pages) {
 		sg_free_table(bo->pages);
 		kfree(bo->pages);
 	}
-	kfree(bo);
+#endif
+	kfree(obj);
 }
 
 /**
@@ -541,74 +543,6 @@ bool i915_ttm_bo_is_i915_ttm_bo(struct ttm_buffer_object *bo)
 		return true;
 	return false;
 }
-
-static int i915_ttm_bo_do_create(struct drm_i915_private *i915,
-				 struct i915_ttm_bo_param *bp,
-				 struct i915_ttm_bo **bo_ptr)
-{
-	struct ttm_operation_ctx ctx = {
-		.interruptible = (bp->type != ttm_bo_type_kernel),
-		.no_wait_gpu = bp->no_wait_gpu,
-		.resv = bp->resv,
-		.flags = bp->type != ttm_bo_type_kernel ? TTM_OPT_FLAG_ALLOW_RES_EVICT : 0
-	};
-	int r;
-
-	struct i915_ttm_bo *bo;
-	unsigned long page_align, size = bp->size;
-	size_t acc_size;
-
-	page_align = ALIGN(bp->byte_align, PAGE_SIZE) >> PAGE_SHIFT;
-	size = ALIGN(size, PAGE_SIZE);
-
-	if (!i915_ttm_bo_validate_size(i915, size, bp->region))
-		return -ENOMEM;
-
-	*bo_ptr = NULL;
-
-	acc_size = ttm_bo_dma_acc_size(&i915->ttm_mman.bdev, size, sizeof(struct i915_ttm_bo));
-
-	bo = kzalloc(sizeof(struct i915_ttm_bo), GFP_KERNEL);
-	if (bo == NULL)
-		return -ENOMEM;
-
-	drm_gem_private_object_init(&i915->drm, &bo->tbo.base, size);
-	bo->preferred_regions = bp->preferred_region ? bp->preferred_region : bp->region;
-	bo->allowed_regions = bo->preferred_regions;
-
-	if (bp->type != ttm_bo_type_kernel && bo->allowed_regions == REGION_LMEM)
-		bo->allowed_regions |= REGION_SMEM;
-
-	bo->flags = bp->flags;
-
-	spin_lock_init(&bo->vma.lock);
-	INIT_LIST_HEAD(&bo->vma.list);
-
-	bo->tbo.bdev = &i915->ttm_mman.bdev;
-	i915_ttm_bo_placement_from_region(bo, bp->region);
-
-	r = ttm_bo_init_reserved(&i915->ttm_mman.bdev, &bo->tbo, size, bp->type,
-				 &bo->placement, page_align, &ctx, acc_size,
-				 NULL, 0, &i915_ttm_bo_destroy);
-
-	if (unlikely(r != 0))
-		return r;
-
-	if (!bp->resv)
-		i915_ttm_bo_unreserve(bo);
-
-	*bo_ptr = bo;
-	return 0;
-}
-
-
-int i915_ttm_bo_create(struct drm_i915_private *i915,
-		       struct i915_ttm_bo_param *bp,
-		       struct i915_ttm_bo **bo_ptr)
-{
-	return i915_ttm_bo_do_create(i915, bp, bo_ptr);
-}
-
 
 /**
  * i915_ttm_bo_placement_from_region - set buffer's placement
@@ -691,115 +625,6 @@ void i915_ttm_bo_placement_from_region(struct i915_ttm_bo *bo, u32 region)
 	placement->num_busy_placement = c;
 	placement->busy_placement = places;
 }
-
-/**
- * i915_ttm_bo_create_reserved - create reserved BO for kernel use
- *
- * @i915: i915 object
- * @size: size for the new BO
- * @align: alignment for the new BO
- * @region: where to place it
- * @bo_ptr: used to initialize BOs in structures
- * @gpu_addr: GPU addr of the pinned BO
- * @cpu_addr: optional CPU address mapping
- *
- * Allocates and pins a BO for kernel internal use, and returns it still
- * reserved.
- *
- * Note: For bo_ptr new BO is only created if bo_ptr points to NULL.
- *
- * Returns:
- * 0 on success, negative error code otherwise.
- */
-int i915_ttm_bo_create_reserved(struct drm_i915_private *i915,
-				unsigned long size, int align,
-				u32 region, struct i915_ttm_bo **bo_ptr,
-				u64 *gpu_addr, void **cpu_addr)
-{
-	struct i915_ttm_bo_param bp;
-	bool free = false;
-	int r;
-
-	if (!size) {
-		i915_ttm_bo_unref(bo_ptr);
-		return 0;
-	}
-
-	memset(&bp, 0, sizeof(bp));
-	bp.size = size;
-	bp.byte_align = align;
-	bp.region = region;
-	bp.flags = 0;
-	bp.flags |= I915_TTM_CREATE_VRAM_CONTIGUOUS;
-	bp.type = ttm_bo_type_kernel;
-	bp.resv = NULL;
-
-
-	if (!*bo_ptr) {
-		r = i915_ttm_bo_create(i915, &bp, bo_ptr);
-		if (r) {
-			dev_err(i915->drm.dev, "(%d) failed to allocate kernel bo\n", r);
-			return r;
-		}
-		free = true;
-	}
-
-	/* reserver */
-	r = i915_ttm_bo_reserve(*bo_ptr, false);
-	if (r) {
-		dev_err(i915->drm.dev, "(%d) failed to reserve kernel bo\n", r);
-		goto error_free;
-	}
-
-	/* pin */
-	r = i915_ttm_bo_pin(*bo_ptr, region);
-	if (r) {
-		dev_err(i915->drm.dev, "(%d) failed to pin kernel bo\n", r);
-		goto error_unreserve;
-	}
-
-	/* alloc gart? */
-
-	/* set gpu addr */
-
-	/* return cpu_addr */
-	if (cpu_addr) {
-		r = i915_ttm_bo_kmap(*bo_ptr, cpu_addr);
-		if (r) {
-			dev_err(i915->drm.dev, "(%d) kernel bo map failed\n", r);
-			goto error_unpin;
-		}
-	}
-	return 0;
-error_unpin:
-	i915_ttm_bo_unpin(*bo_ptr);
-error_unreserve:
-	i915_ttm_bo_unreserve(*bo_ptr);
-error_free:
-	if (free)
-		i915_ttm_bo_unref(bo_ptr);
-	return r;
-}
-
-int i915_ttm_bo_create_kernel(struct drm_i915_private *i915,
-			      unsigned long size, int align,
-			      u32 region, struct i915_ttm_bo **bo_ptr,
-			      u64 *gpu_addr, void **cpu_addr)
-{
-	int r;
-
-	r = i915_ttm_bo_create_reserved(i915, size, align, region, bo_ptr,
-					gpu_addr, cpu_addr);
-
-	if (r)
-		return r;
-
-	if (*bo_ptr)
-		i915_ttm_bo_unreserve(*bo_ptr);
-
-	return 0;
-}
-
 
 /**
  * i915_ttm_bo_kmap - map an &i915_ttm_bo buffer object
@@ -1124,44 +949,6 @@ void i915_ttm_gem_object_free(struct drm_gem_object *gobj)
 void i915_ttm_gem_object_close(struct drm_gem_object *gem, struct drm_file *file)
 {
 
-}
-
-int i915_ttm_gem_object_create(struct drm_i915_private *i915, unsigned long size,
-			       int alignment, u32 initial_region,
-			       u64 flags, enum ttm_bo_type type,
-			       struct dma_resv *resv,
-			       struct drm_gem_object **obj)
-{
-	struct i915_ttm_bo *bo;
-	struct i915_ttm_bo_param bp;
-	int r;
-
-	memset(&bp, 0, sizeof(bp));
-	*obj = NULL;
-
-	bp.size = size;
-	bp.byte_align = alignment;
-	bp.type = type;
-	bp.resv = resv;
-	bp.preferred_region = initial_region;
-retry:
-	bp.flags = flags;
-	bp.region = initial_region;
-	r = i915_ttm_bo_create(i915, &bp, &bo);
-	if (r) {
-		if (r != -ERESTARTSYS) {
-			if (initial_region == REGION_LMEM) {
-				initial_region |= REGION_SMEM;
-				goto retry;
-			}
-			DRM_DEBUG("Failed to allocate GEM object (%ld, %d, %u, %d)\n",
-				  size, initial_region, alignment, r);
-		}
-		return r;
-	}
-	*obj = &bo->tbo.base;
-
-	return 0;
 }
 
 int
