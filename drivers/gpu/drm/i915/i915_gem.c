@@ -909,6 +909,12 @@ new_vma:
 	if (IS_ERR(vma))
 		return vma;
 
+	if (i915_gem_object_is_ttm(vma->obj)) {
+		ret = i915_ttm_alloc_gtt(&vma->obj->base);
+		if (ret)
+			return ERR_PTR(ret);
+		return vma;
+	}
 	if (i915_vma_misplaced(vma, size, alignment, flags)) {
 		if (flags & PIN_NONBLOCK) {
 			if (i915_vma_is_pinned(vma) || i915_vma_is_active(vma))

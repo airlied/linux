@@ -9,7 +9,7 @@
 #include "i915_scatterlist.h"
 #include "i915_gem_lmem.h"
 #include "i915_gem_mman.h"
-
+#include "ttm/i915_ttm.h"
 void __i915_gem_object_set_pages(struct drm_i915_gem_object *obj,
 				 struct sg_table *pages,
 				 unsigned int sg_page_sizes)
@@ -108,6 +108,11 @@ int ____i915_gem_object_get_pages(struct drm_i915_gem_object *obj)
 int __i915_gem_object_get_pages(struct drm_i915_gem_object *obj)
 {
 	int err;
+
+	if (i915_gem_object_is_ttm(obj)) {
+		err = i915_ttm_create_bo_pages(obj);
+		return err;
+	}
 
 	err = mutex_lock_interruptible_nested(&obj->mm.lock, I915_MM_GET_PAGES);
 	if (err)
@@ -331,6 +336,21 @@ void *i915_gem_object_pin_map(struct drm_i915_gem_object *obj,
 	void *ptr;
 	int err;
 
+	if (i915_gem_object_is_ttm(obj)) {
+		err = i915_ttm_bo_pin(obj, i915_ttm_mem_type_to_region(obj->base.mem.mem_type));
+		if (err)
+			return ERR_PTR(err);
+		
+		err = i915_ttm_bo_kmap(obj, &ptr);
+		if (err)
+			return ERR_PTR(err);
+
+		err = i915_ttm_create_bo_pages(obj);
+		if (err)
+			return ERR_PTR(err);
+		return ptr;
+	}
+
 	flags = I915_GEM_OBJECT_HAS_STRUCT_PAGE | I915_GEM_OBJECT_HAS_IOMEM;
 	if (!i915_gem_object_type_has(obj, flags))
 		return ERR_PTR(-ENXIO);
@@ -396,6 +416,9 @@ void __i915_gem_object_flush_map(struct drm_i915_gem_object *obj,
 {
 	enum i915_map_type has_type;
 	void *ptr;
+
+	if (i915_gem_object_is_ttm(obj)) //TODO
+		return;
 
 	GEM_BUG_ON(!i915_gem_object_has_pinned_pages(obj));
 	GEM_BUG_ON(range_overflows_t(typeof(i915_gem_object_size(obj)),

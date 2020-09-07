@@ -671,6 +671,11 @@ static int i915_driver_hw_probe(struct drm_i915_private *dev_priv)
 	/* needs to be done before ggtt probe */
 	intel_dram_edram_detect(dev_priv);
 
+	if (dev_priv->use_ttm) {
+		ret = i915_ttm_early_init(dev_priv);
+		if (ret)
+			return ret;
+	}
 	ret = i915_set_dma_info(dev_priv);
 	if (ret)
 		return ret;

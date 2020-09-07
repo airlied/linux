@@ -129,8 +129,6 @@ static inline u32 i915_ggtt_pin_bias(struct i915_vma *vma)
 
 static inline struct i915_vma *i915_vma_get(struct i915_vma *vma)
 {
-	if (vma->bo)
-		return vma;
 	if (!vma->obj) {
 		WARN_ON_ONCE(1);
 		return NULL;
@@ -141,16 +139,12 @@ static inline struct i915_vma *i915_vma_get(struct i915_vma *vma)
 
 static inline struct i915_vma *i915_vma_tryget(struct i915_vma *vma)
 {
-	if (!vma->obj && !vma->bo) {
+	if (!vma->obj) {
 		WARN_ON_ONCE(1);
 		return NULL;
 	}
-	if (vma->obj) {
-		if (likely(kref_get_unless_zero(&vma->obj->base.base.refcount)))
-			return vma;
-	} else if (vma->bo)
+	if (likely(kref_get_unless_zero(&vma->obj->base.base.refcount)))
 		return vma;
-
 	return NULL;
 }
 

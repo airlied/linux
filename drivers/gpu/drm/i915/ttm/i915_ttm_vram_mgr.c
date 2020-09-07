@@ -242,12 +242,12 @@ static const struct ttm_resource_manager_func i915_ttm_vram_mgr_func = {
 	.put_node = i915_ttm_vram_mgr_del,
 };
 
-int i915_ttm_vram_get_pages(struct i915_ttm_bo *bo)
+int i915_ttm_vram_get_pages(struct drm_i915_gem_object *obj)
 {
-	struct drm_i915_private *i915 = to_i915_ttm_dev(bo->tbo.bdev);
+	struct drm_i915_private *i915 = obj_to_i915(obj);
 	struct sg_table *st;
 	struct scatterlist *sg;
-	struct ttm_resource *mem = &bo->tbo.mem;
+	struct ttm_resource *mem = &obj->base.mem;
 	struct i915_ttm_vram_node *node = mem->mm_node;
 	struct drm_mm_node *nodes = node->nodes;
 	unsigned pages = mem->num_pages;
@@ -288,7 +288,9 @@ int i915_ttm_vram_get_pages(struct i915_ttm_bo *bo)
 		++nodes;
 	}
 	sg_mark_end(sg);
-	bo->pages = st;
+	obj->mm.pages = st;
+	obj->mm.page_sizes.phys = PAGE_SIZE;
+	obj->mm.page_sizes.sg = PAGE_SIZE;
 	return 0;
 }
 

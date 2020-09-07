@@ -38,6 +38,7 @@
 #include "i915_sw_fence_work.h"
 #include "i915_trace.h"
 #include "i915_vma.h"
+#include "ttm/i915_ttm.h"
 
 static struct i915_global_vma {
 	struct i915_global base;
@@ -122,11 +123,9 @@ vma_create(struct drm_i915_gem_object *obj,
 	vma->vm = i915_vm_get(vm);
 	vma->ops = &vm->vma_ops;
 	vma->obj = obj;
-	if (obj) {
-		vma->resv = i915_gem_object_resv(obj);
-		vma->size = i915_gem_object_size(obj);
-		size = i915_gem_object_size(obj);
-	}
+	vma->resv = i915_gem_object_resv(obj);
+	vma->size = i915_gem_object_size(obj);
+	size = i915_gem_object_size(obj);
 	vma->display_alignment = I915_GTT_MIN_ALIGNMENT;
 
 	i915_active_init(&vma->active, __i915_vma_active, __i915_vma_retire);
@@ -171,21 +170,19 @@ vma_create(struct drm_i915_gem_object *obj,
 		if (unlikely(overflows_type(vma->size, u32)))
 			goto err_unlock;
 
-		if (obj) {
-			vma->fence_size = i915_gem_fence_size(vm->i915, vma->size,
-							      i915_gem_object_get_tiling(obj),
-							      i915_gem_object_get_stride(obj));
-			if (unlikely(vma->fence_size < vma->size || /* overflow */
-				     vma->fence_size > vm->total))
-				goto err_unlock;
-
-			GEM_BUG_ON(!IS_ALIGNED(vma->fence_size, I915_GTT_MIN_ALIGNMENT));
-			
-			vma->fence_alignment = i915_gem_fence_alignment(vm->i915, vma->size,
-									i915_gem_object_get_tiling(obj),
-									i915_gem_object_get_stride(obj));
-			GEM_BUG_ON(!is_power_of_2(vma->fence_alignment));
-		}
+		vma->fence_size = i915_gem_fence_size(vm->i915, vma->size,
+						      i915_gem_object_get_tiling(obj),
+						      i915_gem_object_get_stride(obj));
+		if (unlikely(vma->fence_size < vma->size || /* overflow */
+			     vma->fence_size > vm->total))
+			goto err_unlock;
+		
+		GEM_BUG_ON(!IS_ALIGNED(vma->fence_size, I915_GTT_MIN_ALIGNMENT));
+		
+		vma->fence_alignment = i915_gem_fence_alignment(vm->i915, vma->size,
+								i915_gem_object_get_tiling(obj),
+								i915_gem_object_get_stride(obj));
+		GEM_BUG_ON(!is_power_of_2(vma->fence_alignment));
 		__set_bit(I915_VMA_GGTT_BIT, __i915_vma_flags(vma));
 	}
 
@@ -460,6 +457,9 @@ void __iomem *i915_vma_pin_iomap(struct i915_vma *vma)
 	void __iomem *ptr;
 	int err;
 
+	if (i915_gem_object_is_ttm(vma->obj)) {
+		return i915_ttm_pin_iomap(vma->obj);
+	}
 	if (!i915_gem_object_is_devmem(vma->obj)) {
 		if (GEM_WARN_ON(!i915_vma_is_map_and_fenceable(vma))) {
 			err = -ENODEV;
@@ -1029,24 +1029,28 @@ int i915_ggtt_pin(struct i915_vma *vma, u32 align, unsigned int flags)
 
 	GEM_BUG_ON(!i915_vma_is_ggtt(vma));
 
-	do {
-		err = i915_vma_pin(vma, 0, align, flags | PIN_GLOBAL);
-		if (err != -ENOSPC) {
-			if (!err) {
-				err = i915_vma_wait_for_bind(vma);
-				if (err)
-					i915_vma_unpin(vma);
+	if (i915_gem_object_is_ttm(vma->obj)) {
+		return i915_ttm_alloc_gtt(&vma->obj->base);
+	} else {
+		do {
+			err = i915_vma_pin(vma, 0, align, flags | PIN_GLOBAL);
+			if (err != -ENOSPC) {
+				if (!err) {
+					err = i915_vma_wait_for_bind(vma);
+					if (err)
+						i915_vma_unpin(vma);
+				}
+				return err;
 			}
-			return err;
-		}
 
-		/* Unlike i915_vma_pin, we don't take no for an answer! */
-		flush_idle_contexts(vm->gt);
-		if (mutex_lock_interruptible(&vm->mutex) == 0) {
-			i915_gem_evict_vm(vm);
-			mutex_unlock(&vm->mutex);
-		}
-	} while (1);
+			/* Unlike i915_vma_pin, we don't take no for an answer! */
+			flush_idle_contexts(vm->gt);
+			if (mutex_lock_interruptible(&vm->mutex) == 0) {
+				i915_gem_evict_vm(vm);
+				mutex_unlock(&vm->mutex);
+			}
+		} while (1);
+	}
 }
 
 static void __vma_close(struct i915_vma *vma, struct intel_gt *gt)

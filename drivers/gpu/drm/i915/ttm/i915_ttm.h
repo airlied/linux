@@ -13,7 +13,7 @@
 #define I915_TTM_BO_INVALID_OFFSET     LONG_MAX
 
 struct drm_syncobj;
-
+int i915_ttm_early_init(struct drm_i915_private *i915);
 int i915_ttm_init(struct drm_i915_private *i915);
 void i915_ttm_fini(struct drm_i915_private *i915);
 
@@ -81,6 +81,7 @@ static inline unsigned i915_ttm_mem_type_to_region(u32 mem_type)
 uint32_t i915_ttm_bo_get_preferred_pin_region(struct drm_i915_private *i915,
 					      uint32_t region);
 
+struct drm_i915_gem_object *i915_ttm_object_create_internal(struct drm_i915_private *i915, unsigned long size);
 int i915_ttm_gem_object_create(struct drm_i915_private *i915, unsigned long size,
 			       int alignment, u32 initial_region,
 			       u64 flags, enum ttm_bo_type type,
@@ -104,12 +105,12 @@ i915_ttm_do_execbuffer(struct drm_device *dev,
 		       struct drm_i915_gem_execbuffer2 *args,
 		       struct drm_i915_gem_exec_object2 *exec);
 
-int i915_ttm_create_bo_pages(struct i915_ttm_bo *bo);
+int i915_ttm_create_bo_pages(struct drm_i915_gem_object *obj);
 
 int i915_ttm_vram_mgr_init(struct drm_i915_private *i915);
 void i915_ttm_vram_mgr_fini(struct drm_i915_private *i915);
 
-int i915_ttm_vram_get_pages(struct i915_ttm_bo *bo);
+int i915_ttm_vram_get_pages(struct drm_i915_gem_object *obj);
 
 int i915_ttm_gtt_mgr_init(struct drm_i915_private *i915);
 void i915_ttm_gtt_mgr_fini(struct drm_i915_private *i915);
@@ -117,7 +118,8 @@ void i915_ttm_gtt_mgr_fini(struct drm_i915_private *i915);
 int i915_ttm_stolen_mgr_init(struct drm_i915_private *i915);
 void i915_ttm_stolen_mgr_fini(struct drm_i915_private *i915);
 
-int i915_ttm_stolen_get_pages(struct i915_ttm_bo *bo);
+int i915_ttm_stolen_get_pages(struct drm_i915_gem_object *obj);
+
 
 struct drm_i915_gem_object *i915_ttm_object_create_region(struct intel_memory_region **placements,
 							  int n_placements,
@@ -128,4 +130,6 @@ static inline struct drm_i915_gem_object *ttm_to_i915_gem(struct ttm_buffer_obje
 {
 	return container_of(tbo, struct drm_i915_gem_object, base);
 }
+
+void __iomem *i915_ttm_pin_iomap(struct drm_i915_gem_object *obj);
 #endif

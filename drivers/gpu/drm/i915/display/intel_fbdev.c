@@ -214,17 +214,15 @@ static int intelfb_create(struct drm_fb_helper *helper,
 
 	wakeref = intel_runtime_pm_get(&dev_priv->runtime_pm);
 
-	if (!dev_priv->use_ttm) {
-		/* Pin the GGTT vma for our access via info->screen_base.
-		 * This also validates that any existing fb inherited from the
-		 * BIOS is suitable for own access.
-		 */
-		vma = intel_pin_and_fence_fb_obj(&ifbdev->fb->base,
-						 &view, false, &flags);
-		if (IS_ERR(vma)) {
-			ret = PTR_ERR(vma);
-			goto out_unlock;
-		}
+	/* Pin the GGTT vma for our access via info->screen_base.
+	 * This also validates that any existing fb inherited from the
+	 * BIOS is suitable for own access.
+	 */
+	vma = intel_pin_and_fence_fb_obj(&ifbdev->fb->base,
+					 &view, false, &flags);
+	if (IS_ERR(vma)) {
+		ret = PTR_ERR(vma);
+		goto out_unlock;
 	}
 	intel_frontbuffer_flush(to_frontbuffer(ifbdev), ORIGIN_DIRTYFB);
 
@@ -244,34 +242,26 @@ static int intelfb_create(struct drm_fb_helper *helper,
 	info->apertures->ranges[0].size = ggtt->mappable_end;
 
 
-	if (vma) {
-		/* Our framebuffer is the entirety of fbdev's system memory */
+	/* Our framebuffer is the entirety of fbdev's system memory */
+	if (vma->obj->base.mem.mem_type == TTM_PL_VRAM)
+		info->fix.smem_start = dev_priv->mm.regions[INTEL_MEMORY_LOCAL]->io_start + (vma->obj->base.mem.start << PAGE_SHIFT);
+	else
 		info->fix.smem_start =
 			(unsigned long)(ggtt->gmadr.start + vma->node.start);
-		info->fix.smem_len = vma->node.size;
+	info->fix.smem_len = vma->node.size;
 
-		vaddr = i915_vma_pin_iomap(vma);
-		if (IS_ERR(vaddr)) {
-			drm_err(&dev_priv->drm,
-				"Failed to remap framebuffer into virtual memory\n");
-			ret = PTR_ERR(vaddr);
-			goto out_unpin;
-		}
-		info->screen_base = vaddr;
-		info->screen_size = vma->node.size;
-		ifbdev->vma = vma;
-		ifbdev->vma_flags = flags;
-	} else {
-		bo = intel_fb_bo(&ifbdev->fb->base);
-
-		if (bo->tbo.mem.mem_type == TTM_PL_VRAM)
-			info->fix.smem_start = dev_priv->mm.regions[INTEL_MEMORY_LOCAL]->io_start + (bo->tbo.mem.start << PAGE_SHIFT);
-		else
-			info->fix.smem_start = (unsigned long)ggtt->gmadr.start + i915_ttm_bo_gpu_offset(bo);
-		info->fix.smem_len = i915_ttm_bo_size(bo);
-		info->screen_base = i915_ttm_bo_kptr(bo);
-		info->screen_size = i915_ttm_bo_size(bo);
+	vaddr = i915_vma_pin_iomap(vma);
+	if (IS_ERR(vaddr)) {
+		drm_err(&dev_priv->drm,
+			"Failed to remap framebuffer into virtual memory\n");
+		ret = PTR_ERR(vaddr);
+		goto out_unpin;
 	}
+
+	info->screen_base = vaddr;
+	info->screen_size = vma->node.size;
+	ifbdev->vma = vma;
+	ifbdev->vma_flags = flags;
 
 	drm_fb_helper_fill_info(info, &ifbdev->helper, sizes);
 

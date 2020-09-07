@@ -822,19 +822,11 @@ int ggtt_set_pages(struct i915_vma *vma)
 
 	GEM_BUG_ON(vma->pages);
 
-	if (vma->obj) {
-		ret = i915_get_ggtt_vma_pages(vma);
-		if (ret)
-			return ret;
-
-		vma->page_sizes = vma->obj->mm.page_sizes;
-	} else {
-		if (!vma->bo->pages)
-			i915_ttm_create_bo_pages(vma->bo);
-		vma->pages = vma->bo->pages;
-		vma->page_sizes = vma->bo->page_sizes;
-	}
-
+	ret = i915_get_ggtt_vma_pages(vma);
+	if (ret)
+		return ret;
+	
+	vma->page_sizes = vma->obj->mm.page_sizes;
 	return 0;
 }
 
@@ -902,6 +894,8 @@ static int gen8_gmch_probe(struct i915_ggtt *ggtt)
 
 	setup_private_pat(ggtt->vm.gt->uncore);
 
+	if (i915->use_ttm)
+		i915_ttm_gtt_mgr_init(i915);
 	return ggtt_probe_common(ggtt, size);
 }
 
@@ -1448,6 +1442,13 @@ i915_get_ggtt_vma_pages(struct i915_vma *vma)
 {
 	int ret;
 
+	if (i915_gem_object_is_ttm(vma->obj)) {
+		ret = i915_ttm_create_bo_pages(vma->obj);
+		if (ret)
+			return ret;
+		vma->pages = vma->obj->mm.pages;
+		return 0;
+	}
 	/*
 	 * The vma->pages are only valid within the lifespan of the borrowed
 	 * obj->mm.pages. When the obj->mm.pages sg_table is regenerated, so

@@ -373,8 +373,7 @@ static int intel_gt_init_scratch(struct intel_gt *gt, unsigned int size)
 	return 0;
 
 err_unref:
-	if (obj)
-		i915_gem_object_put(obj);
+	i915_gem_object_put(obj);
 	return ret;
 }
 

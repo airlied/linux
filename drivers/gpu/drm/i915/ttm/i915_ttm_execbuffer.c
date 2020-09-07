@@ -290,27 +290,27 @@ static int eb_select_context(struct i915_ttm_execbuffer *eb)
 }
 
 static int i915_ttm_cs_bo_validate(struct i915_ttm_execbuffer *eb,
-				   struct i915_ttm_bo *bo)
+				   struct drm_i915_gem_object *obj)
 {
 	struct ttm_operation_ctx ctx = {
 		.interruptible = true,
 		.no_wait_gpu = false,
-		.resv = bo->tbo.base.resv,
+		.resv = obj->base.base.resv,
 		.flags = 0
 	};
 	uint32_t region;
 	int r;
 
-	if (bo->pin_count)
+	if (obj->ttm.pin_count)
 		return 0;
 
-	region = bo->allowed_regions;
+	region = obj->ttm.allowed_regions;
 
 retry:
-	i915_ttm_bo_placement_from_region(bo, region);
-	r = ttm_bo_validate(&bo->tbo, &bo->placement, &ctx);
-	if (unlikely(r == -ENOMEM) && region != bo->allowed_regions) {
-		region = bo->allowed_regions;
+	i915_ttm_bo_placement_from_region(obj, region);
+	r = ttm_bo_validate(&obj->base, &obj->ttm.placement, &ctx);
+	if (unlikely(r == -ENOMEM) && region != obj->ttm.allowed_regions) {
+		region = obj->ttm.allowed_regions;
 		goto retry;
 	}
 	return r;
@@ -322,11 +322,11 @@ static int i915_ttm_list_validate(struct i915_ttm_execbuffer *eb,
 	struct ttm_operation_ctx ctx = { true, false };
 	struct i915_ttm_bo_list_entry *lobj;
 	int r;
-
+	
 	list_for_each_entry(lobj, validated, tv.head) {
-		struct i915_ttm_bo *bo = ttm_to_i915_bo(lobj->tv.bo);
+		struct drm_i915_gem_object *obj = ttm_to_i915_gem(lobj->tv.bo);
 
-		r = i915_ttm_cs_bo_validate(eb, bo);
+		r = i915_ttm_cs_bo_validate(eb, obj);
 		if (r)
 			return r;
 	}

@@ -114,7 +114,9 @@ struct drm_i915_gem_object {
 		struct ttm_placement placement;
 		struct ttm_bo_kmap_obj kmap;
 		u32 preferred_regions;
-		u32 allowed_regions;	
+		u32 allowed_regions;
+		u32 prime_shared_count;
+		u32 pin_count;
 	} ttm;
 	/**
 	 * Whether the object is currently in the GGTT mmap.

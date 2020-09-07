@@ -11,6 +11,7 @@
 #include "i915_trace.h"
 #include "intel_gt.h"
 #include "intel_gtt.h"
+#include "ttm/i915_ttm.h"
 
 struct drm_i915_gem_object *alloc_pt_lmem(struct i915_address_space *vm, int sz)
 {
@@ -22,6 +23,9 @@ struct drm_i915_gem_object *alloc_pt_dma(struct i915_address_space *vm, int sz)
 	if (I915_SELFTEST_ONLY(should_fail(&vm->fault_attr, 1)))
 		i915_gem_shrink_all(vm->i915);
 
+	if (vm->i915->use_ttm) {
+		return i915_ttm_object_create_internal(vm->i915, sz);
+	}
 	return i915_gem_object_create_internal(vm->i915, sz);
 }
 
@@ -140,6 +144,9 @@ void *__px_vaddr(struct drm_i915_gem_object *p, bool *needs_flush)
 	enum i915_map_type type;
 	void *vaddr;
 
+	if (i915_gem_object_is_ttm(p)) {
+		return i915_ttm_bo_kptr(p);
+	}
 	GEM_BUG_ON(!i915_gem_object_has_pages(p));
 
 	vaddr = page_unpack_bits(p->mm.mapping, &type);

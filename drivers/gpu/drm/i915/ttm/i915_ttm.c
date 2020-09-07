@@ -29,7 +29,7 @@ static void i915_ttm_evict_flags(struct ttm_buffer_object *tbo,
 				struct ttm_placement *placement)
 {
 	struct drm_i915_private *i915 = to_i915_ttm_dev(tbo->bdev);
-	struct i915_ttm_bo *bo;
+	struct drm_i915_gem_object *obj;
 	static const struct ttm_place placements = {
 		.fpfn = 0,
 		.lpfn = 0,
@@ -52,8 +52,7 @@ static void i915_ttm_evict_flags(struct ttm_buffer_object *tbo,
 		return;
 	}
 
-
-	bo = ttm_to_i915_bo(tbo);
+	obj = ttm_to_i915_gem(tbo);
 	switch (tbo->mem.mem_type) {
 	case TTM_PL_VRAM:
 	case I915_TTM_PL_STOLEN:
@@ -61,7 +60,7 @@ static void i915_ttm_evict_flags(struct ttm_buffer_object *tbo,
 		break;
 	}
 
-	*placement = bo->placement;
+	*placement = obj->ttm.placement;
 }
 
 
@@ -76,7 +75,7 @@ static void i915_ttm_evict_flags(struct ttm_buffer_object *tbo,
  */
 static int i915_ttm_verify_access(struct ttm_buffer_object *tbo, struct file *filp)
 {
-	struct i915_ttm_bo *bo = ttm_to_i915_bo(tbo);
+	struct drm_i915_gem_object *obj = ttm_to_i915_gem(tbo);
 
 //	if (amdgpu_ttm_tt_get_usermm(bo->ttm))
 //		return -EPERM;
@@ -148,12 +147,11 @@ static int i915_ttm_bo_move(struct ttm_buffer_object *tbo, bool evict,
 			    struct ttm_resource *new_mem)
 {
 	struct ttm_resource *old_mem = &tbo->mem;
-	struct i915_ttm_bo *bo;
+	struct drm_i915_gem_object *obj = ttm_to_i915_gem(tbo);	
 	struct drm_i915_private *i915;
 	int r;
 
-	bo = ttm_to_i915_bo(tbo);
-	if (WARN_ON_ONCE(bo->pin_count > 0))
+	if (WARN_ON_ONCE(obj->ttm.pin_count > 0))
 		return -EINVAL;
 
 	i915 = to_i915_ttm_dev(tbo->bdev);
@@ -261,8 +259,7 @@ static unsigned long i915_ttm_io_mem_pfn(struct ttm_buffer_object *bo,
 
 struct i915_ttm_tt {
 	struct ttm_dma_tt ttm;
-	struct i915_ttm_bo *bo;
-	struct drm_gem_object *gobj;
+	struct drm_i915_gem_object *obj;
 	struct i915_vma *vma;
 	uint64_t offset;
 };
@@ -296,7 +293,7 @@ static void i915_ttm_backend_unbind(struct ttm_tt *ttm)
 	struct i915_ttm_tt *gtt = (struct i915_ttm_tt *)ttm;
 	if (ttm->page_flags & TTM_PAGE_FLAG_SG)
 		return;
-	//	i915_vma_unpin(gtt->vma);
+//	i915_vma_unpin(gtt->vma);
 }
 
 static void i915_ttm_backend_destroy(struct ttm_tt *ttm)
@@ -304,7 +301,8 @@ static void i915_ttm_backend_destroy(struct ttm_tt *ttm)
 
 	struct i915_ttm_tt *gtt = (void *)ttm;
 
-	i915_vma_put(gtt->vma);
+	if (gtt->vma)
+		i915_vma_put(gtt->vma);
 	ttm_dma_tt_fini(&gtt->ttm);
 	kfree(gtt);
 }
@@ -319,7 +317,7 @@ static struct ttm_tt *i915_ttm_tt_create(struct ttm_buffer_object *tbo,
 					 uint32_t page_flags)
 {
 	struct i915_ttm_tt *gtt;
-	struct i915_ttm_bo *bo = ttm_to_i915_bo(tbo);
+	struct drm_i915_gem_object *obj = ttm_to_i915_gem(tbo);
 	struct drm_i915_private *i915 = to_i915_ttm_dev(tbo->bdev);
 
 	gtt = kzalloc(sizeof(struct i915_ttm_tt), GFP_KERNEL);
@@ -327,13 +325,10 @@ static struct ttm_tt *i915_ttm_tt_create(struct ttm_buffer_object *tbo,
 		return NULL;
 
 	gtt->ttm.ttm.func = &i915_ttm_backend_func;
-	gtt->bo = bo;
-
-//	gtt->vma = i915_vma_instance(obj,
-//TODO					 &i915->ggtt.vm, NULL);
+	gtt->obj = obj;
 
 	/* flags to disallows mapping */
-	if (bo->allowed_regions == REGION_STOLEN_SMEM)
+	if (obj->ttm.allowed_regions == REGION_STOLEN_SMEM)
 		page_flags |= TTM_PAGE_FLAG_SG;
 
 	if (ttm_sg_tt_init(&gtt->ttm, tbo, page_flags)) {
@@ -393,21 +388,22 @@ static struct ttm_bo_driver i915_ttm_bo_driver = {
 #endif
 };
 
-int i915_ttm_init(struct drm_i915_private *i915)
+int i915_ttm_early_init(struct drm_i915_private *i915)
 {
 	int r;
-	uint64_t vram_size = 0;
-
 	r = ttm_bo_device_init(&i915->ttm_mman.bdev,
 			       &i915_ttm_bo_driver,
 			       i915->drm.anon_inode->i_mapping,
 			       i915->drm.vma_offset_manager,
 			       false);
+	return r;
+}
 
-	if (r) {
-		DRM_ERROR("failed initialiseing TTM(%d)\n", r);
-		return r;
-	}
+int i915_ttm_init(struct drm_i915_private *i915)
+{
+	int r;
+	uint64_t vram_size = 0;
+
 	i915->ttm_mman.initialized = true;
 
 	if (HAS_LMEM(i915)) {
@@ -427,7 +423,7 @@ int i915_ttm_init(struct drm_i915_private *i915)
 							    i915->ggtt.mappable_end);
 #endif
 
-	r = i915_ttm_gtt_mgr_init(i915);
+//	r = i915_ttm_gtt_mgr_init(i915);
 
 	printk("creating stolen size %llu\n", i915->stolen_usable_size);
 	if (i915->stolen_usable_size) {
@@ -552,12 +548,12 @@ bool i915_ttm_bo_is_i915_ttm_bo(struct ttm_buffer_object *bo)
  * Sets buffer's placement according to requested region and the buffer's
  * flags.
  */
-void i915_ttm_bo_placement_from_region(struct i915_ttm_bo *bo, u32 region)
+void i915_ttm_bo_placement_from_region(struct drm_i915_gem_object *obj, u32 region)
 {
-	struct drm_i915_private *i915 = to_i915_ttm_dev(bo->tbo.bdev);
-	struct ttm_placement *placement = &bo->placement;
-	struct ttm_place *places = bo->placements;
-	u64 flags = bo->flags;
+	struct drm_i915_private *i915 = obj_to_i915(obj);
+	struct ttm_placement *placement = &obj->ttm.placement;
+	struct ttm_place *places = obj->ttm.placements;
+	u64 flags = 0;//bo->flags;
 	u32 c = 0;
 
 	if (region & REGION_STOLEN_SMEM) {
@@ -637,7 +633,7 @@ void i915_ttm_bo_placement_from_region(struct i915_ttm_bo *bo, u32 region)
  * Returns:
  * 0 for success or a negative error code on failure.
  */
-int i915_ttm_bo_kmap(struct i915_ttm_bo *bo, void **ptr)
+int i915_ttm_bo_kmap(struct drm_i915_gem_object *obj, void **ptr)
 {
 	void *kptr;
 	long r;
@@ -645,24 +641,24 @@ int i915_ttm_bo_kmap(struct i915_ttm_bo *bo, void **ptr)
 //	if (bo->flags & I915_TTM_GEM_CREATE_NO_CPU_ACCESS)
 //		return -EPERM;
 
-	kptr = i915_ttm_bo_kptr(bo);
+	kptr = i915_ttm_bo_kptr(obj);
 	if (kptr) {
 		if (ptr)
 			*ptr = kptr;
 		return 0;
 	}
 
-	r = dma_resv_wait_timeout_rcu(bo->tbo.base.resv, false, false,
+	r = dma_resv_wait_timeout_rcu(obj->base.base.resv, false, false,
 						MAX_SCHEDULE_TIMEOUT);
 	if (r < 0)
 		return r;
 
-	r = ttm_bo_kmap(&bo->tbo, 0, bo->tbo.num_pages, &bo->kmap);
+	r = ttm_bo_kmap(&obj->base, 0, obj->base.num_pages, &obj->ttm.kmap);
 	if (r)
 		return r;
 
 	if (ptr)
-		*ptr = i915_ttm_bo_kptr(bo);
+		*ptr = i915_ttm_bo_kptr(obj);
 
 	return 0;
 }
@@ -676,11 +672,11 @@ int i915_ttm_bo_kmap(struct i915_ttm_bo *bo, void **ptr)
  * Returns:
  * the virtual address of a buffer object area.
  */
-void *i915_ttm_bo_kptr(struct i915_ttm_bo *bo)
+void *i915_ttm_bo_kptr(struct drm_i915_gem_object *obj)
 {
 	bool is_iomem;
 
-	return ttm_kmap_obj_virtual(&bo->kmap, &is_iomem);
+	return ttm_kmap_obj_virtual(&obj->ttm.kmap, &is_iomem);
 }
 
 /**
@@ -689,10 +685,10 @@ void *i915_ttm_bo_kptr(struct i915_ttm_bo *bo)
  *
  * Unmaps a kernel map set up by i915_ttm_bo_kmap().
  */
-void i915_ttm_bo_kunmap(struct i915_ttm_bo *bo)
+void i915_ttm_bo_kunmap(struct drm_i915_gem_object *obj)
 {
-	if (bo->kmap.bo)
-		ttm_bo_kunmap(&bo->kmap);
+	if (obj->ttm.kmap.bo)
+		ttm_bo_kunmap(&obj->ttm.kmap);
 }
 
 /**
@@ -753,10 +749,10 @@ void i915_ttm_bo_unref(struct i915_ttm_bo **bo)
  * Returns:
  * 0 for success or a negative error code on failure.
  */
-int i915_ttm_bo_pin_restricted(struct i915_ttm_bo *bo, u32 region,
+int i915_ttm_bo_pin_restricted(struct drm_i915_gem_object *obj, u32 region,
 			       u64 min_offset, u64 max_offset)
 {
-	struct drm_i915_private *i915 = to_i915_ttm_dev(bo->tbo.bdev);
+	struct drm_i915_private *i915 = obj_to_i915(obj);
 	struct ttm_operation_ctx ctx = { false, false };
 	int r, i;
 
@@ -764,7 +760,7 @@ int i915_ttm_bo_pin_restricted(struct i915_ttm_bo *bo, u32 region,
 		return -EINVAL;
 
 	/* A shared bo cannot be migrated to VRAM */
-	if (bo->prime_shared_count) {
+	if (obj->ttm.prime_shared_count) {
 		if (region & REGION_SMEM)
 		        region = REGION_SMEM;
 		else
@@ -776,13 +772,13 @@ int i915_ttm_bo_pin_restricted(struct i915_ttm_bo *bo, u32 region,
 	 */
 	region = i915_ttm_bo_get_preferred_pin_region(i915, region);
 
-	if (bo->pin_count) {
-		uint32_t mem_type = bo->tbo.mem.mem_type;
+	if (obj->ttm.pin_count) {
+		uint32_t mem_type = obj->base.mem.mem_type;
 
 		if (!(region & i915_ttm_mem_type_to_region(mem_type)))
 			return -EINVAL;
 
-		bo->pin_count++;
+		obj->ttm.pin_count++;
 
 		if (max_offset != 0) {
 //			u64 region_start = bo->tbo.bdev->man[mem_type].gpu_offset;
@@ -793,32 +789,32 @@ int i915_ttm_bo_pin_restricted(struct i915_ttm_bo *bo, u32 region,
 		return 0;
 	}
 
-	if (bo->tbo.base.import_attach)
-		dma_buf_pin(bo->tbo.base.import_attach);
+	if (obj->base.base.import_attach)
+		dma_buf_pin(obj->base.base.import_attach);
 
-	bo->flags |= I915_TTM_CREATE_VRAM_CONTIGUOUS;
-	i915_ttm_bo_placement_from_region(bo, region);
-	for (i = 0; i < bo->placement.num_placement; i++) {
+//	bo->flags |= I915_TTM_CREATE_VRAM_CONTIGUOUS;
+	i915_ttm_bo_placement_from_region(obj, region);
+	for (i = 0; i < obj->ttm.placement.num_placement; i++) {
 		unsigned fpfn, lpfn;
 
 		fpfn = min_offset >> PAGE_SHIFT;
 		lpfn = max_offset >> PAGE_SHIFT;
 
-		if (fpfn > bo->placements[i].fpfn)
-			bo->placements[i].fpfn = fpfn;
-		if (!bo->placements[i].lpfn ||
-		    (lpfn && lpfn < bo->placements[i].lpfn))
-			bo->placements[i].lpfn = lpfn;
-		bo->placements[i].flags |= TTM_PL_FLAG_NO_EVICT;
+		if (fpfn > obj->ttm.placements[i].fpfn)
+			obj->ttm.placements[i].fpfn = fpfn;
+		if (!obj->ttm.placements[i].lpfn ||
+		    (lpfn && lpfn < obj->ttm.placements[i].lpfn))
+			obj->ttm.placements[i].lpfn = lpfn;
+		obj->ttm.placements[i].flags |= TTM_PL_FLAG_NO_EVICT;
 	}
 
-	r = ttm_bo_validate(&bo->tbo, &bo->placement, &ctx);
+	r = ttm_bo_validate(&obj->base, &obj->ttm.placement, &ctx);
 	if (unlikely(r)) {
-		dev_err(i915->drm.dev, "%p pin failed\n", bo);
+		dev_err(i915->drm.dev, "%p pin failed\n", obj);
 		goto error;
 	}
 
-	bo->pin_count = 1;
+	obj->ttm.pin_count = 1;
 #if 0
 	region = i915_ttm_mem_type_to_region(bo->tbo.mem.mem_type);
 	if (region == I915_TTM_GEM_REGION_VRAM) {
@@ -845,9 +841,9 @@ error:
  * Returns:
  * 0 for success or a negative error code on failure.
  */
-int i915_ttm_bo_pin(struct i915_ttm_bo *bo, u32 region)
+int i915_ttm_bo_pin(struct drm_i915_gem_object *obj, u32 region)
 {
-	return i915_ttm_bo_pin_restricted(bo, region, 0, 0);
+	return i915_ttm_bo_pin_restricted(obj, region, 0, 0);
 }
 
 /**
@@ -860,32 +856,32 @@ int i915_ttm_bo_pin(struct i915_ttm_bo *bo, u32 region)
  * Returns:
  * 0 for success or a negative error code on failure.
  */
-int i915_ttm_bo_unpin(struct i915_ttm_bo *bo)
+int i915_ttm_bo_unpin(struct drm_i915_gem_object *obj)
 {
-	struct drm_i915_private *i915 = to_i915_ttm_dev(bo->tbo.bdev);
+	struct drm_i915_private *i915 = obj_to_i915(obj);
 	struct ttm_operation_ctx ctx = { false, false };
 	int r, i;
 
-	if (WARN_ON_ONCE(!bo->pin_count)) {
-		dev_warn(i915->drm.dev, "%p unpin not necessary\n", bo);
+	if (WARN_ON_ONCE(!obj->ttm.pin_count)) {
+		dev_warn(i915->drm.dev, "%p unpin not necessary\n", obj);
 		return 0;
 	}
-	bo->pin_count--;
-	if (bo->pin_count)
+	obj->ttm.pin_count--;
+	if (obj->ttm.pin_count)
 		return 0;
 
-//	i915_ttm_bo_subtract_pin_size(bo);
+///	i915_ttm_bo_subtract_pin_size(bo);
 
-//	if (bo->tbo.base.import_attach)
-//		dma_buf_unpin(bo->tbo.base.import_attach);
+	if (obj->base.base.import_attach)
+		dma_buf_unpin(obj->base.base.import_attach);
 
-	for (i = 0; i < bo->placement.num_placement; i++) {
-		bo->placements[i].lpfn = 0;
-		bo->placements[i].flags &= ~TTM_PL_FLAG_NO_EVICT;
+	for (i = 0; i < obj->ttm.placement.num_placement; i++) {
+		obj->ttm.placements[i].lpfn = 0;
+		obj->ttm.placements[i].flags &= ~TTM_PL_FLAG_NO_EVICT;
 	}
-	r = ttm_bo_validate(&bo->tbo, &bo->placement, &ctx);
+	r = ttm_bo_validate(&obj->base, &obj->ttm.placement, &ctx);
 	if (unlikely(r))
-		dev_err(i915->drm.dev, "%p validate failed for unpin\n", bo);
+		dev_err(i915->drm.dev, "%p validate failed for unpin\n", obj);
 
 	return r;
 }
@@ -980,19 +976,22 @@ i915_ttm_mmap_offset_ioctl(struct drm_file *file,
 }
 
 
-int i915_ttm_create_bo_pages(struct i915_ttm_bo *bo)
+int i915_ttm_create_bo_pages(struct drm_i915_gem_object *obj)
 {
-	struct drm_i915_private *i915 = to_i915_ttm_dev(bo->tbo.bdev);
+	struct drm_i915_private *i915 = obj_to_i915(obj);
 	/* create pages for LMEM bindings here */
 	struct scatterlist *sg;
-	struct ttm_resource *mem = &bo->tbo.mem;
+	struct ttm_resource *mem = &obj->base.mem;
 	unsigned int sg_page_sizes = 0;
 	int ret = 0;
 
+	if (obj->mm.pages)
+		return 0;
 	if (mem->mem_type == I915_TTM_PL_STOLEN) {
-		ret = i915_ttm_stolen_get_pages(bo);
+		ret = i915_ttm_stolen_get_pages(obj);
 	} else if (mem->mem_type == TTM_PL_TT || mem->mem_type == TTM_PL_SYSTEM) {
 		struct ttm_dma_tt *ttm;
+		unsigned long supported = INTEL_INFO(i915)->page_sizes;
 		dma_addr_t *pages_addr;
 		int i;
 		struct drm_mm_node *nodes = mem->mm_node;
@@ -1004,7 +1003,7 @@ int i915_ttm_create_bo_pages(struct i915_ttm_bo *bo)
 		st = kmalloc(sizeof(*st), GFP_KERNEL);
 		if (!st)
 			return -ENOMEM;
-		ttm = container_of(bo->tbo.ttm, struct ttm_dma_tt, ttm);
+		ttm = container_of(obj->base.ttm, struct ttm_dma_tt, ttm);
 		pages_addr = ttm->dma_address;
 
 		sg_alloc_table_from_pages(st, ttm->ttm.pages, ttm->ttm.num_pages, 0,
@@ -1017,9 +1016,12 @@ int i915_ttm_create_bo_pages(struct i915_ttm_bo *bo)
 			sg_dma_address(sgx) = ttm->dma_address[count];
 			count += __sg_page_count(sgx);
 		}
-		bo->pages = st;		
+		obj->mm.pages = st;
+
+		obj->mm.page_sizes.sg = PAGE_SIZE;
+
 	} else {
-		ret = i915_ttm_vram_get_pages(bo);
+		ret = i915_ttm_vram_get_pages(obj);
 	}
 
 	return ret;
@@ -1048,6 +1050,12 @@ int i915_ttm_alloc_gtt(struct ttm_buffer_object *tbo)
 		start = i915_ttm_vram_obj_get_gtt_offset(&tbo->mem);
 	else
 		start = tbo->mem.start;
+
+
+	if (!gtt->vma)
+		gtt->vma = i915_vma_instance(gtt->obj,
+					     &i915->ggtt.vm, NULL);
+		
 	if (start != I915_TTM_BO_INVALID_OFFSET) {
 		return i915_vma_pin(gtt->vma, 0, 0, map_flag | PIN_OFFSET_FIXED | PIN_GLOBAL | (start << PAGE_SHIFT));
 	}
@@ -1176,12 +1184,47 @@ void i915_ttm_bo_placement_from_mrs(struct drm_i915_gem_object *obj,
 	placement->busy_placement = places;
 }
 
+static const struct drm_i915_gem_object_ops ttm_ops;
+
+struct drm_i915_gem_object *i915_ttm_object_create_internal(struct drm_i915_private *i915, unsigned long size)
+{
+	struct drm_i915_gem_object *obj;
+	static struct lock_class_key lock_class;
+	int r;
+	obj = i915_gem_object_alloc();
+	if (!obj)
+		return ERR_PTR(-ENOMEM);
+	drm_gem_private_object_init(&i915->drm, &obj->base.base, size);
+	i915_gem_object_init(obj, &ttm_ops, &lock_class);
+	
+	i915_ttm_bo_placement_from_region(obj, REGION_SMEM);
+	{
+		struct ttm_operation_ctx ctx = {
+			.interruptible = false,
+			.no_wait_gpu = false,
+			.resv = NULL,
+			.flags = 0,
+		};
+		size_t acc_size;
+
+		acc_size = ttm_bo_dma_acc_size(&i915->ttm_mman.bdev, size, sizeof(struct drm_i915_gem_object));
+		r = ttm_bo_init_reserved(&i915->ttm_mman.bdev, &obj->base, size, ttm_bo_type_kernel,
+					 &obj->ttm.placement, 0, &ctx, acc_size,
+					 NULL, 0, &i915_ttm_bo_destroy);
+	}
+	if (r != 0) {
+		kfree(obj);
+		return ERR_PTR(r);
+	}
+	return obj;
+}
 
 struct drm_i915_gem_object *i915_ttm_object_create_region(struct intel_memory_region **placements,
 							  int n_placements,
 							  enum ttm_bo_type type,
 							  unsigned long size)
 {
+	static struct lock_class_key lock_class;	
 	struct drm_i915_private *i915;
 	struct drm_i915_gem_object *obj;
 	unsigned long page_align = 0;
@@ -1195,8 +1238,8 @@ struct drm_i915_gem_object *i915_ttm_object_create_region(struct intel_memory_re
 	if (!obj)
 		return ERR_PTR(-ENOMEM);
 
-	
 	drm_gem_private_object_init(&i915->drm, &obj->base.base, size);
+	i915_gem_object_init(obj, &ttm_ops, &lock_class);
 	i915_ttm_bo_placement_from_mrs(obj, placements, n_placements);
 	{
 		struct ttm_operation_ctx ctx = {
@@ -1210,13 +1253,25 @@ struct drm_i915_gem_object *i915_ttm_object_create_region(struct intel_memory_re
 		acc_size = ttm_bo_dma_acc_size(&i915->ttm_mman.bdev, size, sizeof(struct drm_i915_gem_object));
 		r = ttm_bo_init_reserved(&i915->ttm_mman.bdev, &obj->base, size, type,
 					 &obj->ttm.placement, page_align, &ctx, acc_size,
-					 NULL, 0, &i915_ttm_bo_destroy);
+					 NULL, obj->base.base.resv, &i915_ttm_bo_destroy);
 	}
 	if (r != 0) {
 		kfree(obj);
 		return ERR_PTR(r);
 	}
+	ttm_bo_unreserve(&obj->base);
 	return obj;
 
 
+}
+
+void __iomem *i915_ttm_pin_iomap(struct drm_i915_gem_object *obj)
+{
+	void *vaddr;
+	int ret;
+
+	ret = i915_ttm_bo_kmap(obj, &vaddr);
+	if (ret)
+		return ERR_PTR(ret);
+	return vaddr;
 }

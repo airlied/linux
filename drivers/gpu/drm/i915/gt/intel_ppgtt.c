@@ -295,15 +295,10 @@ int ppgtt_set_pages(struct i915_vma *vma)
 {
 	GEM_BUG_ON(vma->pages);
 
-	if (vma->obj) {
-		vma->pages = vma->obj->mm.pages;
-		vma->page_sizes = vma->obj->mm.page_sizes;
-	} else {
-		if (!vma->bo->pages)
-			i915_ttm_create_bo_pages(vma->bo);
-		vma->pages = vma->bo->pages;
-		vma->page_sizes = vma->bo->page_sizes;
-	}
+	if (i915_gem_object_is_ttm(vma->obj))
+	    i915_ttm_create_bo_pages(vma->obj);
+	vma->pages = vma->obj->mm.pages;
+	vma->page_sizes = vma->obj->mm.page_sizes;
 
 	return 0;
 }
