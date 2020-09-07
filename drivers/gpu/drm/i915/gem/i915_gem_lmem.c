@@ -247,6 +247,9 @@ bool i915_gem_object_is_devmem(struct drm_i915_gem_object *obj)
 {
 	struct intel_memory_region *region = obj->mm.region;
 
+	if (i915_gem_object_is_ttm(obj)) {
+		return obj->base.mem.mem_type == TTM_PL_VRAM;
+	}
 	return region && region->is_devmem;
 }
 

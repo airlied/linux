@@ -16015,31 +16015,17 @@ intel_prepare_plane_fb(struct drm_plane *_plane,
 	if (!obj)
 		return 0;
 
-	if (0) {
-#if 0
-		struct i915_ttm_bo *bo = intel_fb_bo(new_plane_state->hw.fb);
+	ret = i915_gem_object_pin_pages(obj);
+	if (ret)
+		return ret;
 
-		ret = i915_ttm_bo_pin(bo, bo->preferred_regions);
-		if (ret)
-			return ret;
+	ret = intel_plane_pin_fb(new_plane_state);
 
-		ret = i915_ttm_alloc_gtt(&bo->tbo);
-		new_plane_state->gpu_offset = i915_ttm_bo_gpu_offset(bo);
-#endif
-	} else {
-		ret = i915_gem_object_pin_pages(obj);
-		if (ret)
-			return ret;
-
-		ret = intel_plane_pin_fb(new_plane_state);
-
-		i915_gem_object_unpin_pages(obj);
-		if (ret)
-			return ret;
-		fb_obj_bump_render_priority(obj);
-		i915_gem_object_flush_frontbuffer(obj, ORIGIN_DIRTYFB);
-	}
-
+	i915_gem_object_unpin_pages(obj);
+	if (ret)
+		return ret;
+	fb_obj_bump_render_priority(obj);
+	i915_gem_object_flush_frontbuffer(obj, ORIGIN_DIRTYFB);
 
 	if (!new_plane_state->uapi.fence) { /* implicit fencing */
 		struct dma_fence *fence;
@@ -16284,20 +16270,9 @@ intel_legacy_cursor_update(struct drm_plane *_plane,
 	if (ret)
 		goto out_free;
 
-	if (0) {//dev_priv->use_ttm) {
-#if 0
-		struct i915_ttm_bo *bo = intel_fb_bo(new_plane_state->hw.fb);
-		ret = i915_ttm_bo_pin(bo, bo->preferred_regions);
-		if (ret)
-			goto out_free;
-		ret = i915_ttm_alloc_gtt(&bo->tbo);
-		new_plane_state->gpu_offset = i915_ttm_bo_gpu_offset(bo);
-#endif
-	} else {
-		ret = intel_plane_pin_fb(new_plane_state);
-		if (ret)
-			goto out_free;
-	}
+	ret = intel_plane_pin_fb(new_plane_state);
+	if (ret)
+		goto out_free;
 
 	intel_frontbuffer_flush(to_intel_frontbuffer(new_plane_state->hw.fb),
 				ORIGIN_FLIP);

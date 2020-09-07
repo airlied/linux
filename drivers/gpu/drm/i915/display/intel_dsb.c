@@ -264,7 +264,6 @@ void intel_dsb_prepare(struct intel_crtc_state *crtc_state)
 	struct drm_i915_private *i915 = to_i915(crtc->base.dev);
 	struct intel_dsb *dsb;
 	struct drm_i915_gem_object *obj;
-	struct i915_ttm_bo *bo = NULL;	
 	struct i915_vma *vma;
 	u32 *buf;
 	intel_wakeref_t wakeref;
@@ -288,7 +287,7 @@ void intel_dsb_prepare(struct intel_crtc_state *crtc_state)
 		obj = i915_gem_object_create_lmem(i915, DSB_BUF_SIZE, 0);
 	else
 		obj = i915_gem_object_create_internal(i915, DSB_BUF_SIZE);
-	
+
 	if (IS_ERR(obj)) {
 		drm_err(&i915->drm, "Gem object creation failed\n");
 		kfree(dsb);

@@ -18,9 +18,8 @@ static void i915_ttm_bo_list_free(struct kref *ref)
 	struct i915_ttm_bo_list_entry *e;
 
 	i915_ttm_bo_list_for_each_entry(e, list) {
-		struct i915_ttm_bo *bo = ttm_to_i915_bo(e->tv.bo);
-
-		i915_ttm_bo_unref(&bo);
+		struct drm_i915_gem_object *obj = ttm_to_i915_gem(e->tv.bo);
+		i915_gem_object_put(obj);		
 	}
 
 	call_rcu(&list->rhead, i915_ttm_bo_list_free_rcu);
@@ -84,35 +83,31 @@ int i915_ttm_bo_list_create(struct drm_i915_private *i915,
 
 	for (i = 0; i < num_entries; ++i) {
 		struct i915_ttm_bo_list_entry *entry;
-		struct drm_gem_object *gobj;
-		struct i915_ttm_bo *bo;
+		struct drm_i915_gem_object *obj;
 
-		gobj = drm_gem_object_lookup(file, exec[i].handle);
-		if (!gobj) {
+		obj = i915_gem_object_lookup(file, exec[i].handle);
+		if (!obj) {
 			r = -ENOENT;
 			goto error_free;
 		}
 
-		bo = i915_ttm_bo_ref(ttm_gem_to_i915_bo(gobj));
-		drm_gem_object_put(gobj);
-
 		entry = &array[last_entry++];
 
 		entry->user_flags = exec[i].flags;
-		entry->tv.bo = &bo->tbo;
+		entry->tv.bo = &obj->base;
 
 		exec[i].offset = gen8_noncanonical_addr(exec[i].offset);
 
 		entry->pin_flags = eb_pin_flags(&exec[i], EXEC_OBJECT_PINNED | EXEC_OBJECT_SUPPORTS_48B_ADDRESS);
-		total_size += i915_ttm_bo_size(bo);
+		total_size += i915_gem_object_size(obj);
 	}
 	list->num_entries = num_entries;
 	*result = list;
 	return 0;
 error_free:
 	for (i = 0; i < last_entry; ++i) {
-		struct i915_ttm_bo *bo = ttm_to_i915_bo(array[i].tv.bo);
-		i915_ttm_bo_unref(&bo);
+		struct drm_i915_gem_object *obj = ttm_to_i915_gem(array[i].tv.bo);
+		i915_gem_object_put(obj);
 	}
 	kvfree(list);
 	return r;
@@ -129,8 +124,6 @@ void i915_ttm_bo_list_get_list(struct i915_ttm_bo_list *list,
 	unsigned i;
 
 	i915_ttm_bo_list_for_each_entry(e, list) {
-		struct i915_ttm_bo *bo = ttm_to_i915_bo(e->tv.bo);
-
 		list_add_tail(&e->tv.head, validated);
 	}
 }

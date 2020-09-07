@@ -121,7 +121,6 @@ static int intelfb_alloc(struct drm_fb_helper *helper,
 	struct drm_i915_private *dev_priv = to_i915(dev);
 	struct drm_mode_fb_cmd2 mode_cmd = {};
 	struct drm_i915_gem_object *obj = NULL;
-	struct i915_ttm_bo *bo = NULL;
 	int size;
 
 	/* we don't do packed 24bpp */
@@ -181,7 +180,6 @@ static int intelfb_create(struct drm_fb_helper *helper,
 	intel_wakeref_t wakeref;
 	struct fb_info *info;
 	struct i915_vma *vma = NULL;
-	struct i915_ttm_bo *bo = NULL;
 	unsigned long flags = 0;
 	bool prealloc = false;
 	void __iomem *vaddr;
@@ -269,14 +267,14 @@ static int intelfb_create(struct drm_fb_helper *helper,
 	 * If the object is stolen however, it will be full of whatever
 	 * garbage was left in there.
 	 */
-	if (((vma && vma->obj->stolen) || HAS_LMEM(dev_priv)) && !prealloc)
+	if ((vma->obj->stolen || HAS_LMEM(dev_priv)) && !prealloc)
 		memset_io(info->screen_base, 0, info->screen_size);
 
 	/* Use default scratch pixmap (info->pixmap.flags = FB_PIXMAP_SYSTEM) */
 
 	drm_dbg_kms(&dev_priv->drm, "allocated %dx%d fb: 0x%08x\n",
 		    ifbdev->fb->base.width, ifbdev->fb->base.height,
-		    vma ? i915_ggtt_offset(vma) : i915_ttm_bo_gpu_offset(bo));
+		    i915_ggtt_offset(vma));
 
 
 	intel_runtime_pm_put(&dev_priv->runtime_pm, wakeref);
@@ -284,8 +282,7 @@ static int intelfb_create(struct drm_fb_helper *helper,
 	return 0;
 
 out_unpin:
-	if (vma)
-		intel_unpin_fb_vma(vma, flags);
+	intel_unpin_fb_vma(vma, flags);
 out_unlock:
 	intel_runtime_pm_put(&dev_priv->runtime_pm, wakeref);
 	return ret;

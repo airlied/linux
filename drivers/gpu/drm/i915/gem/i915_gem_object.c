@@ -112,10 +112,6 @@ void i915_gem_close_object(struct drm_gem_object *gem, struct drm_file *file)
 	struct i915_lut_handle *lut, *ln;
 	LIST_HEAD(close);
 
-	if (i915->use_ttm) {
-		i915_ttm_gem_object_close(gem, file);
-		return;
-	}
 	spin_lock(&obj->lut_lock);
 	list_for_each_entry_safe(lut, ln, &obj->lut_list, obj_link) {
 		struct i915_gem_context *ctx = lut->ctx;
@@ -277,9 +273,8 @@ void i915_gem_free_object(struct drm_gem_object *gem_obj)
 	struct drm_i915_gem_object *obj = to_intel_bo(gem_obj);
 	struct drm_i915_private *i915 = to_i915(obj_to_dev(obj));
 
-	if (i915->use_ttm) {
-		i915_ttm_gem_object_free(gem_obj);
-		return;
+	if (i915_gem_object_is_ttm(obj)) {
+
 	}
 		
 	GEM_BUG_ON(i915_gem_object_is_framebuffer(obj));

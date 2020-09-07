@@ -642,7 +642,6 @@ static int pin_ggtt_status_page(struct intel_engine_cs *engine,
 static int init_status_page(struct intel_engine_cs *engine)
 {
 	struct drm_i915_gem_object *obj;
-	struct i915_ttm_bo *bo = NULL;
 	struct i915_vma *vma;
 	void *vaddr;
 	int ret;

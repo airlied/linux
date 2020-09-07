@@ -111,10 +111,6 @@ static inline bool i915_vma_is_closed(const struct i915_vma *vma)
 
 static inline u32 i915_ggtt_offset(const struct i915_vma *vma)
 {
-  //	if (vma->bo) {
-	  //TODO
-  //		return i915_ttm_bo_gpu_offset(vma->bo);
-  //	}
 	GEM_BUG_ON(!i915_vma_is_ggtt(vma));
 	GEM_BUG_ON(!drm_mm_node_allocated(&vma->node));
 	GEM_BUG_ON(upper_32_bits(vma->node.start));

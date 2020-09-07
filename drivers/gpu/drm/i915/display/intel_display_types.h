@@ -522,7 +522,6 @@ struct intel_plane_state {
 
 	struct i915_ggtt_view view;
 	struct i915_vma *vma;
-	uint64_t gpu_offset;
 	unsigned long flags;
 #define PLANE_HAS_FENCE BIT(0)
 
@@ -1214,7 +1213,6 @@ struct cxsr_latency {
 #define to_intel_plane(x) container_of(x, struct intel_plane, base)
 #define to_intel_plane_state(x) container_of(x, struct intel_plane_state, uapi)
 #define intel_fb_obj(x) ((x) ? to_intel_bo((x)->obj[0]) : NULL)
-#define intel_fb_bo(x) ((x) ? ttm_gem_to_i915_bo((x)->obj[0]) : NULL)
 
 struct intel_hdmi {
 	i915_reg_t hdmi_reg;
@@ -1701,7 +1699,7 @@ intel_wait_for_vblank_if_active(struct drm_i915_private *dev_priv, enum pipe pip
 
 static inline u32 intel_plane_ggtt_offset(const struct intel_plane_state *state)
 {
-	u32 val = state->vma ? i915_ggtt_offset(state->vma) : state->gpu_offset;
+	u32 val = i915_ggtt_offset(state->vma);
 	printk(KERN_ERR "ggtt offset 0x%08x\n", val);
 	return val;
 

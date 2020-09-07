@@ -26,7 +26,7 @@
 #include "gt/intel_gt.h"
 
 static void i915_ttm_evict_flags(struct ttm_buffer_object *tbo,
-				struct ttm_placement *placement)
+				 struct ttm_placement *placement)
 {
 	struct drm_i915_private *i915 = to_i915_ttm_dev(tbo->bdev);
 	struct drm_i915_gem_object *obj;
@@ -613,7 +613,7 @@ void i915_ttm_bo_placement_from_region(struct drm_i915_gem_object *obj, u32 regi
 		c++;
 	}
 
-	BUG_ON(c >= I915_TTM_BO_MAX_PLACEMENTS);
+	BUG_ON(c >= I915_TTM_MAX_PLACEMENTS);
 
 	placement->num_placement = c;
 	placement->placement = places;
@@ -689,42 +689,6 @@ void i915_ttm_bo_kunmap(struct drm_i915_gem_object *obj)
 {
 	if (obj->ttm.kmap.bo)
 		ttm_bo_kunmap(&obj->ttm.kmap);
-}
-
-/**
- * i915_ttm_bo_ref - reference an &i915_ttm_bo buffer object
- * @bo: &i915_ttm_bo buffer object
- *
- * References the contained &ttm_buffer_object.
- *
- * Returns:
- * a refcounted pointer to the &i915_ttm_bo buffer object.
- */
-struct i915_ttm_bo *i915_ttm_bo_ref(struct i915_ttm_bo *bo)
-{
-	if (bo == NULL)
-		return NULL;
-
-	ttm_bo_get(&bo->tbo);
-	return bo;
-}
-
-/**
- * i915_ttm_bo_unref - unreference an &i915_ttm_bo buffer object
- * @bo: &i915_ttm_bo buffer object
- *
- * Unreferences the contained &ttm_buffer_object and clear the pointer
- */
-void i915_ttm_bo_unref(struct i915_ttm_bo **bo)
-{
-	struct ttm_buffer_object *tbo;
-
-	if ((*bo) == NULL)
-		return;
-
-	tbo = &((*bo)->tbo);
-	ttm_bo_put(tbo);
-	*bo = NULL;
 }
 
 /**
@@ -815,16 +779,6 @@ int i915_ttm_bo_pin_restricted(struct drm_i915_gem_object *obj, u32 region,
 	}
 
 	obj->ttm.pin_count = 1;
-#if 0
-	region = i915_ttm_mem_type_to_region(bo->tbo.mem.mem_type);
-	if (region == I915_TTM_GEM_REGION_VRAM) {
-		atomic64_add(i915_ttm_bo_size(bo), &adev->vram_pin_size);
-		atomic64_add(i915_ttm_vram_mgr_bo_visible_size(bo),
-			     &adev->visible_pin_size);
-	} else if (region == REGION_SMEM) {
-		atomic64_add(i915_ttm_bo_size(bo), &adev->gart_pin_size);
-	}
-#endif
 error:
 	return r;
 }
@@ -887,30 +841,6 @@ int i915_ttm_bo_unpin(struct drm_i915_gem_object *obj)
 }
 
 /**
- * i915_ttm_bo_gpu_offset - return GPU offset of bo
- * @bo:	i915_ttm object for which we query the offset
- *
- * Note: object should either be pinned or reserved when calling this
- * function, it might be useful to add check for this for debugging.
- *
- * Returns:
- * current GPU offset of the object.
- */
-u64 i915_ttm_bo_gpu_offset(struct i915_ttm_bo *bo)
-{
-	WARN_ON_ONCE(bo->tbo.mem.mem_type == TTM_PL_SYSTEM);
-	WARN_ON_ONCE(!dma_resv_is_locked(bo->tbo.base.resv) &&
-		     !bo->pin_count && bo->tbo.type != ttm_bo_type_kernel);
-	WARN_ON_ONCE(bo->tbo.mem.start == I915_TTM_BO_INVALID_OFFSET);
-	WARN_ON_ONCE(bo->tbo.mem.mem_type == TTM_PL_VRAM &&
-		     !(bo->flags & I915_TTM_CREATE_VRAM_CONTIGUOUS));
-
-	if (bo->tbo.mem.mem_type == TTM_PL_VRAM)
-		return i915_ttm_vram_obj_get_gtt_offset(&bo->tbo.mem) << PAGE_SHIFT;
-	return bo->tbo.mem.start << PAGE_SHIFT;
-}
-
-/**
  * i915_ttm_bo_get_preferred_pin_region - get preferred region for scanout
  * @adev: i915_ttm device object
  * @region: allowed :ref:`memory regions <i915_ttm_memory_regions>`
@@ -931,50 +861,6 @@ uint32_t i915_ttm_bo_get_preferred_pin_region(struct drm_i915_private *i915,
 	}
 	return region;
 }
-
-
-void i915_ttm_gem_object_free(struct drm_gem_object *gobj)
-{
-	struct i915_ttm_bo *robj = ttm_gem_to_i915_bo(gobj);
-
-	if (robj) {
-		i915_ttm_bo_unref(&robj);
-	}
-}
-
-void i915_ttm_gem_object_close(struct drm_gem_object *gem, struct drm_file *file)
-{
-
-}
-
-int
-i915_ttm_dumb_mmap_offset(struct drm_file *file,
-			  u32 handle,
-			  u64 *offset)
-{
-	struct drm_gem_object *gobj;
-	struct i915_ttm_bo *bo;
-
-	gobj = drm_gem_object_lookup(file, handle);
-	if (gobj == NULL)
-		return -ENOENT;
-
-	bo = ttm_gem_to_i915_bo(gobj);
-
-	*offset = i915_ttm_bo_mmap_offset(bo);
-	drm_gem_object_put(gobj);
-	return 0;
-}
-
-int
-i915_ttm_mmap_offset_ioctl(struct drm_file *file,
-			   u32 handle,
-			   enum i915_mmap_type mmap_type,
-			   u64 *offset)
-{
-	return i915_ttm_dumb_mmap_offset(file, handle, offset);
-}
-
 
 int i915_ttm_create_bo_pages(struct drm_i915_gem_object *obj)
 {

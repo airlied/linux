@@ -34,7 +34,7 @@
 enum i915_cache_level;
 
 struct drm_i915_gem_object;
-struct i915_ttm_bo;
+
 /**
  * DOC: Global GTT views
  *
@@ -199,7 +199,6 @@ struct i915_vma {
 	const struct i915_vma_ops *ops;
 
 	struct drm_i915_gem_object *obj;
-	struct i915_ttm_bo *bo;
 	
 	struct dma_resv *resv; /** Alias of obj->resv */
 

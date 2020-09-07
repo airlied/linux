@@ -49,7 +49,7 @@ i915_gem_create(struct drm_file *file,
 	/* For most of the ABI (e.g. mmap) we think in system pages */
 	GEM_BUG_ON(!IS_ALIGNED(size, PAGE_SIZE));
 
-	
+
 	if (i915->use_ttm) {
 		obj = i915_ttm_object_create_region(placements, n_placements, ttm_bo_type_device, size);
 		if (IS_ERR(obj))
@@ -351,7 +351,6 @@ i915_gem_create_ioctl(struct drm_device *dev, void *data,
 	struct drm_i915_gem_create_ext *args = data;
 	int ret;
 
-
 	i915_gem_flush_free_objects(i915);
 
 	ret = i915_user_extensions(u64_to_user_ptr(args->extensions),
@@ -376,8 +375,6 @@ i915_gem_create_ioctl(struct drm_device *dev, void *data,
 		ext_data.n_placements = 1;
 	}
 
-
-	
 	ret = i915_gem_create(file,
 			      ext_data.placements,
 			      ext_data.n_placements,

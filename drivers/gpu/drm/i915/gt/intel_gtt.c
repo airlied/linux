@@ -128,8 +128,6 @@ void clear_pages(struct i915_vma *vma)
 
 	if (vma->obj && vma->pages != vma->obj->mm.pages)
 		free_table = true;
-	if (vma->bo && vma->pages != vma->bo->pages)
-		free_table = true;
 	if (free_table) {
 		sg_free_table(vma->pages);
 		kfree(vma->pages);

@@ -1,14 +1,9 @@
 #ifndef I915_TTM_OBJECT_H
 #define I915_TTM_OBJECT_H
 
-struct i915_bo;
-
-struct i915_ttm_bo *i915_ttm_bo_ref(struct i915_ttm_bo *bo);
-void i915_ttm_bo_unref(struct i915_ttm_bo **bo);
 int i915_ttm_bo_kmap(struct drm_i915_gem_object *obj, void **ptr);
 void *i915_ttm_bo_kptr(struct drm_i915_gem_object *obj);
 void i915_ttm_bo_kunmap(struct drm_i915_gem_object *obj);
-u64 i915_ttm_bo_gpu_offset(struct i915_ttm_bo *bo);
 void i915_ttm_bo_placement_from_region(struct drm_i915_gem_object *obj, u32 region);
 int i915_ttm_bo_unpin(struct drm_i915_gem_object *obj);
 bool i915_ttm_bo_is_i915_ttm_bo(struct ttm_buffer_object *bo);
