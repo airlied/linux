@@ -51,7 +51,7 @@ i915_gem_create(struct drm_file *file,
 
 
 	if (i915->use_ttm) {
-		obj = i915_ttm_object_create_region(placements, n_placements, ttm_bo_type_device, size);
+		obj = i915_ttm_object_create_region(placements, n_placements, ttm_bo_type_device, size, 0);
 		if (IS_ERR(obj))
 			return PTR_ERR(obj);
 	} else {

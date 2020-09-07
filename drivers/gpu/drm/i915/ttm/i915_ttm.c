@@ -548,12 +548,12 @@ bool i915_ttm_bo_is_i915_ttm_bo(struct ttm_buffer_object *bo)
  * Sets buffer's placement according to requested region and the buffer's
  * flags.
  */
-void i915_ttm_bo_placement_from_region(struct drm_i915_gem_object *obj, u32 region)
+void i915_ttm_bo_placement_from_region(struct drm_i915_gem_object *obj, u32 region,
+				       unsigned int flags)
 {
 	struct drm_i915_private *i915 = obj_to_i915(obj);
 	struct ttm_placement *placement = &obj->ttm.placement;
 	struct ttm_place *places = obj->ttm.placements;
-	u64 flags = 0;//bo->flags;
 	u32 c = 0;
 
 	if (region & REGION_STOLEN_SMEM) {
@@ -576,7 +576,7 @@ void i915_ttm_bo_placement_from_region(struct drm_i915_gem_object *obj, u32 regi
 
 //		places[c].flags |= TTM_PL_FLAG_TOPDOWN;
 
-		if (flags & I915_TTM_CREATE_VRAM_CONTIGUOUS)
+		if (flags & I915_BO_ALLOC_CONTIGUOUS)
 			places[c].flags |= TTM_PL_FLAG_CONTIGUOUS;
 		c++;
 	}
@@ -756,8 +756,7 @@ int i915_ttm_bo_pin_restricted(struct drm_i915_gem_object *obj, u32 region,
 	if (obj->base.base.import_attach)
 		dma_buf_pin(obj->base.base.import_attach);
 
-//	bo->flags |= I915_TTM_CREATE_VRAM_CONTIGUOUS;
-	i915_ttm_bo_placement_from_region(obj, region);
+	i915_ttm_bo_placement_from_region(obj, region, I915_BO_ALLOC_CONTIGUOUS);
 	for (i = 0; i < obj->ttm.placement.num_placement; i++) {
 		unsigned fpfn, lpfn;
 
@@ -994,12 +993,11 @@ int i915_ttm_alloc_gtt(struct ttm_buffer_object *tbo)
  */
 void i915_ttm_bo_placement_from_mrs(struct drm_i915_gem_object *obj,
 				    struct intel_memory_region **placements,
-				    int n_placements)
+				    int n_placements, unsigned int flags)
 {
 	struct drm_i915_private *i915 = obj_to_i915(obj);
 	struct ttm_placement *placement = &obj->ttm.placement;
 	struct ttm_place *places = obj->ttm.placements;
-	u64 flags = 0;// lags;
 	u32 c = 0;
 	int i;
 	
@@ -1011,8 +1009,9 @@ void i915_ttm_bo_placement_from_mrs(struct drm_i915_gem_object *obj,
 			if (INTEL_GEN(i915) >= 8)
 				places[c].fpfn = 1;
 			places[c].flags = TTM_PL_FLAG_WC | TTM_PL_FLAG_UNCACHED | I915_TTM_PL_FLAG_STOLEN;
-			
-			places[c].flags |= TTM_PL_FLAG_CONTIGUOUS;
+
+			if (flags & I915_BO_ALLOC_CONTIGUOUS)
+				places[c].flags |= TTM_PL_FLAG_CONTIGUOUS;
 			c++;
 		}
 
@@ -1024,7 +1023,7 @@ void i915_ttm_bo_placement_from_mrs(struct drm_i915_gem_object *obj,
 			
 //		places[c].flags |= TTM_PL_FLAG_TOPDOWN;
 			
-			if (flags & I915_TTM_CREATE_VRAM_CONTIGUOUS)
+			if (flags & I915_BO_ALLOC_CONTIGUOUS)
 				places[c].flags |= TTM_PL_FLAG_CONTIGUOUS;
 			c++;
 		}
@@ -1083,7 +1082,7 @@ struct drm_i915_gem_object *i915_ttm_object_create_internal(struct drm_i915_priv
 	drm_gem_private_object_init(&i915->drm, &obj->base.base, size);
 	i915_gem_object_init(obj, &ttm_ops, &lock_class);
 	
-	i915_ttm_bo_placement_from_region(obj, REGION_SMEM);
+	i915_ttm_bo_placement_from_region(obj, REGION_SMEM, 0);
 	{
 		struct ttm_operation_ctx ctx = {
 			.interruptible = false,
@@ -1108,7 +1107,8 @@ struct drm_i915_gem_object *i915_ttm_object_create_internal(struct drm_i915_priv
 struct drm_i915_gem_object *i915_ttm_object_create_region(struct intel_memory_region **placements,
 							  int n_placements,
 							  enum ttm_bo_type type,
-							  unsigned long size)
+							  unsigned long size,
+							  unsigned int flags)
 {
 	static struct lock_class_key lock_class;	
 	struct drm_i915_private *i915;
@@ -1126,7 +1126,7 @@ struct drm_i915_gem_object *i915_ttm_object_create_region(struct intel_memory_re
 
 	drm_gem_private_object_init(&i915->drm, &obj->base.base, size);
 	i915_gem_object_init(obj, &ttm_ops, &lock_class);
-	i915_ttm_bo_placement_from_mrs(obj, placements, n_placements);
+	i915_ttm_bo_placement_from_mrs(obj, placements, n_placements, flags);
 	{
 		struct ttm_operation_ctx ctx = {
 			.interruptible = type != ttm_bo_type_kernel,

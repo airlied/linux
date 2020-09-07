@@ -535,7 +535,7 @@ i915_gem_object_create_shmem(struct drm_i915_private *i915,
 {
 	if (i915->use_ttm) {
 		return i915_ttm_object_create_region(&i915->mm.regions[INTEL_REGION_SMEM], 1, ttm_bo_type_kernel,
-						     size);
+						     size, 0);
 	}
 	return i915_gem_object_create_region(i915->mm.regions[INTEL_REGION_SMEM],
 					     size, 0);

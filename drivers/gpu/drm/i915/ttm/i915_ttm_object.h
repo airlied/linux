@@ -4,7 +4,7 @@
 int i915_ttm_bo_kmap(struct drm_i915_gem_object *obj, void **ptr);
 void *i915_ttm_bo_kptr(struct drm_i915_gem_object *obj);
 void i915_ttm_bo_kunmap(struct drm_i915_gem_object *obj);
-void i915_ttm_bo_placement_from_region(struct drm_i915_gem_object *obj, u32 region);
+void i915_ttm_bo_placement_from_region(struct drm_i915_gem_object *obj, u32 region, unsigned int flags);
 int i915_ttm_bo_unpin(struct drm_i915_gem_object *obj);
 bool i915_ttm_bo_is_i915_ttm_bo(struct ttm_buffer_object *bo);
 

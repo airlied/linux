@@ -72,7 +72,8 @@ int i915_ttm_stolen_get_pages(struct drm_i915_gem_object *obj);
 struct drm_i915_gem_object *i915_ttm_object_create_region(struct intel_memory_region **placements,
 							  int n_placements,
 							  enum ttm_bo_type type,
-							  unsigned long size);
+							  unsigned long size,
+							  unsigned int flags);
 
 static inline struct drm_i915_gem_object *ttm_to_i915_gem(struct ttm_buffer_object *tbo)
 {

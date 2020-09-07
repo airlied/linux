@@ -457,7 +457,7 @@ static void ggtt_bind_vma(struct i915_address_space *vm,
 	pte_flags = 0;
 	if (vma->vm->has_read_only && obj && i915_gem_object_is_readonly(obj))
 		pte_flags |= PTE_READ_ONLY;
-	if (obj && i915_gem_object_is_devmem(obj))
+	if (i915_gem_object_is_devmem(obj))
 		pte_flags |= PTE_LM;
 
 	vm->insert_entries(vm, vma, cache_level, pte_flags);

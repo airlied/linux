@@ -307,7 +307,7 @@ static int i915_ttm_cs_bo_validate(struct i915_ttm_execbuffer *eb,
 	region = obj->ttm.allowed_regions;
 
 retry:
-	i915_ttm_bo_placement_from_region(obj, region);
+	i915_ttm_bo_placement_from_region(obj, region, 0);
 	r = ttm_bo_validate(&obj->base, &obj->ttm.placement, &ctx);
 	if (unlikely(r == -ENOMEM) && region != obj->ttm.allowed_regions) {
 		region = obj->ttm.allowed_regions;

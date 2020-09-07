@@ -668,7 +668,7 @@ i915_gem_object_create_stolen(struct drm_i915_private *i915,
   	if (i915->use_ttm) {
 		struct intel_memory_region *ptr = i915_stolen_region(i915);		
 		return i915_ttm_object_create_region(&ptr, 1, ttm_bo_type_kernel,
-						     size);
+						     size, I915_BO_ALLOC_CONTIGUOUS);
 	}
 
 	return i915_gem_object_create_region(i915_stolen_region(i915),
