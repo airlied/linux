@@ -81,4 +81,13 @@ static inline struct drm_i915_gem_object *ttm_to_i915_gem(struct ttm_buffer_obje
 }
 
 void __iomem *i915_ttm_pin_iomap(struct drm_i915_gem_object *obj);
+
+static inline int i915_ttm_assign_mmap_offset(struct drm_i915_gem_object *obj,
+					      u64 *offset_p)
+{
+	*offset_p = drm_vma_node_offset_addr(&obj->base.base.vma_node);
+	return 0;
+}
+
+
 #endif

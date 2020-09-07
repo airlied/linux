@@ -633,6 +633,11 @@ __assign_mmap_offset(struct drm_file *file,
 	if (!obj)
 		return -ENOENT;
 
+	if (i915_gem_object_is_ttm) {
+		err = i915_ttm_assign_mmap_offset(obj, offset);
+		goto out;
+	}
+	
 	if (i915_gem_object_never_mmap(obj)) {
 		err = -ENODEV;
 		goto out;
@@ -668,8 +673,6 @@ i915_gem_dumb_mmap_offset(struct drm_file *file,
 	enum i915_mmap_type mmap_type;
 	struct drm_i915_private *i915 = to_i915(dev);
 
-	if (i915->use_ttm)
-		return i915_ttm_dumb_mmap_offset(file, handle, offset);
 	if (boot_cpu_has(X86_FEATURE_PAT))
 		mmap_type = I915_MMAP_TYPE_WC;
 	else if (!i915_ggtt_has_aperture(&to_i915(dev)->ggtt))
@@ -744,9 +747,6 @@ i915_gem_mmap_offset_ioctl(struct drm_device *dev, void *data,
 	default:
 		return -EINVAL;
 	}
-
-	if (i915->use_ttm)
-		return i915_ttm_mmap_offset_ioctl(file, args->handle, type, &args->offset);
 
 	return __assign_mmap_offset(file, args->handle, type, &args->offset);
 }
