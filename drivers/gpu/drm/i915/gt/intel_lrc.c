@@ -3978,7 +3978,7 @@ gen10_init_indirectctx_bb(struct intel_engine_cs *engine, u32 *batch)
 
 #define CTX_WA_BB_OBJ_SIZE (PAGE_SIZE)
 
-static int lrc_setup_wa_ctx(struct intel_engine_cs *engine)
+static int lrc_init_wa_ctx(struct intel_engine_cs *engine)
 {
 	struct drm_i915_gem_object *obj;
 	struct i915_vma *vma;
@@ -3994,10 +3994,6 @@ static int lrc_setup_wa_ctx(struct intel_engine_cs *engine)
 		goto err;
 	}
 
-	err = i915_ggtt_pin(vma, NULL, 0, PIN_HIGH);
-	if (err)
-		goto err;
-
 	engine->wa_ctx.vma = vma;
 	return 0;
 
@@ -4006,9 +4002,16 @@ err:
 	return err;
 }
 
-static void lrc_destroy_wa_ctx(struct intel_engine_cs *engine)
+static void lrc_destroy_wa_ctx(struct intel_engine_cs *engine, bool unpin)
 {
-	i915_vma_unpin_and_release(&engine->wa_ctx.vma, 0);
+	if (!engine->wa_ctx.vma)
+		return;
+
+	if (unpin)
+		i915_vma_unpin(engine->wa_ctx.vma);
+
+	i915_vma_put(engine->wa_ctx.vma);
+	engine->wa_ctx.vma = NULL;
 }
 
 typedef u32 *(*wa_bb_func_t)(struct intel_engine_cs *engine, u32 *batch);
@@ -4020,6 +4023,7 @@ static int intel_init_workaround_bb(struct intel_engine_cs *engine)
 					    &wa_ctx->per_ctx };
 	wa_bb_func_t wa_bb_fn[2];
 	void *batch, *batch_ptr;
+	struct i915_gem_ww_ctx ww;
 	unsigned int i;
 	int ret;
 
@@ -4047,12 +4051,20 @@ static int intel_init_workaround_bb(struct intel_engine_cs *engine)
 		return 0;
 	}
 
-	ret = lrc_setup_wa_ctx(engine);
+	ret = lrc_init_wa_ctx(engine);
 	if (ret) {
 		drm_dbg(&engine->i915->drm,
 			"Failed to setup context WA page: %d\n", ret);
 		return ret;
 	}
+
+	i915_gem_ww_ctx_init(&ww, true);
+retry:
+	ret = i915_gem_object_lock(wa_ctx->vma->obj, &ww);
+	if (!ret)
+		ret = i915_ggtt_pin(wa_ctx->vma, &ww, 0, PIN_HIGH);
+	if (ret)
+		goto err;
 
 	batch = i915_gem_object_pin_map(wa_ctx->vma->obj, I915_MAP_WB);
 
@@ -4077,8 +4089,19 @@ static int intel_init_workaround_bb(struct intel_engine_cs *engine)
 
 	__i915_gem_object_flush_map(wa_ctx->vma->obj, 0, batch_ptr - batch);
 	__i915_gem_object_release_map(wa_ctx->vma->obj);
+
 	if (ret)
-		lrc_destroy_wa_ctx(engine);
+		i915_vma_unpin(wa_ctx->vma);
+
+err:
+	if (ret == -EDEADLK) {
+		ret = i915_gem_ww_ctx_backoff(&ww);
+		if (!ret)
+			goto retry;
+	}
+	i915_gem_ww_ctx_fini(&ww);
+	if (ret)
+		lrc_destroy_wa_ctx(engine, false);
 
 	return ret;
 }
@@ -5155,7 +5178,7 @@ static void execlists_release(struct intel_engine_cs *engine)
 	execlists_shutdown(engine);
 
 	intel_engine_cleanup_common(engine);
-	lrc_destroy_wa_ctx(engine);
+	lrc_destroy_wa_ctx(engine, true);
 }
 
 static void
