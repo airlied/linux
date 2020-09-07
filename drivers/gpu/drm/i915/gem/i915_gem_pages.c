@@ -201,6 +201,9 @@ int __i915_gem_object_put_pages(struct drm_i915_gem_object *obj)
 	struct sg_table *pages;
 	int err;
 
+	if (i915_gem_object_is_ttm(obj)) {
+		return 0;
+	}
 	if (i915_gem_object_has_pinned_pages(obj))
 		return -EBUSY;
 

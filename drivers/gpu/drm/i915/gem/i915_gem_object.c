@@ -274,7 +274,8 @@ void i915_gem_free_object(struct drm_gem_object *gem_obj)
 	struct drm_i915_private *i915 = to_i915(obj_to_dev(obj));
 
 	if (i915_gem_object_is_ttm(obj)) {
-
+		ttm_bo_put(&obj->base);
+		return;
 	}
 		
 	GEM_BUG_ON(i915_gem_object_is_framebuffer(obj));

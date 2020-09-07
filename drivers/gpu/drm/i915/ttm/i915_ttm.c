@@ -520,7 +520,7 @@ static void i915_ttm_bo_destroy(struct ttm_buffer_object *tbo)
 		kfree(bo->pages);
 	}
 #endif
-	kfree(obj);
+	i915_gem_object_free(obj);
 }
 
 /**
