@@ -55,6 +55,8 @@ static void i915_ttm_evict_flags(struct ttm_buffer_object *tbo,
 	obj = ttm_to_i915_gem(tbo);
 	switch (tbo->mem.mem_type) {
 	case TTM_PL_VRAM:
+		i915_ttm_bo_placement_from_region(obj, REGION_SMEM, 0);
+		break;
 	case I915_TTM_PL_STOLEN:
 	default:
 		break;
@@ -99,27 +101,6 @@ static void i915_ttm_move_null(struct ttm_buffer_object *bo,
 	BUG_ON(old_mem->mm_node != NULL);
 	*old_mem = *new_mem;
 	new_mem->mm_node = NULL;
-}
-
-/**
- * i915_ttm_mm_node_addr - Compute the GPU relative offset of a GTT buffer.
- *
- * @bo: The bo to assign the memory to.
- * @mm_node: Memory manager node for drm allocator.
- * @mem: The region where the bo resides.
- *
- */
-static uint64_t i915_ttm_mm_node_addr(struct ttm_buffer_object *bo,
-				    struct drm_mm_node *mm_node,
-				    struct ttm_resource *mem)
-{
-	uint64_t addr = 0;
-
-	if (mm_node->start != I915_TTM_BO_INVALID_OFFSET) {
-		addr = mm_node->start << PAGE_SHIFT;
-//		addr += bo->bdev->man[mem->mem_type].gpu_offset;
-	}
-	return addr;
 }
 
 /**
