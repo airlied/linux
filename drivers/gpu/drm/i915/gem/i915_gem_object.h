@@ -16,6 +16,8 @@
 #include "i915_gem_gtt.h"
 #include "i915_vma_types.h"
 
+#include "ttm/i915_ttm_object.h"
+
 void i915_gem_init__objects(struct drm_i915_private *i915);
 
 struct drm_i915_gem_object *i915_gem_object_alloc(void);
@@ -408,7 +410,11 @@ static inline void i915_gem_object_flush_map(struct drm_i915_gem_object *obj)
  */
 static inline void i915_gem_object_unpin_map(struct drm_i915_gem_object *obj)
 {
-	i915_gem_object_unpin_pages(obj);
+	if (i915_gem_object_is_ttm(obj)) {
+		i915_ttm_bo_kunmap(obj);
+		i915_ttm_bo_unpin(obj);
+	} else
+		i915_gem_object_unpin_pages(obj);
 }
 
 void __i915_gem_object_release_map(struct drm_i915_gem_object *obj);

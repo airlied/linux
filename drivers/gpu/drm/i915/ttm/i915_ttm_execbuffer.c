@@ -598,7 +598,16 @@ i915_ttm_do_execbuffer(struct drm_device *dev,
 	}
 
 	r = i915_ttm_list_validate(&eb, &eb.validated);
+	
+	i915_ttm_bo_list_for_each_entry(e, eb.bo_list) {
+		struct drm_i915_gem_object *obj = ttm_to_i915_gem(e->tv.bo);
 
+		e->vma = i915_vma_instance(obj, eb.context->vm, NULL);
+		if (IS_ERR(e->vma)) {
+			DRM_ERROR("vma creation failed\n");
+		}
+	}
+	
 	reserved_buffers = true;
 
 	i915_ttm_bo_list_for_each_entry(e, eb.bo_list) {

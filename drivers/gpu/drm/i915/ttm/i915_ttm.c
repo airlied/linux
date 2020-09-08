@@ -244,7 +244,6 @@ static unsigned long i915_ttm_io_mem_pfn(struct ttm_buffer_object *bo,
 struct i915_ttm_tt {
 	struct ttm_dma_tt ttm;
 	struct drm_i915_gem_object *obj;
-	struct i915_vma *vma;
 	uint64_t offset;
 };
 
@@ -263,13 +262,6 @@ static int i915_ttm_backend_bind(struct ttm_tt *ttm,
 	}
 
 	return 0;
-#if 0
-	if (bo_mem->mem_type != TTM_PL_VRAM)
-		map_flag = PIN_MAPPABLE;
-	r = i915_vma_pin(gtt->vma, 0, 0, map_flag | PIN_OFFSET_FIXED | PIN_GLOBAL | (bo_mem->start << PAGE_SHIFT));
-	printk(KERN_ERR "vma pin failed %d, %lx\n", r, bo_mem->start);
-#endif
-	return r;
 }
 
 static void i915_ttm_backend_unbind(struct ttm_tt *ttm)
@@ -277,7 +269,6 @@ static void i915_ttm_backend_unbind(struct ttm_tt *ttm)
 	struct i915_ttm_tt *gtt = (struct i915_ttm_tt *)ttm;
 	if (ttm->page_flags & TTM_PAGE_FLAG_SG)
 		return;
-//	i915_vma_unpin(gtt->vma);
 }
 
 static void i915_ttm_backend_destroy(struct ttm_tt *ttm)
@@ -285,8 +276,6 @@ static void i915_ttm_backend_destroy(struct ttm_tt *ttm)
 
 	struct i915_ttm_tt *gtt = (void *)ttm;
 
-	if (gtt->vma)
-		i915_vma_put(gtt->vma);
 	ttm_dma_tt_fini(&gtt->ttm);
 	kfree(gtt);
 }
@@ -339,7 +328,7 @@ static void i915_ttm_tt_unpopulate(struct ttm_tt *ttm)
 {
 	struct drm_i915_private *i915 = to_i915_ttm_dev(ttm->bdev);
 	struct i915_ttm_tt *gtt = (void *)ttm;
-	printk(KERN_INFO "tt unpopulate %p\n", ttm);
+
 	if (ttm->page_flags & TTM_PAGE_FLAG_SG) {
 		return;
 	}
@@ -497,7 +486,26 @@ static void i915_ttm_bo_destroy(struct ttm_buffer_object *tbo)
 	struct drm_i915_private *i915 = to_i915_ttm_dev(tbo->bdev);
 	struct drm_i915_gem_object *obj = ttm_to_i915_gem(tbo);
 
+	if (!list_empty(&obj->vma.list)) {
+		struct i915_vma *vma;
+		spin_lock(&obj->vma.lock);
+		while ((vma = list_first_entry_or_null(&obj->vma.list,
+						       struct i915_vma,
+						       obj_link))) {
+			GEM_BUG_ON(vma->obj != obj);
+			spin_unlock(&obj->vma.lock);
+
+			__i915_vma_put(vma);
+
+			spin_lock(&obj->vma.lock);
+		}
+	}
+
 	drm_gem_object_release(&obj->base.base);
+
+	drm_gem_free_mmap_offset(&obj->base.base);
+	kfree(obj->mm.placements);
+	
 #if 0
 	if (bo->pages) {
 		sg_free_table(bo->pages);
@@ -920,13 +928,10 @@ int i915_ttm_alloc_gtt(struct ttm_buffer_object *tbo)
 	else
 		start = tbo->mem.start;
 
-
-	if (!gtt->vma)
-		gtt->vma = i915_vma_instance(gtt->obj,
-					     &i915->ggtt.vm, NULL);
-		
 	if (start != I915_TTM_BO_INVALID_OFFSET) {
-		return i915_vma_pin(gtt->vma, 0, 0, map_flag | PIN_OFFSET_FIXED | PIN_GLOBAL | (start << PAGE_SHIFT));
+		struct i915_vma *vma = i915_vma_instance(gtt->obj,
+							 &i915->ggtt.vm, NULL);
+		return i915_vma_pin(vma, 0, 0, map_flag | PIN_OFFSET_FIXED | PIN_GLOBAL | (start << PAGE_SHIFT));
 	}
 
 	/* allocate GART space */
@@ -955,7 +960,11 @@ int i915_ttm_alloc_gtt(struct ttm_buffer_object *tbo)
 	else
 		start = tmp.start;
 	gtt->offset = (u64)start << PAGE_SHIFT;
-	r = i915_vma_pin(gtt->vma, 0, 0, map_flag | PIN_OFFSET_FIXED | PIN_GLOBAL | (start << PAGE_SHIFT));
+	{
+		struct i915_vma *vma = i915_vma_instance(gtt->obj,
+							 &i915->ggtt.vm, NULL);
+		r = i915_vma_pin(vma, 0, 0, map_flag | PIN_OFFSET_FIXED | PIN_GLOBAL | (start << PAGE_SHIFT));
+	}
 	if (unlikely(r)) {
 		ttm_bo_mem_put(tbo, &tmp);
 		return r;
@@ -1085,6 +1094,7 @@ struct drm_i915_gem_object *i915_ttm_object_create_internal(struct drm_i915_priv
 		kfree(obj);
 		return ERR_PTR(r);
 	}
+	ttm_bo_unreserve(&obj->base);	
 	return obj;
 }
 
@@ -1129,7 +1139,8 @@ struct drm_i915_gem_object *i915_ttm_object_create_region(struct intel_memory_re
 		i915_gem_object_free(obj);
 		return ERR_PTR(r);
 	}
-	ttm_bo_unreserve(&obj->base);
+	if (!obj->base.base.resv)
+		ttm_bo_unreserve(&obj->base);
 	return obj;
 
 

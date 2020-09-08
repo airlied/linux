@@ -19,7 +19,7 @@ static void i915_ttm_bo_list_free(struct kref *ref)
 
 	i915_ttm_bo_list_for_each_entry(e, list) {
 		struct drm_i915_gem_object *obj = ttm_to_i915_gem(e->tv.bo);
-		i915_gem_object_put(obj);		
+		i915_gem_object_put(obj);
 	}
 
 	call_rcu(&list->rhead, i915_ttm_bo_list_free_rcu);
