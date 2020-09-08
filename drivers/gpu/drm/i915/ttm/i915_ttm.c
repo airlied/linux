@@ -1123,7 +1123,7 @@ struct drm_i915_gem_object *i915_ttm_object_create_region(struct intel_memory_re
 					 NULL, obj->base.base.resv, &i915_ttm_bo_destroy);
 	}
 	if (r != 0) {
-		kfree(obj);
+		i915_gem_object_free(obj);
 		return ERR_PTR(r);
 	}
 	ttm_bo_unreserve(&obj->base);
