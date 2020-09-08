@@ -313,3 +313,15 @@ bool i915_ttm_vram_obj_premap_allowed(struct ttm_resource *mem)
 
 	return node->nodes[0].size == mem->num_pages;
 }
+
+struct drm_mm_node *i915_ttm_vram_find_node(struct ttm_buffer_object *bo, u64 *offset)
+{
+	struct i915_ttm_vram_node *node = bo->mem.mm_node;
+	struct drm_mm_node *mm_node = node->nodes;
+
+	while (*offset >= (mm_node->size << PAGE_SHIFT)) {
+		*offset -= (mm_node->size << PAGE_SHIFT);
+		++mm_node;
+	}
+	return mm_node;
+}

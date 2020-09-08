@@ -233,7 +233,10 @@ static unsigned long i915_ttm_io_mem_pfn(struct ttm_buffer_object *bo,
 	uint64_t offset = (page_offset << PAGE_SHIFT);
 	struct drm_mm_node *mm;
 
-	mm = i915_ttm_find_mm_node(&bo->mem, &offset);
+	if (bo->mem.mem_type == TTM_PL_VRAM)
+		mm = i915_ttm_vram_find_node(bo, &offset);
+	else
+		mm = i915_ttm_find_mm_node(&bo->mem, &offset);
 	return (bo->mem.bus.base >> PAGE_SHIFT) + mm->start +
 		(offset >> PAGE_SHIFT);
 }

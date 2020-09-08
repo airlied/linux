@@ -89,5 +89,5 @@ static inline int i915_ttm_assign_mmap_offset(struct drm_i915_gem_object *obj,
 	return 0;
 }
 
-
+struct drm_mm_node *i915_ttm_vram_find_node(struct ttm_buffer_object *bo, u64 *offset);
 #endif
