@@ -184,23 +184,38 @@ i915_gem_phys_pwrite(struct drm_i915_gem_object *obj,
 		     struct drm_i915_gem_pwrite *args,
 		     struct drm_file *file)
 {
-	void *vaddr = sg_page(obj->mm.pages->sgl) + args->offset;
+	void *vaddr;
 	char __user *user_data = u64_to_user_ptr(args->data_ptr);
+	int ret;
 
+	ret = i915_gem_object_lock_interruptible(obj, NULL);
+	if (ret)
+		return ret;
+
+	ret = i915_gem_object_pin_pages(obj);
+	i915_gem_object_unlock(obj);
+	if (ret)
+		return ret;
+
+	vaddr = sg_page(obj->mm.pages->sgl) + args->offset;
 	/*
 	 * We manually control the domain here and pretend that it
 	 * remains coherent i.e. in the GTT domain, like shmem_pwrite.
 	 */
 	i915_gem_object_invalidate_frontbuffer(obj, ORIGIN_CPU);
 
-	if (copy_from_user(vaddr, user_data, args->size))
-		return -EFAULT;
+	if (copy_from_user(vaddr, user_data, args->size)) {
+		ret = -EFAULT;
+		goto err;
+	}
 
 	drm_clflush_virt_range(vaddr, args->size);
 	intel_gt_chipset_flush(&to_i915(obj->base.dev)->gt);
 
 	i915_gem_object_flush_frontbuffer(obj, ORIGIN_CPU);
-	return 0;
+err:
+	i915_gem_object_unpin_pages(obj);
+	return ret;
 }
 
 static int
@@ -330,7 +345,6 @@ i915_gem_shmem_pread(struct drm_i915_gem_object *obj,
 {
 	unsigned int needs_clflush;
 	unsigned int idx, offset;
-	struct dma_fence *fence;
 	char __user *user_data;
 	u64 remain;
 	int ret;
@@ -339,18 +353,16 @@ i915_gem_shmem_pread(struct drm_i915_gem_object *obj,
 	if (ret)
 		return ret;
 
-	ret = i915_gem_object_prepare_read(obj, &needs_clflush);
-	if (ret) {
-		i915_gem_object_unlock(obj);
-		return ret;
-	}
+	ret = i915_gem_object_pin_pages(obj);
+	if (ret)
+		goto err_unlock;
 
-	fence = i915_gem_object_lock_fence(obj);
+	ret = i915_gem_object_prepare_read(obj, &needs_clflush);
+	if (ret)
+		goto err_unpin;
+
 	i915_gem_object_finish_access(obj);
 	i915_gem_object_unlock(obj);
-
-	if (!fence)
-		return -ENOMEM;
 
 	remain = args->size;
 	user_data = u64_to_user_ptr(args->data_ptr);
@@ -369,7 +381,13 @@ i915_gem_shmem_pread(struct drm_i915_gem_object *obj,
 		offset = 0;
 	}
 
-	i915_gem_object_unlock_fence(obj, fence);
+	i915_gem_object_unpin_pages(obj);
+	return ret;
+
+err_unpin:
+	i915_gem_object_unpin_pages(obj);
+err_unlock:
+	i915_gem_object_unlock(obj);
 	return ret;
 }
 
@@ -397,6 +415,83 @@ gtt_user_read(struct io_mapping *mapping,
 	return unwritten;
 }
 
+static struct i915_vma *i915_gem_gtt_prepare(struct drm_i915_gem_object *obj,
+					     struct drm_mm_node *node,
+					     bool write)
+{
+	struct drm_i915_private *i915 = to_i915(obj->base.dev);
+	struct i915_ggtt *ggtt = &i915->ggtt;
+	struct i915_vma *vma;
+	struct i915_gem_ww_ctx ww;
+	int ret;
+
+	i915_gem_ww_ctx_init(&ww, true);
+retry:
+	vma = ERR_PTR(-ENODEV);
+	ret = i915_gem_object_lock(obj, &ww);
+	if (ret)
+		goto err_ww;
+
+	ret = i915_gem_object_set_to_gtt_domain(obj, write);
+	if (ret)
+		goto err_ww;
+
+	if (!i915_gem_object_is_tiled(obj))
+		vma = i915_gem_object_ggtt_pin_ww(obj, &ww, NULL, 0, 0,
+						  PIN_MAPPABLE |
+						  PIN_NONBLOCK /* NOWARN */ |
+						  PIN_NOEVICT);
+	if (vma == ERR_PTR(-EDEADLK)) {
+		ret = -EDEADLK;
+		goto err_ww;
+	} else if (!IS_ERR(vma)) {
+		node->start = i915_ggtt_offset(vma);
+		node->flags = 0;
+	} else {
+		ret = insert_mappable_node(ggtt, node, PAGE_SIZE);
+		if (ret)
+			goto err_ww;
+		GEM_BUG_ON(!drm_mm_node_allocated(node));
+		vma = NULL;
+	}
+
+	ret = i915_gem_object_pin_pages(obj);
+	if (ret) {
+		if (drm_mm_node_allocated(node)) {
+			ggtt->vm.clear_range(&ggtt->vm, node->start, node->size);
+			remove_mappable_node(ggtt, node);
+		} else {
+			i915_vma_unpin(vma);
+		}
+	}
+
+err_ww:
+	if (ret == -EDEADLK) {
+		ret = i915_gem_ww_ctx_backoff(&ww);
+		if (!ret)
+			goto retry;
+	}
+	i915_gem_ww_ctx_fini(&ww);
+
+	return ret ? ERR_PTR(ret) : vma;
+}
+
+static void i915_gem_gtt_cleanup(struct drm_i915_gem_object *obj,
+				 struct drm_mm_node *node,
+				 struct i915_vma *vma)
+{
+	struct drm_i915_private *i915 = to_i915(obj->base.dev);
+	struct i915_ggtt *ggtt = &i915->ggtt;
+
+	i915_gem_object_unpin_pages(obj);
+	if (drm_mm_node_allocated(node)) {
+		ggtt->vm.clear_range(&ggtt->vm, node->start, node->size);
+		remove_mappable_node(ggtt, node);
+	} else {
+		i915_vma_unpin(vma);
+	}
+}
+
 static int
 i915_gem_gtt_pread(struct drm_i915_gem_object *obj,
 		   const struct drm_i915_gem_pread *args)
@@ -405,44 +500,17 @@ i915_gem_gtt_pread(struct drm_i915_gem_object *obj,
 	struct i915_ggtt *ggtt = &i915->ggtt;
 	intel_wakeref_t wakeref;
 	struct drm_mm_node node;
-	struct dma_fence *fence;
 	void __user *user_data;
 	struct i915_vma *vma;
 	u64 remain, offset;
-	int ret;
+	int ret = 0;
 
 	wakeref = intel_runtime_pm_get(&i915->runtime_pm);
-	vma = ERR_PTR(-ENODEV);
-	if (!i915_gem_object_is_tiled(obj))
-		vma = i915_gem_object_ggtt_pin(obj, NULL, 0, 0,
-					       PIN_MAPPABLE |
-					       PIN_NONBLOCK /* NOWARN */ |
-					       PIN_NOEVICT);
-	if (!IS_ERR(vma)) {
-		node.start = i915_ggtt_offset(vma);
-		node.flags = 0;
-	} else {
-		ret = insert_mappable_node(ggtt, &node, PAGE_SIZE);
-		if (ret)
-			goto out_rpm;
-		GEM_BUG_ON(!drm_mm_node_allocated(&node));
-	}
 
-	ret = i915_gem_object_lock_interruptible(obj, NULL);
-	if (ret)
-		goto out_unpin;
-
-	ret = i915_gem_object_set_to_gtt_domain(obj, false);
-	if (ret) {
-		i915_gem_object_unlock(obj);
-		goto out_unpin;
-	}
-
-	fence = i915_gem_object_lock_fence(obj);
-	i915_gem_object_unlock(obj);
-	if (!fence) {
-		ret = -ENOMEM;
-		goto out_unpin;
+	vma = i915_gem_gtt_prepare(obj, &node, false);
+	if (IS_ERR(vma)) {
+		ret = PTR_ERR(vma);
+		goto out_rpm;
 	}
 
 	user_data = u64_to_user_ptr(args->data_ptr);
@@ -479,14 +547,7 @@ i915_gem_gtt_pread(struct drm_i915_gem_object *obj,
 		offset += page_length;
 	}
 
-	i915_gem_object_unlock_fence(obj, fence);
-out_unpin:
-	if (drm_mm_node_allocated(&node)) {
-		ggtt->vm.clear_range(&ggtt->vm, node.start, node.size);
-		remove_mappable_node(ggtt, &node);
-	} else {
-		i915_vma_unpin(vma);
-	}
+	i915_gem_gtt_cleanup(obj, &node, vma);
 out_rpm:
 	intel_runtime_pm_put(&i915->runtime_pm, wakeref);
 	return ret;
@@ -538,15 +599,10 @@ i915_gem_pread_ioctl(struct drm_device *dev, void *data,
 	if (ret)
 		goto out;
 
-	ret = i915_gem_object_pin_pages(obj);
-	if (ret)
-		goto out;
-
 	ret = i915_gem_shmem_pread(obj, args);
 	if (ret == -EFAULT || ret == -ENODEV)
 		ret = i915_gem_gtt_pread(obj, args);
 
-	i915_gem_object_unpin_pages(obj);
 out:
 	i915_gem_object_put(obj);
 	return ret;
@@ -594,11 +650,10 @@ i915_gem_gtt_pwrite_fast(struct drm_i915_gem_object *obj,
 	struct intel_runtime_pm *rpm = &i915->runtime_pm;
 	intel_wakeref_t wakeref;
 	struct drm_mm_node node;
-	struct dma_fence *fence;
 	struct i915_vma *vma;
 	u64 remain, offset;
 	void __user *user_data;
-	int ret;
+	int ret = 0;
 
 	if (i915_gem_object_has_struct_page(obj)) {
 		/*
@@ -616,37 +671,10 @@ i915_gem_gtt_pwrite_fast(struct drm_i915_gem_object *obj,
 		wakeref = intel_runtime_pm_get(rpm);
 	}
 
-	vma = ERR_PTR(-ENODEV);
-	if (!i915_gem_object_is_tiled(obj))
-		vma = i915_gem_object_ggtt_pin(obj, NULL, 0, 0,
-					       PIN_MAPPABLE |
-					       PIN_NONBLOCK /* NOWARN */ |
-					       PIN_NOEVICT);
-	if (!IS_ERR(vma)) {
-		node.start = i915_ggtt_offset(vma);
-		node.flags = 0;
-	} else {
-		ret = insert_mappable_node(ggtt, &node, PAGE_SIZE);
-		if (ret)
-			goto out_rpm;
-		GEM_BUG_ON(!drm_mm_node_allocated(&node));
-	}
-
-	ret = i915_gem_object_lock_interruptible(obj, NULL);
-	if (ret)
-		goto out_unpin;
-
-	ret = i915_gem_object_set_to_gtt_domain(obj, true);
-	if (ret) {
-		i915_gem_object_unlock(obj);
-		goto out_unpin;
-	}
-
-	fence = i915_gem_object_lock_fence(obj);
-	i915_gem_object_unlock(obj);
-	if (!fence) {
-		ret = -ENOMEM;
-		goto out_unpin;
+	vma = i915_gem_gtt_prepare(obj, &node, true);
+	if (IS_ERR(vma)) {
+		ret = PTR_ERR(vma);
+		goto out_rpm;
 	}
 
 	i915_gem_object_invalidate_frontbuffer(obj, ORIGIN_CPU);
@@ -695,14 +723,7 @@ i915_gem_gtt_pwrite_fast(struct drm_i915_gem_object *obj,
 	intel_gt_flush_ggtt_writes(ggtt->vm.gt);
 	i915_gem_object_flush_frontbuffer(obj, ORIGIN_CPU);
 
-	i915_gem_object_unlock_fence(obj, fence);
-out_unpin:
-	if (drm_mm_node_allocated(&node)) {
-		ggtt->vm.clear_range(&ggtt->vm, node.start, node.size);
-		remove_mappable_node(ggtt, &node);
-	} else {
-		i915_vma_unpin(vma);
-	}
+	i915_gem_gtt_cleanup(obj, &node, vma);
 out_rpm:
 	intel_runtime_pm_put(rpm, wakeref);
 	return ret;
@@ -742,7 +763,6 @@ i915_gem_shmem_pwrite(struct drm_i915_gem_object *obj,
 	unsigned int partial_cacheline_write;
 	unsigned int needs_clflush;
 	unsigned int offset, idx;
-	struct dma_fence *fence;
 	void __user *user_data;
 	u64 remain;
 	int ret;
@@ -751,18 +771,16 @@ i915_gem_shmem_pwrite(struct drm_i915_gem_object *obj,
 	if (ret)
 		return ret;
 
-	ret = i915_gem_object_prepare_write(obj, &needs_clflush);
-	if (ret) {
-		i915_gem_object_unlock(obj);
-		return ret;
-	}
+	ret = i915_gem_object_pin_pages(obj);
+	if (ret)
+		goto err_unlock;
 
-	fence = i915_gem_object_lock_fence(obj);
+	ret = i915_gem_object_prepare_write(obj, &needs_clflush);
+	if (ret)
+		goto err_unpin;
+
 	i915_gem_object_finish_access(obj);
 	i915_gem_object_unlock(obj);
-
-	if (!fence)
-		return -ENOMEM;
 
 	/* If we don't overwrite a cacheline completely we need to be
 	 * careful to have up-to-date data by first clflushing. Don't
@@ -791,8 +809,14 @@ i915_gem_shmem_pwrite(struct drm_i915_gem_object *obj,
 	}
 
 	i915_gem_object_flush_frontbuffer(obj, ORIGIN_CPU);
-	i915_gem_object_unlock_fence(obj, fence);
 
+	i915_gem_object_unpin_pages(obj);
+	return ret;
+
+err_unpin:
+	i915_gem_object_unpin_pages(obj);
+err_unlock:
+	i915_gem_object_unlock(obj);
 	return ret;
 }
 
@@ -849,10 +873,6 @@ i915_gem_pwrite_ioctl(struct drm_device *dev, void *data,
 	if (ret)
 		goto err;
 
-	ret = i915_gem_object_pin_pages(obj);
-	if (ret)
-		goto err;
-
 	ret = -EFAULT;
 	/* We can only do the GTT pwrite on untiled buffers, as otherwise
 	 * it would end up going through the fenced access, and we'll get
@@ -875,7 +895,6 @@ i915_gem_pwrite_ioctl(struct drm_device *dev, void *data,
 			ret = i915_gem_phys_pwrite(obj, args, file);
 	}
 
-	i915_gem_object_unpin_pages(obj);
 err:
 	i915_gem_object_put(obj);
 	return ret;
