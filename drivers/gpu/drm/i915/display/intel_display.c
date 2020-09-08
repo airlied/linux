@@ -16202,7 +16202,6 @@ intel_legacy_cursor_update(struct drm_plane *_plane,
 			   struct drm_modeset_acquire_ctx *ctx)
 {
 	struct intel_plane *plane = to_intel_plane(_plane);
-	struct drm_i915_private *dev_priv = to_i915(plane->base.dev);
 	struct intel_crtc *crtc = to_intel_crtc(_crtc);
 	struct intel_plane_state *old_plane_state =
 		to_intel_plane_state(plane->base.state);
@@ -17321,7 +17320,6 @@ intel_user_framebuffer_create(struct drm_device *dev,
 			      struct drm_file *filp,
 			      const struct drm_mode_fb_cmd2 *user_mode_cmd)
 {
-	struct drm_i915_private *dev_priv = to_i915(dev);
 	struct drm_framebuffer *fb;
 	struct drm_i915_gem_object *obj;
 	struct drm_mode_fb_cmd2 mode_cmd = *user_mode_cmd;
