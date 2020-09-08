@@ -516,6 +516,10 @@ i915_gem_set_domain_ioctl(struct drm_device *dev, void *data,
 		goto out;
 	}
 
+	err = i915_gem_object_lock_interruptible(obj, NULL);
+	if (err)
+		goto out;
+
 	/*
 	 * Flush and acquire obj->pages so that we are coherent through
 	 * direct access in memory with previous cached writes through
@@ -527,7 +531,7 @@ i915_gem_set_domain_ioctl(struct drm_device *dev, void *data,
 	 */
 	err = i915_gem_object_pin_pages(obj);
 	if (err)
-		goto out;
+		goto out_unlock;
 
 	/*
 	 * Already in the desired write domain? Nothing for us to do!
@@ -542,10 +546,6 @@ i915_gem_set_domain_ioctl(struct drm_device *dev, void *data,
 	if (READ_ONCE(obj->write_domain) == read_domains)
 		goto out_unpin;
 
-	err = i915_gem_object_lock_interruptible(obj, NULL);
-	if (err)
-		goto out_unpin;
-
 	if (read_domains & I915_GEM_DOMAIN_WC)
 		err = i915_gem_object_set_to_wc_domain(obj, write_domain);
 	else if (read_domains & I915_GEM_DOMAIN_GTT)
@@ -556,13 +556,15 @@ i915_gem_set_domain_ioctl(struct drm_device *dev, void *data,
 	/* And bump the LRU for this access */
 	i915_gem_object_bump_inactive_ggtt(obj);
 
-	i915_gem_object_unlock(obj);
-
-	if (write_domain)
-		i915_gem_object_invalidate_frontbuffer(obj, ORIGIN_CPU);
-
 out_unpin:
 	i915_gem_object_unpin_pages(obj);
+
+out_unlock:
+	i915_gem_object_unlock(obj);
+
+	if (!err && write_domain)
+		i915_gem_object_invalidate_frontbuffer(obj, ORIGIN_CPU);
+
 out:
 	i915_gem_object_put(obj);
 	return err;
