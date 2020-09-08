@@ -33,6 +33,7 @@ static int
 i915_gem_create(struct drm_file *file,
 		struct intel_memory_region **placements,
 		int n_placements,
+		unsigned int flags,
 		u64 *size_p,
 		u32 *handle_p)
 {
