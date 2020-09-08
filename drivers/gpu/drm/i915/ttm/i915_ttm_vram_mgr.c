@@ -43,7 +43,6 @@ int i915_ttm_vram_mgr_init(struct drm_i915_private *i915)
 	struct i915_ttm_vram_mgr *mgr;
 	struct ttm_resource_manager *man;
 	unsigned long vram_size;
-	int ret;
 
 	if (!HAS_LMEM(i915))
 		return 0;
@@ -97,7 +96,7 @@ static int i915_ttm_vram_mgr_new(struct ttm_resource_manager *man,
 	enum drm_mm_insert_mode mode;
 	struct ttm_resource_manager *gtt_mgr = ttm_manager_type(tbo->bdev, TTM_PL_TT);
 	unsigned long lpfn, num_nodes, pages_per_node, pages_left;
-	uint64_t mem_bytes, max_bytes;
+	uint64_t mem_bytes;
 	struct i915_ttm_vram_node *node;
 	struct drm_i915_private *i915 = vram_mgr_to_i915(man);
 	unsigned i;
@@ -174,21 +173,21 @@ static int i915_ttm_vram_mgr_new(struct ttm_resource_manager *man,
 		pages_left -= pages;
 	}
 	spin_unlock(&mgr->lock);
-	struct ttm_place gtt_place = *place;
-	gtt_place.fpfn = 0;
-	/* force gtt mgr to give us a node */
-	gtt_place.lpfn = i915->ggtt.vm.total >> PAGE_SHIFT;
-	node->gtt_res = *mem;
-	node->gtt_res.mm_node = NULL;
+
+	{
+		struct ttm_place gtt_place = *place;
+		gtt_place.fpfn = 0;
+		/* force gtt mgr to give us a node */
+		gtt_place.lpfn = i915->ggtt.vm.total >> PAGE_SHIFT;
+		node->gtt_res = *mem;
+		node->gtt_res.mm_node = NULL;
 		/* allocate a gtt node as well */
-	r = gtt_mgr->func->get_node(gtt_mgr, tbo, &gtt_place, &node->gtt_res);
-	if (unlikely(r)) {
-		printk(KERN_ERR "fail two, %d %d\n", place->fpfn, place->lpfn);
-		goto error;
+		r = gtt_mgr->func->get_node(gtt_mgr, tbo, &gtt_place, &node->gtt_res);
+		if (unlikely(r)) {
+			printk(KERN_ERR "fail two, %d %d\n", place->fpfn, place->lpfn);
+			goto error;
+		}
 	}
-
-
-//	atomic64_add(vis_usage, &mgr->vis_usage);
 
 	mem->mm_node = node;
 	mem->start = node->nodes[0].start;
@@ -244,7 +243,6 @@ static const struct ttm_resource_manager_func i915_ttm_vram_mgr_func = {
 
 int i915_ttm_vram_get_pages(struct drm_i915_gem_object *obj)
 {
-	struct drm_i915_private *i915 = obj_to_i915(obj);
 	struct sg_table *st;
 	struct scatterlist *sg;
 	struct ttm_resource *mem = &obj->base.mem;

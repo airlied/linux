@@ -17,7 +17,6 @@ int i915_ttm_gtt_mgr_init(struct drm_i915_private *i915)
 	struct ttm_resource_manager *man;
 	struct i915_ttm_gtt_mgr *mgr;
 	unsigned long gtt_pages = i915->ggtt.vm.total >> PAGE_SHIFT;
-	int ret;
 
 	mgr = &i915->ttm_mman.gtt_mgr;
 	man = &mgr->manager;
@@ -42,8 +41,8 @@ void i915_ttm_gtt_mgr_fini(struct drm_i915_private *i915)
 {
 	struct i915_ttm_gtt_mgr *mgr = &i915->ttm_mman.gtt_mgr;
 	struct ttm_resource_manager *man = &mgr->manager;
-
 	int ret;
+
 	ttm_resource_manager_set_used(man, false);
 
 	ret = ttm_resource_manager_force_list_clean(&i915->ttm_mman.bdev, man);
@@ -76,10 +75,8 @@ static int i915_ttm_gtt_mgr_new(struct ttm_resource_manager *man,
 				 struct ttm_resource *mem)
 {
 	struct i915_ttm_gtt_mgr *mgr = to_gtt_mgr(man);
-	struct drm_mm *mm = &mgr->mm;
 	struct i915_ttm_gtt_node *node;
 	int r;
-	unsigned long lpfn;
 
 	spin_lock(&mgr->lock);
 	if ((&tbo->mem == mem || (tbo->mem.mem_type != TTM_PL_TT && tbo->mem.mem_type != I915_TTM_PL_STOLEN)) &&

@@ -27,7 +27,6 @@ int i915_ttm_stolen_mgr_init(struct drm_i915_private *i915)
 {
 	struct i915_ttm_stolen_mgr *mgr = &i915->ttm_mman.stolen_mgr;
 	struct ttm_resource_manager *man = &mgr->manager;
-	int ret;
 	unsigned long p_size = i915->stolen_usable_size >> PAGE_SHIFT;
 
 	printk("creating stolen size %llu\n", i915->stolen_usable_size);
@@ -86,18 +85,15 @@ static int i915_ttm_stolen_mgr_new(struct ttm_resource_manager *man,
 				 struct ttm_resource *mem)
 {
 	struct i915_ttm_stolen_mgr *mgr = to_stolen_mgr(man);
-	struct drm_mm *mm = &mgr->mm;
 	struct i915_ttm_stolen_node *node;
 	struct ttm_resource_manager *gtt_mgr = ttm_manager_type(tbo->bdev, TTM_PL_TT);
 	unsigned long lpfn;
 	int r;
 
-	printk(KERN_ERR "%s %d %lld %ld\n", __func__, tbo->mem.mem_type, atomic64_read(&mgr->available), mem->num_pages);
 	spin_lock(&mgr->lock);
 	if ((&tbo->mem == mem || tbo->mem.mem_type != TTM_PL_TT) &&
 	    atomic64_read(&mgr->available) < mem->num_pages) {
 		spin_unlock(&mgr->lock);
-		printk(KERN_ERR "leaving early\n");
 		return 0;
 	}
 	atomic64_sub(mem->num_pages, &mgr->available);
@@ -119,25 +115,25 @@ static int i915_ttm_stolen_mgr_new(struct ttm_resource_manager *man,
 					lpfn, DRM_MM_INSERT_BEST);
 	spin_unlock(&mgr->lock);
 	if (unlikely(r)) {
-		printk(KERN_ERR "fail one, %ld %ld\n", place->fpfn, place->lpfn);
 		goto err_free;
 	}
 
-	struct ttm_place gtt_place = *place;
-	gtt_place.fpfn = 0;
-	/* force gtt mgr to give us a node */
-	gtt_place.lpfn = to_i915_ttm_dev(tbo->bdev)->ggtt.vm.total >> PAGE_SHIFT;
-	node->gtt_res = *mem;
-	node->gtt_res.mm_node = NULL;
-	/* allocate a gtt node as well */
-	r = gtt_mgr->func->get_node(gtt_mgr, tbo, &gtt_place, &node->gtt_res);
-	if (unlikely(r)) {
-		printk(KERN_ERR "fail two, %ld %ld\n", place->fpfn, place->lpfn);
-		goto err_free;
+	{
+		struct ttm_place gtt_place = *place;
+		gtt_place.fpfn = 0;
+		/* force gtt mgr to give us a node */
+		gtt_place.lpfn = to_i915_ttm_dev(tbo->bdev)->ggtt.vm.total >> PAGE_SHIFT;
+		node->gtt_res = *mem;
+		node->gtt_res.mm_node = NULL;
+		/* allocate a gtt node as well */
+		r = gtt_mgr->func->get_node(gtt_mgr, tbo, &gtt_place, &node->gtt_res);
+		if (unlikely(r)) {
+			goto err_free;
+		}
 	}
 	mem->mm_node = node;
-	mem->start = node->gtt_res.start;
-	printk(KERN_ERR "stolen mgr node start %lx\n", mem->start);
+	mem->start = node->node.start;
+
 	return 0;
 err_free:
 	kfree(node);

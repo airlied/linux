@@ -28,7 +28,6 @@
 static void i915_ttm_evict_flags(struct ttm_buffer_object *tbo,
 				 struct ttm_placement *placement)
 {
-	struct drm_i915_private *i915 = to_i915_ttm_dev(tbo->bdev);
 	struct drm_i915_gem_object *obj;
 	static const struct ttm_place placements = {
 		.fpfn = 0,
@@ -77,10 +76,6 @@ static void i915_ttm_evict_flags(struct ttm_buffer_object *tbo,
  */
 static int i915_ttm_verify_access(struct ttm_buffer_object *tbo, struct file *filp)
 {
-	struct drm_i915_gem_object *obj = ttm_to_i915_gem(tbo);
-
-//	if (amdgpu_ttm_tt_get_usermm(bo->ttm))
-//		return -EPERM;
 	return drm_vma_node_verify_access(&tbo->base.vma_node,
 					  filp->private_data);
 }
@@ -174,7 +169,6 @@ static int i915_ttm_bo_move(struct ttm_buffer_object *tbo, bool evict,
  */
 static int i915_ttm_io_mem_reserve(struct ttm_bo_device *bdev, struct ttm_resource *mem)
 {
-	struct ttm_resource_manager *man = ttm_manager_type(bdev, mem->mem_type);
 	struct drm_i915_private *i915 = to_i915_ttm_dev(bdev);
 	struct drm_mm_node *mm_node = mem->mm_node;
 
@@ -251,8 +245,7 @@ static int i915_ttm_backend_bind(struct ttm_tt *ttm,
 				 struct ttm_resource *bo_mem)
 {
 	struct i915_ttm_tt *gtt = (struct i915_ttm_tt *)ttm;
-	int r;
-	u64 map_flag = 0;
+
 	if (ttm->page_flags & TTM_PAGE_FLAG_SG)
 		return 0;
 
@@ -266,14 +259,12 @@ static int i915_ttm_backend_bind(struct ttm_tt *ttm,
 
 static void i915_ttm_backend_unbind(struct ttm_tt *ttm)
 {
-	struct i915_ttm_tt *gtt = (struct i915_ttm_tt *)ttm;
 	if (ttm->page_flags & TTM_PAGE_FLAG_SG)
 		return;
 }
 
 static void i915_ttm_backend_destroy(struct ttm_tt *ttm)
 {
-
 	struct i915_ttm_tt *gtt = (void *)ttm;
 
 	ttm_dma_tt_fini(&gtt->ttm);
@@ -291,7 +282,6 @@ static struct ttm_tt *i915_ttm_tt_create(struct ttm_buffer_object *tbo,
 {
 	struct i915_ttm_tt *gtt;
 	struct drm_i915_gem_object *obj = ttm_to_i915_gem(tbo);
-	struct drm_i915_private *i915 = to_i915_ttm_dev(tbo->bdev);
 
 	gtt = kzalloc(sizeof(struct i915_ttm_tt), GFP_KERNEL);
 	if (gtt == NULL)
@@ -375,7 +365,6 @@ int i915_ttm_early_init(struct drm_i915_private *i915)
 int i915_ttm_init(struct drm_i915_private *i915)
 {
 	int r;
-	uint64_t vram_size = 0;
 
 	i915->ttm_mman.initialized = true;
 
@@ -434,56 +423,8 @@ void i915_ttm_fini(struct drm_i915_private *i915)
 	DRM_INFO("i915: ttm finialized\n");
 }
 
-
-/* Validate bo size is bit bigger then the request domain */
-static bool i915_ttm_bo_validate_size(struct drm_i915_private *i915,
-				      unsigned long size, u32 domain)
-{
-	struct ttm_resource_manager *man = NULL;
-
-	/*
-	 * If GTT is part of requested domains the check must succeed to
-	 * allow fall back to GTT
-	 */
-	if (domain & REGION_SMEM) {
-		man = ttm_manager_type(&i915->ttm_mman.bdev, TTM_PL_TT);
-
-		if (size < (man->size << PAGE_SHIFT))
-			return true;
-		else
-			goto fail;
-	}
-
-	if (domain & REGION_LMEM) {
-		man = ttm_manager_type(&i915->ttm_mman.bdev, TTM_PL_VRAM);
-
-		if (size < (man->size << PAGE_SHIFT))
-			return true;
-		else
-			goto fail;
-	}
-
-
-	if (domain & REGION_STOLEN_SMEM) {
-		man = ttm_manager_type(&i915->ttm_mman.bdev, I915_TTM_PL_STOLEN);
-
-		if (size < (man->size << PAGE_SHIFT))
-			return true;
-		else
-			goto fail;
-	}
-
-	return true;
-
-fail:
-	DRM_DEBUG("BO size %lu > total memory in domain: %llu\n", size,
-		  man->size << PAGE_SHIFT);
-	return false;
-}
-
 static void i915_ttm_bo_destroy(struct ttm_buffer_object *tbo)
 {
-	struct drm_i915_private *i915 = to_i915_ttm_dev(tbo->bdev);
 	struct drm_i915_gem_object *obj = ttm_to_i915_gem(tbo);
 
 	if (!list_empty(&obj->vma.list)) {
@@ -855,11 +796,8 @@ uint32_t i915_ttm_bo_get_preferred_pin_region(struct drm_i915_private *i915,
 
 int i915_ttm_create_bo_pages(struct drm_i915_gem_object *obj)
 {
-	struct drm_i915_private *i915 = obj_to_i915(obj);
 	/* create pages for LMEM bindings here */
-	struct scatterlist *sg;
 	struct ttm_resource *mem = &obj->base.mem;
-	unsigned int sg_page_sizes = 0;
 	int ret = 0;
 
 	if (obj->mm.pages)
@@ -868,14 +806,11 @@ int i915_ttm_create_bo_pages(struct drm_i915_gem_object *obj)
 		ret = i915_ttm_stolen_get_pages(obj);
 	} else if (mem->mem_type == TTM_PL_TT || mem->mem_type == TTM_PL_SYSTEM) {
 		struct ttm_dma_tt *ttm;
-		unsigned long supported = INTEL_INFO(i915)->page_sizes;
 		dma_addr_t *pages_addr;
 		int i;
-		struct drm_mm_node *nodes = mem->mm_node;
-		unsigned pages = mem->num_pages;
 		struct sg_table *st;
-		struct scatterlist *sg;
 		struct scatterlist *sgx;
+		int count = 0;
 
 		st = kmalloc(sizeof(*st), GFP_KERNEL);
 		if (!st)
@@ -888,7 +823,7 @@ int i915_ttm_create_bo_pages(struct drm_i915_gem_object *obj)
 					  GFP_KERNEL);
 
 		//TODO scatter list binding for real life
-		int count = 0;
+
 		for_each_sg(st->sgl, sgx, st->nents, i) {
 			sg_dma_address(sgx) = ttm->dma_address[count];
 			count += __sg_page_count(sgx);
@@ -915,7 +850,6 @@ int i915_ttm_alloc_gtt(struct ttm_buffer_object *tbo)
 	struct ttm_resource tmp;
 	struct ttm_placement placement;
 	struct ttm_place placements;
-	uint64_t addr, flags;
 	int r;
 	u64 map_flag = 0;
 	unsigned long start;

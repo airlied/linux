@@ -334,7 +334,7 @@ i915_gem_set_tiling_ioctl(struct drm_device *dev, void *data,
 {
 	struct drm_i915_private *dev_priv = to_i915(dev);
 	struct drm_i915_gem_set_tiling *args = data;
-
+	struct drm_i915_gem_object *obj;
 	int err;
 
 	if (!dev_priv->ggtt.num_fences)
@@ -374,7 +374,6 @@ i915_gem_set_tiling_ioctl(struct drm_device *dev, void *data,
 		}
 	}
 
-	struct drm_i915_gem_object *obj;		
 	obj = i915_gem_object_lookup(file, args->handle);
 	if (!obj)
 		return -ENOENT;
