@@ -539,7 +539,8 @@ const struct vmw_sg_table *vmw_bo_sg_table(struct ttm_buffer_object *bo)
 }
 
 
-static int vmw_ttm_bind(struct ttm_tt *ttm, struct ttm_resource *bo_mem)
+static int vmw_ttm_bind(struct ttm_bo_device *bdev,
+			struct ttm_tt *ttm, struct ttm_resource *bo_mem)
 {
 	struct vmw_ttm_tt *vmw_be =
 		container_of(ttm, struct vmw_ttm_tt, dma_ttm.ttm);
@@ -573,7 +574,8 @@ static int vmw_ttm_bind(struct ttm_tt *ttm, struct ttm_resource *bo_mem)
 	return 0;
 }
 
-static void vmw_ttm_unbind(struct ttm_tt *ttm)
+static void vmw_ttm_unbind(struct ttm_bo_device *bdev,
+			   struct ttm_tt *ttm)
 {
 	struct vmw_ttm_tt *vmw_be =
 		container_of(ttm, struct vmw_ttm_tt, dma_ttm.ttm);
@@ -594,7 +596,7 @@ static void vmw_ttm_unbind(struct ttm_tt *ttm)
 }
 
 
-static void vmw_ttm_destroy(struct ttm_tt *ttm)
+static void vmw_ttm_destroy(struct ttm_bo_device *bdev, struct ttm_tt *ttm)
 {
 	struct vmw_ttm_tt *vmw_be =
 		container_of(ttm, struct vmw_ttm_tt, dma_ttm.ttm);
@@ -612,7 +614,8 @@ static void vmw_ttm_destroy(struct ttm_tt *ttm)
 }
 
 
-static int vmw_ttm_populate(struct ttm_tt *ttm, struct ttm_operation_ctx *ctx)
+static int vmw_ttm_populate(struct ttm_bo_device *bdev,
+			    struct ttm_tt *ttm, struct ttm_operation_ctx *ctx)
 {
 	struct vmw_ttm_tt *vmw_tt =
 		container_of(ttm, struct vmw_ttm_tt, dma_ttm.ttm);
@@ -640,7 +643,8 @@ static int vmw_ttm_populate(struct ttm_tt *ttm, struct ttm_operation_ctx *ctx)
 	return ret;
 }
 
-static void vmw_ttm_unpopulate(struct ttm_tt *ttm)
+static void vmw_ttm_unpopulate(struct ttm_bo_device *bdev,
+			       struct ttm_tt *ttm)
 {
 	struct vmw_ttm_tt *vmw_tt = container_of(ttm, struct vmw_ttm_tt,
 						 dma_ttm.ttm);
@@ -664,12 +668,6 @@ static void vmw_ttm_unpopulate(struct ttm_tt *ttm)
 		ttm_pool_unpopulate(ttm);
 }
 
-static struct ttm_backend_func vmw_ttm_func = {
-	.bind = vmw_ttm_bind,
-	.unbind = vmw_ttm_unbind,
-	.destroy = vmw_ttm_destroy,
-};
-
 static struct ttm_tt *vmw_ttm_tt_create(struct ttm_buffer_object *bo,
 					uint32_t page_flags)
 {
@@ -680,7 +678,6 @@ static struct ttm_tt *vmw_ttm_tt_create(struct ttm_buffer_object *bo,
 	if (!vmw_be)
 		return NULL;
 
-	vmw_be->dma_ttm.ttm.func = &vmw_ttm_func;
 	vmw_be->dev_priv = container_of(bo->bdev, struct vmw_private, bdev);
 	vmw_be->mob = NULL;
 
@@ -721,8 +718,8 @@ static int vmw_ttm_io_mem_reserve(struct ttm_bo_device *bdev, struct ttm_resourc
 	case VMW_PL_MOB:
 		return 0;
 	case TTM_PL_VRAM:
-		mem->bus.offset = mem->start << PAGE_SHIFT;
-		mem->bus.base = dev_priv->vram_start;
+		mem->bus.offset = (mem->start << PAGE_SHIFT) +
+			dev_priv->vram_start;
 		mem->bus.is_iomem = true;
 		break;
 	default:
@@ -766,6 +763,9 @@ struct ttm_bo_driver vmw_bo_driver = {
 	.ttm_tt_create = &vmw_ttm_tt_create,
 	.ttm_tt_populate = &vmw_ttm_populate,
 	.ttm_tt_unpopulate = &vmw_ttm_unpopulate,
+	.ttm_tt_bind = &vmw_ttm_bind,
+	.ttm_tt_unbind = &vmw_ttm_unbind,
+	.ttm_tt_destroy = &vmw_ttm_destroy,
 	.eviction_valuable = ttm_bo_eviction_valuable,
 	.evict_flags = vmw_evict_flags,
 	.move = NULL,
@@ -796,7 +796,7 @@ int vmw_bo_create_and_populate(struct vmw_private *dev_priv,
 
 	ret = ttm_bo_reserve(bo, false, true, NULL);
 	BUG_ON(ret != 0);
-	ret = vmw_ttm_populate(bo->ttm, &ctx);
+	ret = vmw_ttm_populate(bo->bdev, bo->ttm, &ctx);
 	if (likely(ret == 0)) {
 		struct vmw_ttm_tt *vmw_tt =
 			container_of(bo->ttm, struct vmw_ttm_tt, dma_ttm.ttm);

@@ -967,15 +967,11 @@ static const struct drm_gem_object_funcs drm_gem_vram_object_funcs = {
  * TTM TT
  */
 
-static void backend_func_destroy(struct ttm_tt *tt)
+static void bo_driver_ttm_tt_destroy(struct ttm_bo_device *bdev, struct ttm_tt *tt)
 {
 	ttm_tt_fini(tt);
 	kfree(tt);
 }
-
-static struct ttm_backend_func backend_func = {
-	.destroy = backend_func_destroy
-};
 
 /*
  * TTM BO device
@@ -990,8 +986,6 @@ static struct ttm_tt *bo_driver_ttm_tt_create(struct ttm_buffer_object *bo,
 	tt = kzalloc(sizeof(*tt), GFP_KERNEL);
 	if (!tt)
 		return NULL;
-
-	tt->func = &backend_func;
 
 	ret = ttm_tt_init(tt, bo, page_flags);
 	if (ret < 0)
@@ -1042,8 +1036,7 @@ static int bo_driver_io_mem_reserve(struct ttm_bo_device *bdev,
 	case TTM_PL_SYSTEM:	/* nothing to do */
 		break;
 	case TTM_PL_VRAM:
-		mem->bus.offset = mem->start << PAGE_SHIFT;
-		mem->bus.base = vmm->vram_base;
+		mem->bus.offset = (mem->start << PAGE_SHIFT) + vmm->vram_base;
 		mem->bus.is_iomem = true;
 		break;
 	default:
@@ -1055,6 +1048,7 @@ static int bo_driver_io_mem_reserve(struct ttm_bo_device *bdev,
 
 static struct ttm_bo_driver bo_driver = {
 	.ttm_tt_create = bo_driver_ttm_tt_create,
+	.ttm_tt_destroy = bo_driver_ttm_tt_destroy,
 	.eviction_valuable = ttm_bo_eviction_valuable,
 	.evict_flags = bo_driver_evict_flags,
 	.move_notify = bo_driver_move_notify,
