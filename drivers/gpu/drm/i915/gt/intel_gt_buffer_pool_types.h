@@ -31,6 +31,7 @@ struct intel_gt_buffer_pool_node {
 		struct rcu_head rcu;
 	};
 	unsigned long age;
+	bool pinned;
 };
 
 #endif /* INTEL_GT_BUFFER_POOL_TYPES_H */

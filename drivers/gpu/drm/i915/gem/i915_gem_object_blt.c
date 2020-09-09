@@ -54,6 +54,9 @@ struct i915_vma *intel_emit_vma_fill_blt(struct intel_context *ce,
 	if (unlikely(err))
 		goto out_put;
 
+	/* we pinned the pool, mark it as such */
+	intel_gt_buffer_pool_mark_used(pool);
+
 	cmd = i915_gem_object_pin_map(pool->obj, I915_MAP_WC);
 	if (IS_ERR(cmd)) {
 		err = PTR_ERR(cmd);
@@ -275,6 +278,9 @@ struct i915_vma *intel_emit_vma_copy_blt(struct intel_context *ce,
 	err = i915_vma_pin_ww(batch, ww, 0, 0, PIN_USER);
 	if (unlikely(err))
 		goto out_put;
+
+	/* we pinned the pool, mark it as such */
+	intel_gt_buffer_pool_mark_used(pool);
 
 	cmd = i915_gem_object_pin_map(pool->obj, I915_MAP_WC);
 	if (IS_ERR(cmd)) {
