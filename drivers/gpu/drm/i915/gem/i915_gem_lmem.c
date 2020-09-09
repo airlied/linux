@@ -31,7 +31,7 @@ int i915_gem_object_lmem_pread(struct drm_i915_gem_object *obj,
 	if (ret)
 		return ret;
 
-	i915_gem_object_lock(obj);
+	i915_gem_object_lock(obj, NULL);
 	ret = i915_gem_object_set_to_wc_domain(obj, false);
 	if (ret) {
 		i915_gem_object_unlock(obj);
@@ -117,7 +117,7 @@ int i915_gem_object_lmem_pwrite(struct drm_i915_gem_object *obj,
 	if (ret)
 		return ret;
 
-	i915_gem_object_lock(obj);
+	i915_gem_object_lock(obj, NULL);
 	ret = i915_gem_object_set_to_wc_domain(obj, true);
 	if (ret) {
 		i915_gem_object_unlock(obj);

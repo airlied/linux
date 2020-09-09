@@ -88,7 +88,7 @@ i915_gem_create(struct drm_file *file,
 			goto handle_create;
 		}
 
-		i915_gem_object_lock(obj);
+		i915_gem_object_lock(obj, NULL);
 		ret = i915_gem_object_set_to_cpu_domain(obj, false);
 		i915_gem_object_unlock(obj);
 		if (ret) {
