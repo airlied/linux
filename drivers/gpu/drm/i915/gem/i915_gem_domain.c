@@ -528,7 +528,9 @@ i915_gem_set_domain_ioctl(struct drm_device *dev, void *data,
 	 * considered to be outside of any cache domain.
 	 */
 	if (i915_gem_object_is_proxy(obj)) {
-		err = -ENXIO;
+		/* silently allow userptr to complete */
+		if (!i915_gem_object_is_userptr(obj))
+			err = -ENXIO;
 		goto out;
 	}
 
