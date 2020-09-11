@@ -289,6 +289,7 @@ struct drm_i915_gem_object {
 	unsigned long *bit_17;
 
 	union {
+#ifdef CONFIG_MMU_NOTIFIER
 		struct i915_gem_userptr {
 			uintptr_t ptr;
 
@@ -296,6 +297,7 @@ struct drm_i915_gem_object {
 			struct i915_mmu_object *mmu_object;
 			struct work_struct *work;
 		} userptr;
+#endif
 
 		unsigned long scratch;
 		u64 encode;
