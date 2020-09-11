@@ -38,6 +38,9 @@ void __i915_gem_object_release_shmem(struct drm_i915_gem_object *obj,
 				     bool needs_clflush);
 
 int i915_gem_object_attach_phys(struct drm_i915_gem_object *obj, int align);
+void i915_gem_object_put_pages_phys(struct drm_i915_gem_object *obj,
+				    struct sg_table *pages);
+
 
 void i915_gem_flush_free_objects(struct drm_i915_private *i915);
 

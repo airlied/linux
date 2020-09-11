@@ -76,6 +76,8 @@ static int i915_gem_object_get_pages_phys(struct drm_i915_gem_object *obj)
 
 	intel_gt_chipset_flush(&to_i915(obj->base.dev)->gt);
 
+	/* We're no longer struct page backed */
+	obj->flags &= ~I915_BO_ALLOC_STRUCT_PAGE;
 	__i915_gem_object_set_pages(obj, st, sg->length);
 
 	return 0;
@@ -89,7 +91,7 @@ err_pci:
 	return -ENOMEM;
 }
 
-static void
+void
 i915_gem_object_put_pages_phys(struct drm_i915_gem_object *obj,
 			       struct sg_table *pages)
 {
@@ -134,60 +136,14 @@ i915_gem_object_put_pages_phys(struct drm_i915_gem_object *obj,
 			  vaddr, dma);
 }
 
-static void phys_release(struct drm_i915_gem_object *obj)
-{
-	fput(obj->base.filp);
-}
-
-static const struct drm_i915_gem_object_ops i915_gem_phys_ops = {
-	.name = "i915_gem_object_phys",
-	.get_pages = i915_gem_object_get_pages_phys,
-	.put_pages = i915_gem_object_put_pages_phys,
-
-	.release = phys_release,
-};
-
-int i915_gem_object_attach_phys(struct drm_i915_gem_object *obj, int align)
+static int i915_gem_object_shmem_to_phys(struct drm_i915_gem_object *obj)
 {
 	struct sg_table *pages;
 	int err;
 
-	if (align > obj->base.size)
-		return -EINVAL;
-
-	if (obj->ops == &i915_gem_phys_ops)
-		return 0;
-
-	if (obj->ops != &i915_gem_shmem_ops)
-		return -EINVAL;
-
-	err = i915_gem_object_unbind(obj, I915_GEM_OBJECT_UNBIND_ACTIVE);
-	if (err)
-		return err;
-
-	mutex_lock_nested(&obj->mm.lock, I915_MM_GET_PAGES);
-
-	if (obj->mm.madv != I915_MADV_WILLNEED) {
-		err = -EFAULT;
-		goto err_unlock;
-	}
-
-	if (obj->mm.quirked) {
-		err = -EFAULT;
-		goto err_unlock;
-	}
-
-	if (obj->mm.mapping) {
-		err = -EBUSY;
-		goto err_unlock;
-	}
-
 	pages = __i915_gem_object_unset_pages(obj);
 
-	obj->ops = &i915_gem_phys_ops;
-	obj->flags &= ~I915_BO_ALLOC_STRUCT_PAGE;
-
-	err = ____i915_gem_object_get_pages(obj);
+	err = i915_gem_object_get_pages_phys(obj);
 	if (err)
 		goto err_xfer;
 
@@ -198,19 +154,64 @@ int i915_gem_object_attach_phys(struct drm_i915_gem_object *obj, int align)
 		i915_gem_shmem_ops.put_pages(obj, pages);
 
 	i915_gem_object_release_memory_region(obj);
-
-	mutex_unlock(&obj->mm.lock);
 	return 0;
 
 err_xfer:
-	obj->ops = &i915_gem_shmem_ops;
-	obj->flags |= I915_BO_ALLOC_STRUCT_PAGE;
 	if (!IS_ERR_OR_NULL(pages)) {
 		unsigned int sg_page_sizes = i915_sg_page_sizes(pages->sgl);
 
 		__i915_gem_object_set_pages(obj, pages, sg_page_sizes);
 	}
-err_unlock:
+	return err;
+}
+
+int i915_gem_object_attach_phys(struct drm_i915_gem_object *obj, int align)
+{
+	int err;
+
+	if (align > obj->base.size)
+		return -EINVAL;
+
+	if (obj->ops != &i915_gem_shmem_ops)
+		return -EINVAL;
+
+	if (!i915_gem_object_has_struct_page(obj))
+		return 0;
+
+	err = i915_gem_object_unbind(obj, I915_GEM_OBJECT_UNBIND_ACTIVE);
+	if (err)
+		return err;
+
+	mutex_lock_nested(&obj->mm.lock, I915_MM_GET_PAGES);
+
+	if (unlikely(!i915_gem_object_has_struct_page(obj)))
+		goto out;
+
+	if (obj->mm.madv != I915_MADV_WILLNEED) {
+		err = -EFAULT;
+		goto out;
+	}
+
+	if (obj->mm.quirked) {
+		err = -EFAULT;
+		goto out;
+	}
+
+	if (obj->mm.mapping || i915_gem_object_has_pinned_pages(obj)) {
+		err = -EBUSY;
+		goto out;
+	}
+
+	if (unlikely(obj->mm.madv != I915_MADV_WILLNEED)) {
+		drm_dbg(obj->base.dev,
+			"Attempting to obtain a purgeable object\n");
+		err = -EFAULT;
+		goto out;
+	}
+
+	err = i915_gem_object_shmem_to_phys(obj);
+
+out:
 	mutex_unlock(&obj->mm.lock);
 	return err;
 }

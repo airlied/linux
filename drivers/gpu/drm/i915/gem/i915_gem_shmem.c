@@ -303,6 +303,11 @@ shmem_put_pages(struct drm_i915_gem_object *obj, struct sg_table *pages)
 	struct pagevec pvec;
 	struct page *page;
 
+	if (unlikely(!i915_gem_object_has_struct_page(obj))) {
+		i915_gem_object_put_pages_phys(obj, pages);
+		return;
+	}
+
 	__i915_gem_object_release_shmem(obj, pages, true);
 
 	i915_gem_gtt_finish_pages(obj, pages);
@@ -423,7 +428,8 @@ shmem_pwrite(struct drm_i915_gem_object *obj,
 
 static void shmem_release(struct drm_i915_gem_object *obj)
 {
-	i915_gem_object_release_memory_region(obj);
+	if (obj->flags & I915_BO_ALLOC_STRUCT_PAGE)
+		i915_gem_object_release_memory_region(obj);
 
 	fput(obj->base.filp);
 }
