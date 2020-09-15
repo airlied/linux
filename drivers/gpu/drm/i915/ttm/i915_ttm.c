@@ -700,6 +700,7 @@ int i915_ttm_init(struct drm_i915_private *i915)
 {
 	int r;
 
+	mutex_init(&i915->ttm_mman.notifier_lock);
 	i915->ttm_mman.initialized = true;
 
 	if (HAS_LMEM(i915)) {
@@ -777,7 +778,7 @@ static void i915_ttm_bo_destroy(struct ttm_buffer_object *tbo)
 
 	drm_gem_free_mmap_offset(&obj->base.base);
 	kfree(obj->mm.placements);
-
+	i915_ttm_mn_unregister(obj);
 #if 0
 	if (bo->pages) {
 		sg_free_table(bo->pages);
@@ -1477,6 +1478,9 @@ struct drm_i915_gem_object *i915_ttm_object_create_userptr(struct drm_i915_priva
 	if (r)
 		goto release_object;
 
+	r = i915_ttm_mn_register(obj, user_ptr);
+	if (r)
+		goto release_object;
 	return obj;
 release_object:
 	drm_gem_object_put(&obj->base.base);

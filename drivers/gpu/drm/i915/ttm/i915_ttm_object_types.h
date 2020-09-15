@@ -46,6 +46,7 @@ struct i915_ttm_mman {
 	struct i915_ttm_gtt_mgr gtt_mgr;
 	struct i915_ttm_stolen_mgr stolen_mgr;
 	void __iomem *aper_base_kaddr;
+	struct mutex notifier_lock;
 };
 
 #endif
