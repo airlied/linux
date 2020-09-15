@@ -96,6 +96,7 @@ config DRM_I915_COMPRESS_ERROR
 config DRM_I915_USERPTR
 	bool "Always enable userptr support"
 	depends on DRM_I915
+	select HMM_MIRROR
 	select MMU_NOTIFIER
 	default y
 	help

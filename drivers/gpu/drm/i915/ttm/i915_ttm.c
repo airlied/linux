@@ -244,14 +244,268 @@ struct i915_ttm_tt {
 	struct ttm_dma_tt ttm;
 	struct drm_i915_gem_object *obj;
 	uint64_t offset;
+	uint64_t userptr;
+	struct task_struct *usertask;
+	uint32_t userflags;
+#if IS_ENABLED(CONFIG_DRM_I915_USERPTR)
+	struct hmm_range *range;
+#endif
 };
+
+/**
+ * amdgpu_ttm_tt_is_readonly - Is the ttm_tt object read only?
+ */
+static bool i915_ttm_tt_is_readonly(struct ttm_tt *ttm)
+{
+	struct i915_ttm_tt *gtt = (void *)ttm;
+
+	if (gtt == NULL)
+		return false;
+
+	return !!(gtt->userflags & I915_USERPTR_READ_ONLY);
+}
+
+#ifdef CONFIG_DRM_I915_USERPTR
+/**
+ * i915_ttm_tt_get_user_pages - get device accessible pages that back user
+ * memory and start HMM tracking CPU page table update
+ *
+ * Calling function must call i915_ttm_tt_userptr_range_done() once and only
+ * once afterwards to stop HMM tracking
+ */
+int i915_ttm_tt_get_user_pages(struct drm_i915_gem_object *obj, struct page **pages)
+{
+	struct ttm_tt *ttm = obj->base.ttm;
+	struct i915_ttm_tt *gtt = (void *)ttm;
+	unsigned long start = gtt->userptr;
+	struct vm_area_struct *vma;
+	struct hmm_range *range;
+	unsigned long timeout;
+	struct mm_struct *mm;
+	unsigned long i;
+	int r = 0;
+
+	mm = obj->ttm.notifier.mm;
+	if (unlikely(!mm)) {
+		DRM_DEBUG_DRIVER("BO is not registered?\n");
+		return -EFAULT;
+	}
+
+	/* Another get_user_pages is running at the same time?? */
+	if (WARN_ON(gtt->range))
+		return -EFAULT;
+
+	if (!mmget_not_zero(mm)) /* Happens during process shutdown */
+		return -ESRCH;
+
+	range = kzalloc(sizeof(*range), GFP_KERNEL);
+	if (unlikely(!range)) {
+		r = -ENOMEM;
+		goto out;
+	}
+	range->notifier = &obj->ttm.notifier;
+	range->start = obj->ttm.notifier.interval_tree.start;
+	range->end = obj->ttm.notifier.interval_tree.last + 1;
+	range->default_flags = HMM_PFN_REQ_FAULT;
+	if (!i915_ttm_tt_is_readonly(ttm))
+		range->default_flags |= HMM_PFN_REQ_WRITE;
+
+	range->hmm_pfns = kvmalloc_array(ttm->num_pages,
+					 sizeof(*range->hmm_pfns), GFP_KERNEL);
+	if (unlikely(!range->hmm_pfns)) {
+		r = -ENOMEM;
+		goto out_free_ranges;
+	}
+
+	mmap_read_lock(mm);
+	vma = find_vma(mm, start);
+	if (unlikely(!vma || start < vma->vm_start)) {
+		r = -EFAULT;
+		goto out_unlock;
+	}
+	mmap_read_unlock(mm);
+	timeout = jiffies + msecs_to_jiffies(HMM_RANGE_DEFAULT_TIMEOUT);
+
+retry:
+	range->notifier_seq = mmu_interval_read_begin(&obj->ttm.notifier);
+
+	mmap_read_lock(mm);
+	r = hmm_range_fault(range);
+	mmap_read_unlock(mm);
+	if (unlikely(r)) {
+		/*
+		 * FIXME: This timeout should encompass the retry from
+		 * mmu_interval_read_retry() as well.
+		 */
+		if (r == -EBUSY && !time_after(jiffies, timeout))
+			goto retry;
+		goto out_free_pfns;
+	}
+
+	/*
+	 * Due to default_flags, all pages are HMM_PFN_VALID or
+	 * hmm_range_fault() fails. FIXME: The pages cannot be touched outside
+	 * the notifier_lock, and mmu_interval_read_retry() must be done first.
+	 */
+	for (i = 0; i < ttm->num_pages; i++)
+		pages[i] = hmm_pfn_to_page(range->hmm_pfns[i]);
+
+	gtt->range = range;
+	mmput(mm);
+
+	return 0;
+
+out_unlock:
+	mmap_read_unlock(mm);
+out_free_pfns:
+	kvfree(range->hmm_pfns);
+out_free_ranges:
+	kfree(range);
+out:
+	mmput(mm);
+	return r;
+}
+
+/**
+ * i915_ttm_tt_userptr_range_done - stop HMM track the CPU page table change
+ * Check if the pages backing this ttm range have been invalidated
+ *
+ * Returns: true if pages are still valid
+ */
+bool i915_ttm_tt_get_user_pages_done(struct ttm_tt *ttm)
+{
+	struct i915_ttm_tt *gtt = (void *)ttm;
+	bool r = false;
+
+	if (!gtt || !gtt->userptr)
+		return false;
+
+	DRM_DEBUG_DRIVER("user_pages_done 0x%llx pages 0x%lx\n",
+		gtt->userptr, ttm->num_pages);
+
+	WARN_ONCE(!gtt->range || !gtt->range->hmm_pfns,
+		"No user pages to check\n");
+
+	if (gtt->range) {
+		/*
+		 * FIXME: Must always hold notifier_lock for this, and must
+		 * not ignore the return code.
+		 */
+		r = mmu_interval_read_retry(gtt->range->notifier,
+					 gtt->range->notifier_seq);
+		kvfree(gtt->range->hmm_pfns);
+		kfree(gtt->range);
+		gtt->range = NULL;
+	}
+
+	return !r;
+}
+#endif
+
+/**
+ * i915_ttm_tt_set_user_pages - Copy pages in, putting old pages as necessary.
+ *
+ * Called by i915_cs_list_validate(). This creates the page list
+ * that backs user memory and will ultimately be mapped into the device
+ * address space.
+ */
+void i915_ttm_tt_set_user_pages(struct ttm_tt *ttm, struct page **pages)
+{
+	unsigned long i;
+
+	for (i = 0; i < ttm->num_pages; ++i)
+		ttm->pages[i] = pages ? pages[i] : NULL;
+}
+
+/**
+ * i915_ttm_tt_pin_userptr - 	prepare the sg table with the user pages
+ *
+ * Called by i915_ttm_backend_bind()
+ **/
+static int i915_ttm_tt_pin_userptr(struct ttm_bo_device *bdev,
+				     struct ttm_tt *ttm)
+{
+	struct drm_i915_private *i915 = to_i915_ttm_dev(bdev);
+	struct i915_ttm_tt *gtt = (void *)ttm;
+	int r;
+
+	int write = !(gtt->userflags & I915_USERPTR_READ_ONLY);
+	enum dma_data_direction direction = write ?
+		DMA_BIDIRECTIONAL : DMA_TO_DEVICE;
+
+	/* Allocate an SG array and squash pages into it */
+	r = sg_alloc_table_from_pages(ttm->sg, ttm->pages, ttm->num_pages, 0,
+				      ttm->num_pages << PAGE_SHIFT,
+				      GFP_KERNEL);
+	if (r)
+		goto release_sg;
+
+	/* Map SG to device */
+	r = dma_map_sgtable(i915->drm.dev, ttm->sg, direction, 0);
+	if (r)
+		goto release_sg;
+
+	/* convert SG to linear array of pages and dma addresses */
+	drm_prime_sg_to_page_addr_arrays(ttm->sg, ttm->pages,
+					 gtt->ttm.dma_address, ttm->num_pages);
+
+	return 0;
+
+release_sg:
+	kfree(ttm->sg);
+	return r;
+}
+
+/**
+ * i915_ttm_tt_unpin_userptr - Unpin and unmap userptr pages
+ */
+static void i915_ttm_tt_unpin_userptr(struct ttm_bo_device *bdev,
+				      struct ttm_tt *ttm)
+{
+	struct drm_i915_private *i915 = to_i915_ttm_dev(bdev);
+	struct i915_ttm_tt *gtt = (void *)ttm;
+
+	int write = !(gtt->userflags & I915_USERPTR_READ_ONLY);
+	enum dma_data_direction direction = write ?
+		DMA_BIDIRECTIONAL : DMA_TO_DEVICE;
+
+	/* double check that we don't free the table twice */
+	if (!ttm->sg->sgl)
+		return;
+
+	/* unmap the pages mapped to the device */
+	dma_unmap_sgtable(i915->drm.dev, ttm->sg, direction, 0);
+	sg_free_table(ttm->sg);
+
+#if IS_ENABLED(CONFIG_DRM_I915_USERPTR)
+	if (gtt->range) {
+		unsigned long i;
+
+		for (i = 0; i < ttm->num_pages; i++) {
+			if (ttm->pages[i] !=
+			    hmm_pfn_to_page(gtt->range->hmm_pfns[i]))
+				break;
+		}
+
+		WARN((i == ttm->num_pages), "Missing get_user_page_done\n");
+	}
+#endif
+}
 
 static int i915_ttm_tt_bind(struct ttm_bo_device *bdev,
 				 struct ttm_tt *ttm,
 				 struct ttm_resource *bo_mem)
 {
 	struct i915_ttm_tt *gtt = (struct i915_ttm_tt *)ttm;
+	int r;
 
+	if (gtt->userptr) {
+		r = i915_ttm_tt_pin_userptr(bdev, ttm);
+		if (r) {
+			DRM_ERROR("failed to pin userptr\n");
+			return r;
+		}
+	}
 	if (ttm->page_flags & TTM_PAGE_FLAG_SG)
 		return 0;
 
@@ -266,6 +520,9 @@ static int i915_ttm_tt_bind(struct ttm_bo_device *bdev,
 static void i915_ttm_tt_unbind(struct ttm_bo_device *bdev,
 			       struct ttm_tt *ttm)
 {
+	struct i915_ttm_tt *gtt = (struct i915_ttm_tt *)ttm;
+	if (gtt->userptr)
+		i915_ttm_tt_unpin_userptr(bdev, ttm);
 }
 
 static void i915_ttm_tt_destroy(struct ttm_bo_device *bdev,
@@ -273,6 +530,8 @@ static void i915_ttm_tt_destroy(struct ttm_bo_device *bdev,
 {
 	struct i915_ttm_tt *gtt = (void *)ttm;
 
+	if (gtt->usertask)
+		put_task_struct(gtt->usertask);
 	ttm_dma_tt_fini(&gtt->ttm);
 	kfree(gtt);
 }
@@ -307,6 +566,17 @@ static int i915_ttm_tt_populate(struct ttm_bo_device *bdev,
 	struct drm_i915_private *i915 = to_i915_ttm_dev(bdev);
 	struct i915_ttm_tt *gtt = (void *)ttm;
 
+	/* user pages are bound by i915_ttm_tt_pin_userptr() */
+	if (gtt && gtt->userptr) {
+		ttm->sg = kzalloc(sizeof(struct sg_table), GFP_KERNEL);
+		if (!ttm->sg)
+			return -ENOMEM;
+
+		ttm->page_flags |= TTM_PAGE_FLAG_SG;
+		ttm->state = tt_unbound;
+		return 0;
+	}
+
 	if (ttm->page_flags & TTM_PAGE_FLAG_SG) {
 		return 0;
 	}
@@ -320,11 +590,70 @@ static void i915_ttm_tt_unpopulate(struct ttm_bo_device *bdev,
 	struct drm_i915_private *i915 = to_i915_ttm_dev(bdev);
 	struct i915_ttm_tt *gtt = (void *)ttm;
 
+	if (gtt && gtt->userptr) {
+		i915_ttm_tt_set_user_pages(ttm, NULL);
+		kfree(ttm->sg);
+		ttm->page_flags &= ~TTM_PAGE_FLAG_SG;
+		return;
+	}
+
 	if (ttm->page_flags & TTM_PAGE_FLAG_SG) {
 		return;
 	}
 
 	ttm_unmap_and_unpopulate_pages(i915->drm.dev, &gtt->ttm);
+}
+
+
+/**
+ * i915_ttm_tt_set_userptr - Initialize userptr GTT ttm_tt for the current
+ * task
+ *
+ * @bo: The ttm_buffer_object to bind this userptr to
+ * @addr:  The address in the current tasks VM space to use
+ * @flags: Requirements of userptr object.
+ *
+ * Called by i915_gem_userptr_ioctl() to bind userptr pages
+ * to current task
+ */
+int i915_ttm_tt_set_userptr(struct ttm_buffer_object *bo,
+			    uint64_t addr, uint32_t flags)
+{
+	struct i915_ttm_tt *gtt;
+
+	if (!bo->ttm) {
+		/* TODO: We want a separate TTM object type for userptrs */
+		bo->ttm = i915_ttm_tt_create(bo, 0);
+		if (bo->ttm == NULL)
+			return -ENOMEM;
+	}
+
+	gtt = (void*)bo->ttm;
+	gtt->userptr = addr;
+	gtt->userflags = flags;
+
+	if (gtt->usertask)
+		put_task_struct(gtt->usertask);
+	gtt->usertask = current->group_leader;
+	get_task_struct(gtt->usertask);
+
+	return 0;
+}
+
+/**
+ * i915_ttm_tt_get_usermm - Return memory manager for ttm_tt object
+ */
+struct mm_struct *i915_ttm_tt_get_usermm(struct ttm_tt *ttm)
+{
+	struct i915_ttm_tt *gtt = (void *)ttm;
+
+	if (gtt == NULL)
+		return NULL;
+
+	if (gtt->usertask == NULL)
+		return NULL;
+
+	return gtt->usertask->mm;
 }
 
 static struct ttm_bo_driver i915_ttm_bo_driver = {
