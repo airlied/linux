@@ -101,4 +101,7 @@ struct drm_mm_node *i915_ttm_vram_find_node(struct ttm_buffer_object *bo, u64 *o
 
 int i915_ttm_vram_vram_copy(struct ttm_buffer_object *obj,
 			    struct ttm_resource *new_mem);
+
+int i915_ttm_mn_register(struct drm_i915_gem_object *obj, unsigned long addr);
+void i915_ttm_mn_unregister(struct drm_i915_gem_object *obj);
 #endif
