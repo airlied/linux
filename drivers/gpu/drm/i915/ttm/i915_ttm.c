@@ -1442,6 +1442,47 @@ struct drm_i915_gem_object *i915_ttm_object_create_region(struct intel_memory_re
 
 }
 
+struct drm_i915_gem_object *i915_ttm_object_create_userptr(struct drm_i915_private *i915,
+							   u64 user_ptr,
+							   u64 user_size,
+							   u32 user_flags)
+{
+	static struct lock_class_key lock_class;
+	struct drm_i915_gem_object *obj;
+	int r;
+	obj = i915_gem_object_alloc();
+	if (!obj)
+		return ERR_PTR(-ENOMEM);
+
+	drm_gem_private_object_init(&i915->drm, &obj->base.base, user_size);
+	i915_gem_object_init(obj, &ttm_ops, &lock_class);
+
+	i915_ttm_bo_placement_from_region(obj, REGION_SMEM, 0);
+	{
+		struct ttm_operation_ctx ctx = {
+			.interruptible = true,
+			.no_wait_gpu = false,
+			.resv = NULL,
+			.flags = TTM_OPT_FLAG_ALLOW_RES_EVICT,
+		};
+		size_t acc_size;
+
+		acc_size = ttm_bo_dma_acc_size(&i915->ttm_mman.bdev, user_size, sizeof(struct drm_i915_gem_object));
+		r = ttm_bo_init_reserved(&i915->ttm_mman.bdev, &obj->base, user_size, ttm_bo_type_device,
+					 &obj->ttm.placement, 1, &ctx, acc_size,
+					 NULL, obj->base.base.resv, &i915_ttm_bo_destroy);
+	}
+
+	r = i915_ttm_tt_set_userptr(&obj->base, user_ptr, user_flags);
+	if (r)
+		goto release_object;
+
+	return obj;
+release_object:
+	drm_gem_object_put(&obj->base.base);
+	return ERR_PTR(r);
+}
+
 void __iomem *i915_ttm_pin_iomap(struct drm_i915_gem_object *obj)
 {
 	void *vaddr;
