@@ -16,7 +16,9 @@
 #include <drm/ttm/ttm_placement.h>
 #include "i915_active.h"
 #include "i915_selftest.h"
-
+#ifdef CONFIG_MMU_NOTIFIER
+#include <linux/mmu_notifier.h>
+#endif
 struct drm_i915_gem_object;
 struct intel_fronbuffer;
 
@@ -159,6 +161,10 @@ struct drm_i915_gem_object {
 		struct ttm_bo_kmap_obj kmap;
 		u32 prime_shared_count;
 		u32 pin_count;
+
+#ifdef CONFIG_MMU_NOTIFIER
+		struct mmu_interval_notifier notifier;
+#endif
 	} ttm;
 	/**
 	 * Whether the object is currently in the GGTT mmap.
