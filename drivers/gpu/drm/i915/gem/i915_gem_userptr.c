@@ -14,6 +14,7 @@
 #include "i915_gem_ioctls.h"
 #include "i915_gem_object.h"
 #include "i915_scatterlist.h"
+#include "ttm/i915_ttm.h"
 
 struct i915_mm_struct {
 	struct mm_struct *mm;
@@ -805,27 +806,37 @@ i915_gem_userptr_ioctl(struct drm_device *dev,
 			return -ENODEV;
 	}
 
-	obj = i915_gem_object_alloc();
-	if (obj == NULL)
-		return -ENOMEM;
+	if (dev_priv->use_ttm) {
+		obj = i915_ttm_object_create_userptr(dev_priv, args->user_ptr,
+						     args->user_size,
+						     args->flags);
+		if (IS_ERR(obj))
+			ret = PTR_ERR(obj);
+		else
+			ret = 0;
+	} else {
+		obj = i915_gem_object_alloc();
+		if (obj == NULL)
+			return -ENOMEM;
 
-	drm_gem_private_object_init(dev, &obj->base.base, args->user_size);
-	i915_gem_object_init(obj, &i915_gem_userptr_ops, &lock_class);
-	obj->read_domains = I915_GEM_DOMAIN_CPU;
-	obj->write_domain = I915_GEM_DOMAIN_CPU;
-	i915_gem_object_set_cache_coherency(obj, I915_CACHE_LLC);
+		drm_gem_private_object_init(dev, &obj->base.base, args->user_size);
+		i915_gem_object_init(obj, &i915_gem_userptr_ops, &lock_class);
+		obj->read_domains = I915_GEM_DOMAIN_CPU;
+		obj->write_domain = I915_GEM_DOMAIN_CPU;
+		i915_gem_object_set_cache_coherency(obj, I915_CACHE_LLC);
 
-	obj->userptr.ptr = args->user_ptr;
-	if (args->flags & I915_USERPTR_READ_ONLY)
-		i915_gem_object_set_readonly(obj);
+		obj->userptr.ptr = args->user_ptr;
+		if (args->flags & I915_USERPTR_READ_ONLY)
+			i915_gem_object_set_readonly(obj);
 
-	/* And keep a pointer to the current->mm for resolving the user pages
-	 * at binding. This means that we need to hook into the mmu_notifier
-	 * in order to detect if the mmu is destroyed.
-	 */
-	ret = i915_gem_userptr_init__mm_struct(obj);
-	if (ret == 0)
-		ret = i915_gem_userptr_init__mmu_notifier(obj, args->flags);
+		/* And keep a pointer to the current->mm for resolving the user pages
+		 * at binding. This means that we need to hook into the mmu_notifier
+		 * in order to detect if the mmu is destroyed.
+		 */
+		ret = i915_gem_userptr_init__mm_struct(obj);
+		if (ret == 0)
+			ret = i915_gem_userptr_init__mmu_notifier(obj, args->flags);
+	}
 	if (ret == 0)
 		ret = drm_gem_handle_create(file, &obj->base.base, &handle);
 

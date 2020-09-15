@@ -79,7 +79,10 @@ struct drm_i915_gem_object *i915_ttm_object_create_region(struct intel_memory_re
 							  enum ttm_bo_type type,
 							  unsigned long size,
 							  unsigned int flags);
-
+struct drm_i915_gem_object *i915_ttm_object_create_userptr(struct drm_i915_private *i915,
+							   u64 user_ptr,
+							   u64 user_size,
+							   u32 user_flags);
 static inline struct drm_i915_gem_object *ttm_to_i915_gem(struct ttm_buffer_object *tbo)
 {
 	return container_of(tbo, struct drm_i915_gem_object, base);
