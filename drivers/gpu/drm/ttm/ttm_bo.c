@@ -272,15 +272,14 @@ static int ttm_bo_handle_move_mem(struct ttm_buffer_object *bo,
 			goto out_err;
 	}
 
-	if (old_man->use_tt && new_man->use_tt) {
+	if (bdev->driver->move)
+		ret = bdev->driver->move(bo, evict, ctx, mem);
+	else if (old_man->use_tt && new_man->use_tt) {
 		if (bo->mem.mem_type != TTM_PL_SYSTEM)
 			ret = ttm_bo_move_ttm_to_system(bo, ctx);
 		if (!ret)
 			ttm_bo_move_null(bo, mem);
-	}
-	else if (bdev->driver->move)
-		ret = bdev->driver->move(bo, evict, ctx, mem);
-	else
+	} else
 		ret = ttm_bo_move_memcpy(bo, ctx, mem);
 	if (ret) {
 		if (bdev->driver->move_notify) {
