@@ -1304,12 +1304,13 @@ int amdgpu_bo_move_notify(struct ttm_buffer_object *bo,
 		ret = ttm_bo_tt_bind(bo, new_mem);
 		if (ret)
 			return ret;
-	} else
-		ttm_bo_tt_unbind(bo);
+	}
 
 	/* update statistics */
-	if (!new_mem)
+	if (!new_mem) {
+		ttm_bo_tt_unbind(bo);
 		return 0;
+	}
 
 	/* move_notify is called before move happens */
 	trace_amdgpu_bo_move(abo, new_mem->mem_type, old_mem->mem_type);

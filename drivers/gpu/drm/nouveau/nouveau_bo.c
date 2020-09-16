@@ -932,7 +932,11 @@ nouveau_bo_move_flipd(struct ttm_buffer_object *bo, bool evict, bool intr,
 	if (ret)
 		goto out;
 
-	ret = ttm_bo_move_ttm_to_system(bo, &ctx);
+	ret = ttm_bo_wait(bo, intr, no_wait_gpu);
+	if (unlikely(ret))
+		goto out;
+
+	ttm_bo_tt_unbind(bo);
 out:
 	ttm_resource_free(bo, &tmp_reg);
 	return ret;
@@ -1088,9 +1092,12 @@ nouveau_bo_move(struct ttm_buffer_object *bo, bool evict,
 
 	if (old_reg->mem_type == TTM_PL_TT &&
 	    new_reg->mem_type == TTM_PL_SYSTEM) {
-		ret = ttm_bo_move_ttm_to_system(bo, ctx);
-		if (ret)
-			return ret;
+		ret = ttm_bo_wait(bo, ctx->interruptible, ctx->no_wait_gpu);
+		if (unlikely(ret))
+			goto out;
+
+		ttm_bo_tt_unbind(bo);
+		ttm_resource_free(bo, &bo->mem);
 		ttm_bo_move_null(bo, new_reg);
 		goto out;
 	}

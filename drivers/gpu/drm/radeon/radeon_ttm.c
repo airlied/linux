@@ -246,7 +246,10 @@ static int radeon_move_vram_ram(struct ttm_buffer_object *bo,
 	if (unlikely(r)) {
 		goto out_cleanup;
 	}
-	r = ttm_bo_move_ttm_to_system(bo, &ctx);
+	r = ttm_bo_wait(bo, interruptible, no_wait_gpu);
+	if (unlikely(r))
+		goto out_cleanup;
+	ttm_bo_tt_unbind(bo);
 out_cleanup:
 	ttm_resource_free(bo, &tmp_mem);
 	return r;
@@ -319,9 +322,12 @@ static int radeon_bo_move(struct ttm_buffer_object *bo, bool evict,
 	}
 	if ((old_mem->mem_type == TTM_PL_TT &&
 	     new_mem->mem_type == TTM_PL_SYSTEM)) {
-		r = ttm_bo_move_ttm_to_system(bo, ctx);
-		if (r)
+		r = ttm_bo_wait(bo, ctx->interruptible, ctx->no_wait_gpu);
+		if (unlikely(r))
 			return r;
+
+		ttm_bo_tt_unbind(bo);
+		ttm_resource_free(bo, &bo->mem);		
 		ttm_bo_move_null(bo, new_mem);
 		return 0;
 	}
