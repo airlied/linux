@@ -778,7 +778,7 @@ int radeon_bo_move_notify(struct ttm_buffer_object *bo,
 			  struct ttm_resource *new_mem)
 {
 	struct radeon_bo *rbo;
-
+	int ret = 0;
 	if (!radeon_ttm_bo_is_radeon_bo(bo))
 		return 0;
 
@@ -792,6 +792,12 @@ int radeon_bo_move_notify(struct ttm_buffer_object *bo,
 
 	radeon_update_memory_usage(rbo, bo->mem.mem_type, -1);
 	radeon_update_memory_usage(rbo, new_mem->mem_type, 1);
+
+	if (new_mem->mem_type == TTM_PL_TT) {
+		ret = ttm_bo_tt_bind(bo, new_mem);
+		if (ret)
+			return ret;
+	}
 	return 0;
 }
 

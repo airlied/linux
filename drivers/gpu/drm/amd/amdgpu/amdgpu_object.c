@@ -1282,6 +1282,7 @@ int amdgpu_bo_move_notify(struct ttm_buffer_object *bo,
 	struct amdgpu_device *adev = amdgpu_ttm_adev(bo->bdev);
 	struct amdgpu_bo *abo;
 	struct ttm_resource *old_mem = &bo->mem;
+	int ret;
 
 	if (!amdgpu_bo_is_amdgpu_bo(bo))
 		return 0;
@@ -1302,6 +1303,12 @@ int amdgpu_bo_move_notify(struct ttm_buffer_object *bo,
 	/* update statistics */
 	if (!new_mem)
 		return 0;
+
+	if (new_mem->mem_type == TTM_PL_TT) {
+		ret = ttm_bo_tt_bind(bo, new_mem);
+		if (ret)
+			return ret;
+	}
 
 	/* move_notify is called before move happens */
 	trace_amdgpu_bo_move(abo, new_mem->mem_type, old_mem->mem_type);

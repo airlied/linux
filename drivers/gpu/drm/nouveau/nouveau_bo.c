@@ -986,6 +986,7 @@ nouveau_bo_move_ntfy(struct ttm_buffer_object *bo, bool evict,
 	struct nouveau_mem *mem = new_reg ? nouveau_mem(new_reg) : NULL;
 	struct nouveau_bo *nvbo = nouveau_bo(bo);
 	struct nouveau_vma *vma;
+	int ret;
 
 	/* ttm can now (stupidly) pass the driver bos it didn't create... */
 	if (bo->destroy != nouveau_bo_del_ttm)
@@ -1010,6 +1011,12 @@ nouveau_bo_move_ntfy(struct ttm_buffer_object *bo, bool evict,
 			nvbo->offset = (new_reg->start << PAGE_SHIFT);
 		else
 			nvbo->offset = 0;
+
+		if (new_reg->mem_type == TTM_PL_TT) {
+			ret = ttm_bo_tt_bind(bo, new_reg);
+			if (ret)
+				return ret;
+		}
 	}
 	return 0;
 }

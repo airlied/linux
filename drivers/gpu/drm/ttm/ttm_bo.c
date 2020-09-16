@@ -263,10 +263,6 @@ static int ttm_bo_handle_move_mem(struct ttm_buffer_object *bo,
 			ret = ttm_tt_populate(bdev, bo->ttm, ctx);
 			if (ret)
 				goto out_err;
-
-			ret = ttm_bo_tt_bind(bo, mem);
-			if (ret)
-				goto out_err;
 		}
 	}
 
