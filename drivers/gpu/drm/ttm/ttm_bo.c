@@ -239,7 +239,7 @@ static int ttm_bo_handle_move_mem(struct ttm_buffer_object *bo,
 	struct ttm_bo_device *bdev = bo->bdev;
 	struct ttm_resource_manager *old_man = ttm_manager_type(bdev, bo->mem.mem_type);
 	struct ttm_resource_manager *new_man = ttm_manager_type(bdev, mem->mem_type);
-	int ret;
+	int ret = 0;
 
 	ttm_bo_unmap_virtual(bo);
 
@@ -268,19 +268,14 @@ static int ttm_bo_handle_move_mem(struct ttm_buffer_object *bo,
 			if (ret)
 				goto out_err;
 		}
-
-		if (bo->mem.mem_type == TTM_PL_SYSTEM) {
-			if (bdev->driver->move_notify)
-				bdev->driver->move_notify(bo, evict, mem);
-			bo->mem = *mem;
-			goto moved;
-		}
 	}
 
 	if (bdev->driver->move_notify)
 		bdev->driver->move_notify(bo, evict, mem);
 
-	if (old_man->use_tt && new_man->use_tt) {
+	if (new_man->use_tt && bo->mem.mem_type == TTM_PL_SYSTEM) {
+		bo->mem = *mem;
+	} else if (old_man->use_tt && new_man->use_tt) {
 		ret = ttm_bo_move_ttm(bo, ctx, mem);
 		if (!ret && bo->mem.mem_type != TTM_PL_SYSTEM) {
 			ret = ttm_bo_tt_bind(bo, &bo->mem);
@@ -301,7 +296,6 @@ static int ttm_bo_handle_move_mem(struct ttm_buffer_object *bo,
 		goto out_err;
 	}
 
-moved:
 	bo->evicted = false;
 
 	ctx->bytes_moved += bo->num_pages << PAGE_SHIFT;
