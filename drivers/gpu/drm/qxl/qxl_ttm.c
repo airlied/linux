@@ -170,20 +170,21 @@ static int qxl_bo_move(struct ttm_buffer_object *bo, bool evict,
 	return ttm_bo_move_memcpy(bo, ctx, new_mem);
 }
 
-static void qxl_bo_move_notify(struct ttm_buffer_object *bo,
-			       bool evict,
-			       struct ttm_resource *new_mem)
+static int qxl_bo_move_notify(struct ttm_buffer_object *bo,
+			      bool evict,
+			      struct ttm_resource *new_mem)
 {
 	struct qxl_bo *qbo;
 	struct qxl_device *qdev;
 
 	if (!qxl_ttm_bo_is_qxl_bo(bo))
-		return;
+		return 0;
 	qbo = to_qxl_bo(bo);
 	qdev = to_qxl(qbo->tbo.base.dev);
 
 	if (bo->mem.mem_type == TTM_PL_PRIV && qbo->surface_id)
 		qxl_surface_evict(qdev, qbo, new_mem ? true : false);
+	return 0;
 }
 
 static struct ttm_bo_driver qxl_bo_driver = {

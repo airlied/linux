@@ -965,19 +965,20 @@ static void bo_driver_evict_flags(struct ttm_buffer_object *bo,
 	drm_gem_vram_bo_driver_evict_flags(gbo, placement);
 }
 
-static void bo_driver_move_notify(struct ttm_buffer_object *bo,
-				  bool evict,
-				  struct ttm_resource *new_mem)
+static int bo_driver_move_notify(struct ttm_buffer_object *bo,
+				 bool evict,
+				 struct ttm_resource *new_mem)
 {
 	struct drm_gem_vram_object *gbo;
 
 	/* TTM may pass BOs that are not GEM VRAM BOs. */
 	if (!drm_is_gem_vram(bo))
-		return;
+		return 0;
 
 	gbo = drm_gem_vram_of_bo(bo);
 
 	drm_gem_vram_bo_driver_move_notify(gbo, evict, new_mem);
+	return 0;
 }
 
 static int bo_driver_io_mem_reserve(struct ttm_bo_device *bdev,

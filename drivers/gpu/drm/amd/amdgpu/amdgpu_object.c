@@ -1275,7 +1275,7 @@ int amdgpu_bo_get_metadata(struct amdgpu_bo *bo, void *buffer,
  * bookkeeping.
  * TTM driver callback which is called when ttm moves a buffer.
  */
-void amdgpu_bo_move_notify(struct ttm_buffer_object *bo,
+int amdgpu_bo_move_notify(struct ttm_buffer_object *bo,
 			   bool evict,
 			   struct ttm_resource *new_mem)
 {
@@ -1284,7 +1284,7 @@ void amdgpu_bo_move_notify(struct ttm_buffer_object *bo,
 	struct ttm_resource *old_mem = &bo->mem;
 
 	if (!amdgpu_bo_is_amdgpu_bo(bo))
-		return;
+		return 0;
 
 	abo = ttm_to_amdgpu_bo(bo);
 	amdgpu_vm_bo_invalidate(adev, abo, evict);
@@ -1301,10 +1301,11 @@ void amdgpu_bo_move_notify(struct ttm_buffer_object *bo,
 
 	/* update statistics */
 	if (!new_mem)
-		return;
+		return 0;
 
 	/* move_notify is called before move happens */
 	trace_amdgpu_bo_move(abo, new_mem->mem_type, old_mem->mem_type);
+	return 0;
 }
 
 /**

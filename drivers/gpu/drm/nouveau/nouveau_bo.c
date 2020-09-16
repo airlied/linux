@@ -979,7 +979,7 @@ out:
 	return ret;
 }
 
-static void
+static int
 nouveau_bo_move_ntfy(struct ttm_buffer_object *bo, bool evict,
 		     struct ttm_resource *new_reg)
 {
@@ -989,7 +989,7 @@ nouveau_bo_move_ntfy(struct ttm_buffer_object *bo, bool evict,
 
 	/* ttm can now (stupidly) pass the driver bos it didn't create... */
 	if (bo->destroy != nouveau_bo_del_ttm)
-		return;
+		return 0;
 
 	nouveau_bo_del_io_reserve_lru(bo);
 
@@ -1011,7 +1011,7 @@ nouveau_bo_move_ntfy(struct ttm_buffer_object *bo, bool evict,
 		else
 			nvbo->offset = 0;
 	}
-
+	return 0;
 }
 
 static int

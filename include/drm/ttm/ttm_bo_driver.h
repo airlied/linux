@@ -187,9 +187,9 @@ struct ttm_bo_driver {
 	 * @evict: whether this move is evicting the buffer from the graphics
 	 * address space
 	 */
-	void (*move_notify)(struct ttm_buffer_object *bo,
-			    bool evict,
-			    struct ttm_resource *new_mem);
+	int (*move_notify)(struct ttm_buffer_object *bo,
+			   bool evict,
+			   struct ttm_resource *new_mem);
 	/* notify the driver we are taking a fault on this BO
 	 * and have reserved it */
 	int (*fault_reserve_notify)(struct ttm_buffer_object *bo);

@@ -759,12 +759,13 @@ static int vmw_ttm_io_mem_reserve(struct ttm_bo_device *bdev, struct ttm_resourc
  * Calls move_notify for all subsystems needing it.
  * (currently only resources).
  */
-static void vmw_move_notify(struct ttm_buffer_object *bo,
-			    bool evict,
-			    struct ttm_resource *mem)
+static int vmw_move_notify(struct ttm_buffer_object *bo,
+			   bool evict,
+			   struct ttm_resource *mem)
 {
 	vmw_bo_move_notify(bo, mem);
 	vmw_query_move_notify(bo, mem);
+	return 0;
 }
 
 

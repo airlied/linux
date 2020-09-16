@@ -773,14 +773,14 @@ int radeon_bo_check_tiling(struct radeon_bo *bo, bool has_moved,
 	return radeon_bo_get_surface_reg(bo);
 }
 
-void radeon_bo_move_notify(struct ttm_buffer_object *bo,
-			   bool evict,
-			   struct ttm_resource *new_mem)
+int radeon_bo_move_notify(struct ttm_buffer_object *bo,
+			  bool evict,
+			  struct ttm_resource *new_mem)
 {
 	struct radeon_bo *rbo;
 
 	if (!radeon_ttm_bo_is_radeon_bo(bo))
-		return;
+		return 0;
 
 	rbo = container_of(bo, struct radeon_bo, tbo);
 	radeon_bo_check_tiling(rbo, 0, 1);
@@ -788,10 +788,11 @@ void radeon_bo_move_notify(struct ttm_buffer_object *bo,
 
 	/* update statistics */
 	if (!new_mem)
-		return;
+		return 0;
 
 	radeon_update_memory_usage(rbo, bo->mem.mem_type, -1);
 	radeon_update_memory_usage(rbo, new_mem->mem_type, 1);
+	return 0;
 }
 
 int radeon_bo_fault_reserve_notify(struct ttm_buffer_object *bo)
