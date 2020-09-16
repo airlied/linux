@@ -1127,8 +1127,14 @@ nouveau_bo_move(struct ttm_buffer_object *bo, bool evict,
 
 	/* Fallback to software copy. */
 	ret = ttm_bo_wait(bo, ctx->interruptible, ctx->no_wait_gpu);
-	if (ret == 0)
+	if (ret == 0) {
+		struct ttm_resource_manager *new_man = ttm_manager_type(bo->bdev, new_reg->mem_type);
 		ret = ttm_bo_move_memcpy(bo, ctx, new_reg);
+		if (new_man->use_tt) {
+			ttm_bo_tt_unbind(bo);
+			ttm_bo_tt_destroy(bo);
+		}
+	}
 
 out:
 	if (drm->client.device.info.family < NV_DEVICE_INFO_V0_TESLA) {

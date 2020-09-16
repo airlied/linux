@@ -216,7 +216,6 @@ int ttm_bo_move_memcpy(struct ttm_buffer_object *bo,
 		       struct ttm_resource *new_mem)
 {
 	struct ttm_bo_device *bdev = bo->bdev;
-	struct ttm_resource_manager *man = ttm_manager_type(bdev, new_mem->mem_type);
 	struct ttm_tt *ttm = bo->ttm;
 	struct ttm_resource *old_mem = &bo->mem;
 	struct ttm_resource old_copy = *old_mem;
@@ -296,11 +295,6 @@ out2:
 	old_copy = *old_mem;
 	*old_mem = *new_mem;
 	new_mem->mm_node = NULL;
-
-	if (!man->use_tt) {
-		ttm_bo_tt_unbind(bo);
-		ttm_bo_tt_destroy(bo);
-	}
 
 out1:
 	ttm_resource_iounmap(bdev, old_mem, new_iomap);

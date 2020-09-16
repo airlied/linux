@@ -732,6 +732,12 @@ memcpy:
 		r = ttm_bo_move_memcpy(bo, ctx, new_mem);
 		if (r)
 			return r;
+
+		if (new_mem->mem_type != TTM_PL_SYSTEM &&
+		    new_mem->mem_type != TTM_PL_TT) {
+			ttm_bo_tt_unbind(bo);
+			ttm_bo_tt_destroy(bo);
+		}
 	}
 
 	if (bo->type == ttm_bo_type_device &&

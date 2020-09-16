@@ -363,6 +363,11 @@ memcpy:
 		if (r) {
 			return r;
 		}
+		if (new_mem->mem_type != TTM_PL_SYSTEM &&
+		    new_mem->mem_type != TTM_PL_TT) {
+			ttm_bo_tt_unbind(bo);
+			ttm_bo_tt_destroy(bo);
+		}		
 	}
 
 	/* update statistics */

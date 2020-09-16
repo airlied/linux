@@ -795,6 +795,10 @@ static int vmw_move(struct ttm_buffer_object *bo, bool evict,
 	} else
 		ret = ttm_bo_move_memcpy(bo, ctx, new_mem);
 
+	if (new_man->use_tt) {
+		ttm_bo_tt_unbind(bo);
+		ttm_bo_tt_destroy(bo);
+	}
 	return ret;
 }
 

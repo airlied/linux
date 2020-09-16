@@ -280,8 +280,13 @@ static int ttm_bo_handle_move_mem(struct ttm_buffer_object *bo,
 			ret = ttm_bo_move_ttm_to_system(bo, ctx);
 		if (!ret)
 			ttm_bo_move_null(bo, mem);
-	} else
+	} else {
 		ret = ttm_bo_move_memcpy(bo, ctx, mem);
+		if (!new_man->use_tt) {
+			/* driver that need unbind use a move */
+			ttm_bo_tt_destroy(bo);
+		}
+	}
 	if (ret) {
 		if (bdev->driver->move_notify) {
 			swap(*mem, bo->mem);
@@ -1618,6 +1623,7 @@ void ttm_bo_tt_destroy(struct ttm_buffer_object *bo)
 	ttm_tt_destroy(bo->bdev, bo->ttm);
 	bo->ttm = NULL;
 }
+EXPORT_SYMBOL(ttm_bo_tt_destroy);
 
 int ttm_bo_tt_bind(struct ttm_buffer_object *bo, struct ttm_resource *mem)
 {
