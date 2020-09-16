@@ -1300,15 +1300,16 @@ int amdgpu_bo_move_notify(struct ttm_buffer_object *bo,
 	if (evict)
 		atomic64_inc(&adev->num_evictions);
 
-	/* update statistics */
-	if (!new_mem)
-		return 0;
-
-	if (new_mem->mem_type == TTM_PL_TT) {
+	if (new_mem && new_mem->mem_type == TTM_PL_TT) {
 		ret = ttm_bo_tt_bind(bo, new_mem);
 		if (ret)
 			return ret;
-	}
+	} else
+		ttm_bo_tt_unbind(bo);
+
+	/* update statistics */
+	if (!new_mem)
+		return 0;
 
 	/* move_notify is called before move happens */
 	trace_amdgpu_bo_move(abo, new_mem->mem_type, old_mem->mem_type);

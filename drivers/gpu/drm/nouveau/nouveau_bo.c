@@ -1011,13 +1011,14 @@ nouveau_bo_move_ntfy(struct ttm_buffer_object *bo, bool evict,
 			nvbo->offset = (new_reg->start << PAGE_SHIFT);
 		else
 			nvbo->offset = 0;
-
-		if (new_reg->mem_type == TTM_PL_TT) {
-			ret = ttm_bo_tt_bind(bo, new_reg);
-			if (ret)
-				return ret;
-		}
 	}
+
+	if (new_reg && new_reg->mem_type == TTM_PL_TT) {
+		ret = ttm_bo_tt_bind(bo, new_reg);
+		if (ret)
+			return ret;
+	} else
+		ttm_bo_tt_unbind(bo);
 	return 0;
 }
 

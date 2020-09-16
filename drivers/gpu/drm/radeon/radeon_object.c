@@ -786,18 +786,19 @@ int radeon_bo_move_notify(struct ttm_buffer_object *bo,
 	radeon_bo_check_tiling(rbo, 0, 1);
 	radeon_vm_bo_invalidate(rbo->rdev, rbo);
 
+	if (new_mem && new_mem->mem_type == TTM_PL_TT) {
+		ret = ttm_bo_tt_bind(bo, new_mem);
+		if (ret)
+			return ret;
+	} else
+		ttm_bo_tt_unbind(bo);
+
 	/* update statistics */
 	if (!new_mem)
 		return 0;
 
 	radeon_update_memory_usage(rbo, bo->mem.mem_type, -1);
 	radeon_update_memory_usage(rbo, new_mem->mem_type, 1);
-
-	if (new_mem->mem_type == TTM_PL_TT) {
-		ret = ttm_bo_tt_bind(bo, new_mem);
-		if (ret)
-			return ret;
-	}
 	return 0;
 }
 

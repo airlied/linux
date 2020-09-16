@@ -300,7 +300,6 @@ static int ttm_bo_handle_move_mem(struct ttm_buffer_object *bo,
 out_err:
 	new_man = ttm_manager_type(bdev, bo->mem.mem_type);
 	if (!new_man->use_tt) {
-		ttm_bo_tt_unbind(bo);
 		ttm_bo_tt_destroy(bo);
 	}
 
@@ -320,7 +319,6 @@ static void ttm_bo_cleanup_memtype_use(struct ttm_buffer_object *bo)
 	if (bo->bdev->driver->move_notify)
 		(void)bo->bdev->driver->move_notify(bo, false, NULL);
 
-	ttm_bo_tt_unbind(bo);
 	ttm_bo_tt_destroy(bo);
 	ttm_resource_free(bo, &bo->mem);
 }
@@ -1650,3 +1648,4 @@ void ttm_bo_tt_unbind(struct ttm_buffer_object *bo)
 		ttm_bo_tt_set_unbound(bo);
 	}
 }
+EXPORT_SYMBOL(ttm_bo_tt_unbind);

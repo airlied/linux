@@ -764,14 +764,14 @@ static int vmw_move_notify(struct ttm_buffer_object *bo,
 			   struct ttm_resource *mem)
 {
 	int ret;
-	if (mem) {
-		if (mem->mem_type == VMW_PL_GMR ||
-		    mem->mem_type == VMW_PL_MOB) {
-			ret = ttm_bo_tt_bind(bo, mem);
-			if (ret)
-				return ret;
-		}
-	}
+	if (mem && (mem->mem_type == VMW_PL_GMR ||
+		    mem->mem_type == VMW_PL_MOB)) {
+		ret = ttm_bo_tt_bind(bo, mem);
+		if (ret)
+			return ret;
+	} else
+		ttm_bo_tt_unbind(bo);
+
 	vmw_bo_move_notify(bo, mem);
 	vmw_query_move_notify(bo, mem);
 	return 0;
