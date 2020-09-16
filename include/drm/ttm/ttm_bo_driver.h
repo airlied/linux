@@ -594,10 +594,11 @@ void ttm_mem_io_free(struct ttm_bo_device *bdev,
  * Returns:
  * !0: Failure.
  */
-
-int ttm_bo_move_ttm(struct ttm_buffer_object *bo,
-		    struct ttm_operation_ctx *ctx,
-		    struct ttm_resource *new_mem);
+int ttm_bo_move_ttm_to_system(struct ttm_buffer_object *bo,
+			      struct ttm_operation_ctx *ctx);
+int ttm_bo_move_ttm_from_system(struct ttm_buffer_object *bo,
+				struct ttm_operation_ctx *ctx,
+				struct ttm_resource *new_mem);
 
 /**
  * ttm_bo_move_memcpy

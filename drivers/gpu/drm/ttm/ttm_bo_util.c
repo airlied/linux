@@ -50,44 +50,45 @@ void ttm_bo_free_old_node(struct ttm_buffer_object *bo)
 	ttm_resource_free(bo, &bo->mem);
 }
 
-int ttm_bo_move_ttm(struct ttm_buffer_object *bo,
-		   struct ttm_operation_ctx *ctx,
-		    struct ttm_resource *new_mem)
+int ttm_bo_move_ttm_from_system(struct ttm_buffer_object *bo,
+				struct ttm_operation_ctx *ctx,
+				struct ttm_resource *new_mem)
 {
-	struct ttm_tt *ttm = bo->ttm;
-	struct ttm_resource *old_mem = &bo->mem;
 	int ret;
 
-	if (old_mem->mem_type != TTM_PL_SYSTEM) {
-		ret = ttm_bo_wait(bo, ctx->interruptible, ctx->no_wait_gpu);
-
-		if (unlikely(ret != 0)) {
-			if (ret != -ERESTARTSYS)
-				pr_err("Failed to expire sync object before unbinding TTM\n");
-			return ret;
-		}
-
-		ttm_bo_tt_unbind(bo);
-		ttm_bo_free_old_node(bo);
-		old_mem->mem_type = TTM_PL_SYSTEM;
-	}
-
-	ret = ttm_tt_set_placement_caching(ttm, new_mem->placement);
+	ret = ttm_tt_set_placement_caching(bo->ttm, new_mem->placement);
 	if (unlikely(ret != 0))
 		return ret;
 
 	if (new_mem->mem_type != TTM_PL_SYSTEM) {
-		ret = ttm_tt_populate(bo->bdev, ttm, ctx);
+		ret = ttm_tt_populate(bo->bdev, bo->ttm, ctx);
 		if (unlikely(ret != 0))
 			return ret;
 	}
 
-	*old_mem = *new_mem;
-	new_mem->mm_node = NULL;
+	ttm_bo_move_null(bo, new_mem);
 
 	return 0;
 }
-EXPORT_SYMBOL(ttm_bo_move_ttm);
+EXPORT_SYMBOL(ttm_bo_move_ttm_from_system);
+
+int ttm_bo_move_ttm_to_system(struct ttm_buffer_object *bo,
+			      struct ttm_operation_ctx *ctx)
+{
+	int ret;
+
+	ret = ttm_bo_wait(bo, ctx->interruptible, ctx->no_wait_gpu);
+	if (unlikely(ret != 0)) {
+		if (ret != -ERESTARTSYS)
+			pr_err("Failed to expire sync object before unbinding TTM\n");
+		return ret;
+	}
+
+	ttm_bo_tt_unbind(bo);
+	ttm_bo_free_old_node(bo);
+	return 0;
+}
+EXPORT_SYMBOL(ttm_bo_move_ttm_to_system);
 
 int ttm_mem_io_reserve(struct ttm_bo_device *bdev,
 		       struct ttm_resource *mem)

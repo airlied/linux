@@ -932,7 +932,7 @@ nouveau_bo_move_flipd(struct ttm_buffer_object *bo, bool evict, bool intr,
 	if (ret)
 		goto out;
 
-	ret = ttm_bo_move_ttm(bo, &ctx, new_reg);
+	ret = ttm_bo_move_ttm_to_system(bo, &ctx);
 out:
 	ttm_resource_free(bo, &tmp_reg);
 	return ret;
@@ -962,7 +962,7 @@ nouveau_bo_move_flips(struct ttm_buffer_object *bo, bool evict, bool intr,
 	if (ret)
 		return ret;
 
-	ret = ttm_bo_move_ttm(bo, &ctx, &tmp_reg);
+	ret = ttm_bo_move_ttm_from_system(bo, &ctx, &tmp_reg);
 	if (ret)
 		goto out;
 
