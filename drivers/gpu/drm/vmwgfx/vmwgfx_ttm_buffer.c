@@ -763,18 +763,39 @@ static int vmw_move_notify(struct ttm_buffer_object *bo,
 			   bool evict,
 			   struct ttm_resource *mem)
 {
-	int ret;
-	if (mem && (mem->mem_type == VMW_PL_GMR ||
-		    mem->mem_type == VMW_PL_MOB)) {
-		ret = ttm_bo_tt_bind(bo, mem);
-		if (ret)
-			return ret;
-	} else
-		ttm_bo_tt_unbind(bo);
-
 	vmw_bo_move_notify(bo, mem);
 	vmw_query_move_notify(bo, mem);
 	return 0;
+}
+
+static int vmw_move(struct ttm_buffer_object *bo, bool evict,
+		    struct ttm_operation_ctx *ctx,
+		    struct ttm_resource *new_mem)
+{
+	struct ttm_resource_manager *old_man = ttm_manager_type(bo->bdev, bo->mem.mem_type);
+	struct ttm_resource_manager *new_man = ttm_manager_type(bo->bdev, new_mem->mem_type);
+	int ret = 0;
+
+	if (new_mem->mem_type == VMW_PL_GMR ||
+	    new_mem->mem_type == VMW_PL_MOB) {
+		ret = ttm_bo_tt_bind(bo, new_mem);
+		if (ret)
+			return ret;
+	}
+
+	if (old_man->use_tt && new_man->use_tt) {
+		if (bo->mem.mem_type != TTM_PL_SYSTEM) {
+			ret = ttm_bo_wait(bo, ctx->interruptible, ctx->no_wait_gpu);
+			if (ret)
+				return ret;
+			ttm_bo_tt_unbind(bo);
+			ttm_resource_free(bo, &bo->mem);
+		}
+		ttm_bo_move_null(bo, new_mem);
+	} else
+		ret = ttm_bo_move_memcpy(bo, ctx, new_mem);
+
+	return ret;
 }
 
 
@@ -799,7 +820,7 @@ struct ttm_bo_driver vmw_bo_driver = {
 	.ttm_tt_destroy = &vmw_ttm_destroy,
 	.eviction_valuable = ttm_bo_eviction_valuable,
 	.evict_flags = vmw_evict_flags,
-	.move = NULL,
+	.move = vmw_move,
 	.verify_access = vmw_verify_access,
 	.move_notify = vmw_move_notify,
 	.swap_notify = vmw_swap_notify,
