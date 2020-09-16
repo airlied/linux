@@ -966,6 +966,10 @@ nouveau_bo_move_flips(struct ttm_buffer_object *bo, bool evict, bool intr,
 	if (ret)
 		goto out;
 
+	ret = ttm_bo_tt_bind(bo, &tmp_reg);
+	if (ret)
+		goto out;
+
 	ret = nouveau_bo_move_m2mf(bo, true, intr, no_wait_gpu, new_reg);
 	if (ret)
 		goto out;

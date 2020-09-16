@@ -608,6 +608,10 @@ static int amdgpu_move_ram_vram(struct ttm_buffer_object *bo, bool evict,
 		goto out_cleanup;
 	}
 
+	r = ttm_bo_tt_bind(bo, &bo->mem);
+	if (unlikely(r))
+		goto out_cleanup;
+
 	/* copy to VRAM */
 	r = amdgpu_move_blit(bo, evict, new_mem, old_mem);
 	if (unlikely(r)) {
