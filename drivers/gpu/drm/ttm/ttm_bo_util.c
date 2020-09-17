@@ -50,11 +50,33 @@ void ttm_bo_free_old_node(struct ttm_buffer_object *bo)
 	ttm_resource_free(bo, &bo->mem);
 }
 
+int ttm_bo_move_to_new_tt_mem(struct ttm_buffer_object *bo,
+			      struct ttm_operation_ctx *ctx,
+			      struct ttm_resource *new_mem)
+{
+	struct ttm_tt *ttm = bo->ttm;
+	int ret;
+
+	ret = ttm_tt_set_placement_caching(ttm, new_mem->placement);
+	if (unlikely(ret != 0))
+		return ret;
+
+	if (new_mem->mem_type != TTM_PL_SYSTEM) {
+		ret = ttm_tt_populate(bo->bdev, ttm, ctx);
+		if (unlikely(ret != 0))
+			return ret;
+
+		ret = ttm_bo_tt_bind(bo, new_mem);
+		if (unlikely(ret != 0))
+			return ret;
+	}
+	return 0;
+}
+
 int ttm_bo_move_ttm(struct ttm_buffer_object *bo,
 		   struct ttm_operation_ctx *ctx,
 		    struct ttm_resource *new_mem)
 {
-	struct ttm_tt *ttm = bo->ttm;
 	struct ttm_resource *old_mem = &bo->mem;
 	int ret;
 
@@ -72,21 +94,9 @@ int ttm_bo_move_ttm(struct ttm_buffer_object *bo,
 		old_mem->mem_type = TTM_PL_SYSTEM;
 	}
 
-	ret = ttm_tt_set_placement_caching(ttm, new_mem->placement);
-	if (unlikely(ret != 0))
+	ret = ttm_bo_move_to_new_tt_mem(bo, ctx, new_mem);
+	if (ret)
 		return ret;
-
-	if (new_mem->mem_type != TTM_PL_SYSTEM) {
-
-		ret = ttm_tt_populate(bo->bdev, ttm, ctx);
-		if (unlikely(ret != 0))
-			return ret;
-
-		ret = ttm_bo_tt_bind(bo, new_mem);
-		if (unlikely(ret != 0))
-			return ret;
-	}
-
 	ttm_bo_assign_mem(bo, new_mem);
 	return 0;
 }
