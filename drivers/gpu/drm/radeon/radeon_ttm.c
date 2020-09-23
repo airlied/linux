@@ -214,21 +214,9 @@ static int radeon_move_vram_ram(struct ttm_buffer_object *bo,
 {
 	struct ttm_resource *old_mem = &bo->mem;
 	struct ttm_resource tmp_mem;
-	struct ttm_place placements;
-	struct ttm_placement placement;
 	int r;
 
-	tmp_mem = *new_mem;
-	tmp_mem.mm_node = NULL;
-	placement.num_placement = 1;
-	placement.placement = &placements;
-	placement.num_busy_placement = 1;
-	placement.busy_placement = &placements;
-	placements.fpfn = 0;
-	placements.lpfn = 0;
-	placements.mem_type = TTM_PL_TT;
-	placements.flags = TTM_PL_MASK_CACHING;
-	r = ttm_bo_mem_space(bo, &placement, &tmp_mem, ctx);
+	r = ttm_bo_create_tt_tmp(bo, ctx, new_mem, &tmp_mem);
 	if (unlikely(r)) {
 		return r;
 	}
@@ -275,21 +263,9 @@ static int radeon_move_ram_vram(struct ttm_buffer_object *bo,
 {
 	struct ttm_resource *old_mem = &bo->mem;
 	struct ttm_resource tmp_mem;
-	struct ttm_placement placement;
-	struct ttm_place placements;
 	int r;
 
-	tmp_mem = *new_mem;
-	tmp_mem.mm_node = NULL;
-	placement.num_placement = 1;
-	placement.placement = &placements;
-	placement.num_busy_placement = 1;
-	placement.busy_placement = &placements;
-	placements.fpfn = 0;
-	placements.lpfn = 0;
-	placements.mem_type = TTM_PL_TT;
-	placements.flags = TTM_PL_MASK_CACHING;
-	r = ttm_bo_mem_space(bo, &placement, &tmp_mem, ctx);
+	r = ttm_bo_create_tt_tmp(bo, ctx, new_mem, &tmp_mem);
 	if (unlikely(r)) {
 		return r;
 	}
