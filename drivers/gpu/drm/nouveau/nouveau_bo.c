@@ -992,17 +992,12 @@ nouveau_bo_vma_map_update(struct nouveau_bo *nvbo,
 }
 
 static void
-nouveau_bo_move_ntfy(struct ttm_buffer_object *bo, bool evict,
-		     struct ttm_resource *new_reg)
+nouveau_bo_invalidate_ntfy(struct ttm_buffer_object *bo)
 {
 	struct nouveau_bo *nvbo = nouveau_bo(bo);
 
 	/* ttm can now (stupidly) pass the driver bos it didn't create... */
 	if (bo->destroy != nouveau_bo_del_ttm)
-		return;
-
-	/* handle new_reg path in move */
-	if (new_reg)
 		return;
 
 	nouveau_bo_del_io_reserve_lru(bo);
@@ -1439,7 +1434,7 @@ struct ttm_bo_driver nouveau_bo_driver = {
 	.ttm_tt_destroy = &nouveau_ttm_tt_destroy,
 	.eviction_valuable = ttm_bo_eviction_valuable,
 	.evict_flags = nouveau_bo_evict_flags,
-	.move_notify = nouveau_bo_move_ntfy,
+	.invalidate_notify = nouveau_bo_invalidate_ntfy,
 	.move = nouveau_bo_move,
 	.verify_access = nouveau_bo_verify_access,
 	.fault_reserve_notify = &nouveau_ttm_fault_reserve_notify,
