@@ -342,15 +342,12 @@ static int radeon_bo_move(struct ttm_buffer_object *bo, bool evict,
 		return -EINVAL;
 
 	rdev = radeon_get_rdev(bo->bdev);
-	if (old_mem->mem_type == TTM_PL_SYSTEM && bo->ttm == NULL) {
-		ttm_bo_move_null(bo, new_mem);
-		return 0;
-	}
+	if (old_mem->mem_type == TTM_PL_SYSTEM && bo->ttm == NULL)
+		goto out_assign;
+
 	if (old_mem->mem_type == TTM_PL_SYSTEM &&
-	    new_mem->mem_type == TTM_PL_TT) {
-		ttm_bo_move_null(bo, new_mem);
-		return 0;
-	}
+	    new_mem->mem_type == TTM_PL_TT)
+		goto out_assign;
 
 	if (old_mem->mem_type == TTM_PL_TT &&
 	    new_mem->mem_type == TTM_PL_SYSTEM) {
@@ -360,8 +357,7 @@ static int radeon_bo_move(struct ttm_buffer_object *bo, bool evict,
 		r = ttm_tt_set_placement_caching(bo->ttm, new_mem->placement);
 		if (r)
 			return r;
-		ttm_bo_assign_mem(bo, new_mem);
-		return 0;
+		goto out_assign;
 	}
 
 	if (!rdev->ring[radeon_copy_ring_index(rdev)].ready ||
@@ -393,6 +389,9 @@ memcpy:
 
 	/* update statistics */
 	atomic64_add((u64)bo->num_pages << PAGE_SHIFT, &rdev->num_bytes_moved);
+	return 0;
+out_assign:
+	ttm_bo_assign_mem(bo, new_mem);
 	return 0;
 }
 
