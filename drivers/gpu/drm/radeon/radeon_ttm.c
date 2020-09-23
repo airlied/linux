@@ -220,10 +220,6 @@ static int radeon_move_vram_ram(struct ttm_buffer_object *bo,
 	if (unlikely(r)) {
 		return r;
 	}
-	r = ttm_bo_move_to_new_tt_mem(bo, ctx, &tmp_mem);
-	if (unlikely(r)) {
-		goto out_cleanup;
-	}
 
 	r = radeon_ttm_tt_bind(bo->bdev, bo->ttm, &tmp_mem);
 	if (unlikely(r)) {
@@ -260,10 +256,6 @@ static int radeon_move_ram_vram(struct ttm_buffer_object *bo,
 	int r;
 
 	r = ttm_bo_create_tt_tmp(bo, ctx, new_mem, &tmp_mem);
-	if (unlikely(r)) {
-		return r;
-	}
-	r = ttm_bo_move_to_new_tt_mem(bo, ctx, &tmp_mem);
 	if (unlikely(r)) {
 		goto out_cleanup;
 	}

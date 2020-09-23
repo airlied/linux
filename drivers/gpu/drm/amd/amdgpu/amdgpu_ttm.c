@@ -534,11 +534,6 @@ static int amdgpu_move_vram_ram(struct ttm_buffer_object *bo, bool evict,
 		return r;
 	}
 
-	/* set caching flags */
-	r = ttm_bo_move_to_new_tt_mem(bo, ctx, &tmp_mem);
-	if (unlikely(r))
-		goto out_cleanup;
-
 	/* Bind the memory to the GTT space */
 	r = amdgpu_ttm_backend_bind(bo->bdev, bo->ttm, &tmp_mem);
 	if (unlikely(r)) {
@@ -588,11 +583,6 @@ static int amdgpu_move_ram_vram(struct ttm_buffer_object *bo, bool evict,
 		return r;
 	}
 
-	/* move/bind old memory to GTT space */
-	r = ttm_bo_move_to_new_tt_mem(bo, ctx, &tmp_mem);
-	if (unlikely(r)) {
-		goto out_cleanup;
-	}
 	r = amdgpu_ttm_backend_bind(bo->bdev, bo->ttm, &tmp_mem);
 	if (unlikely(r))
 		goto out_cleanup;

@@ -1566,6 +1566,10 @@ int ttm_bo_create_tt_tmp(struct ttm_buffer_object *bo,
 	if (ret)
 		return ret;
 
+	ret  = ttm_bo_move_to_new_tt_mem(bo, ctx, new_temp);
+	if (ret)
+		return ret;
+
 	return 0;
 }
 EXPORT_SYMBOL(ttm_bo_create_tt_tmp);
