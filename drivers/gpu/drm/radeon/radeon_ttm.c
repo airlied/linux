@@ -839,7 +839,7 @@ static struct ttm_bo_driver radeon_bo_driver = {
 	.evict_flags = &radeon_evict_flags,
 	.move = &radeon_bo_move,
 	.verify_access = &radeon_verify_access,
-	.move_notify = &radeon_bo_move_notify,
+	.invalidate_notify = &radeon_bo_invalidate_notify,
 	.fault_reserve_notify = &radeon_bo_fault_reserve_notify,
 	.io_mem_reserve = &radeon_ttm_io_mem_reserve,
 };

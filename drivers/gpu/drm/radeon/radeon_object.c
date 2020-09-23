@@ -769,18 +769,13 @@ void radeon_bo_memory_usage(struct radeon_bo *rbo,
 	radeon_update_memory_usage(rbo, new_mem_type, 1);
 }
 
-void radeon_bo_move_notify(struct ttm_buffer_object *bo,
-			   bool evict,
-			   struct ttm_resource *new_mem)
+void radeon_bo_invalidate_notify(struct ttm_buffer_object *bo)
 {
 	struct radeon_bo *rbo;
 
 	if (!radeon_ttm_bo_is_radeon_bo(bo))
 		return;
 
-	/* the new_mem path is handled via the move callback now */
-	if (new_mem)
-		return;
 	rbo = container_of(bo, struct radeon_bo, tbo);
 	radeon_bo_invalidate(rbo);
 }

@@ -164,9 +164,7 @@ void radeon_bo_memory_usage(struct radeon_bo *rbo,
 			    uint32_t old_mem_type,
 			    uint32_t new_mem_type);
 void radeon_bo_invalidate(struct radeon_bo *rbo);
-extern void radeon_bo_move_notify(struct ttm_buffer_object *bo,
-				  bool evict,
-				  struct ttm_resource *new_mem);
+void radeon_bo_invalidate_notify(struct ttm_buffer_object *bo);
 extern int radeon_bo_fault_reserve_notify(struct ttm_buffer_object *bo);
 extern int radeon_bo_get_surface_reg(struct radeon_bo *bo);
 extern void radeon_bo_fence(struct radeon_bo *bo, struct radeon_fence *fence,
