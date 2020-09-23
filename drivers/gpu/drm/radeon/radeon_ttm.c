@@ -220,13 +220,7 @@ static int radeon_move_vram_ram(struct ttm_buffer_object *bo,
 	if (unlikely(r)) {
 		return r;
 	}
-
-	r = ttm_tt_set_placement_caching(bo->ttm, tmp_mem.placement);
-	if (unlikely(r)) {
-		goto out_cleanup;
-	}
-
-	r = ttm_tt_populate(bo->bdev, bo->ttm, ctx);
+	r = ttm_bo_move_to_new_tt_mem(bo, ctx, &tmp_mem);
 	if (unlikely(r)) {
 		goto out_cleanup;
 	}
