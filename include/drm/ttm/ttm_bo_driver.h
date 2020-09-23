@@ -165,6 +165,13 @@ struct ttm_bo_driver {
 	void (*move_notify)(struct ttm_buffer_object *bo,
 			    bool evict,
 			    struct ttm_resource *new_mem);
+
+	/**
+	 * Hook to notify driver about a bo being torn down.
+	 * can be used for invalidation instead of move_notify.
+	 */
+	void (*invalidate_notify)(struct ttm_buffer_object *bo);
+
 	/* notify the driver we are taking a fault on this BO
 	 * and have reserved it */
 	int (*fault_reserve_notify)(struct ttm_buffer_object *bo);

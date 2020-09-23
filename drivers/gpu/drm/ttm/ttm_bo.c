@@ -282,7 +282,9 @@ out_err:
 
 static void ttm_bo_cleanup_memtype_use(struct ttm_buffer_object *bo)
 {
-	if (bo->bdev->driver->move_notify)
+	if (bo->bdev->driver->invalidate_notify)
+		bo->bdev->driver->invalidate_notify(bo);
+	else if (bo->bdev->driver->move_notify)
 		bo->bdev->driver->move_notify(bo, false, NULL);
 
 	ttm_bo_tt_destroy(bo);
