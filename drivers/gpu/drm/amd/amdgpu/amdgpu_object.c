@@ -1246,6 +1246,19 @@ int amdgpu_bo_get_metadata(struct amdgpu_bo *bo, void *buffer,
 	return 0;
 }
 
+void amdgpu_bo_move_invalidate(struct amdgpu_bo *abo,
+			       bool evict)
+{
+	struct amdgpu_device *adev = amdgpu_ttm_adev(abo->tbo.bdev);
+
+	amdgpu_vm_bo_invalidate(adev, abo, evict);
+	amdgpu_bo_kunmap(abo);
+
+	if (abo->tbo.base.dma_buf && !abo->tbo.base.import_attach &&
+	    abo->tbo.mem.mem_type != TTM_PL_SYSTEM)
+		dma_buf_move_notify(abo->tbo.base.dma_buf);
+
+}
 /**
  * amdgpu_bo_move_notify - notification about a memory move
  * @bo: pointer to a buffer object
@@ -1260,32 +1273,14 @@ void amdgpu_bo_move_notify(struct ttm_buffer_object *bo,
 			   bool evict,
 			   struct ttm_resource *new_mem)
 {
-	struct amdgpu_device *adev = amdgpu_ttm_adev(bo->bdev);
 	struct amdgpu_bo *abo;
-	struct ttm_resource *old_mem = &bo->mem;
 
 	if (!amdgpu_bo_is_amdgpu_bo(bo))
 		return;
 
-	abo = ttm_to_amdgpu_bo(bo);
-	amdgpu_vm_bo_invalidate(adev, abo, evict);
-
-	amdgpu_bo_kunmap(abo);
-
-	if (abo->tbo.base.dma_buf && !abo->tbo.base.import_attach &&
-	    bo->mem.mem_type != TTM_PL_SYSTEM)
-		dma_buf_move_notify(abo->tbo.base.dma_buf);
-
-	/* remember the eviction */
-	if (evict)
-		atomic64_inc(&adev->num_evictions);
-
-	/* update statistics */
+	/* new_mem path is handled in move */
 	if (!new_mem)
-		return;
-
-	/* move_notify is called before move happens */
-	trace_amdgpu_bo_move(abo, new_mem->mem_type, old_mem->mem_type);
+		amdgpu_bo_move_invalidate(abo, false);
 }
 
 /**

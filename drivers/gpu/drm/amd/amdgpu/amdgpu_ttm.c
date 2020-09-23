@@ -679,6 +679,12 @@ static int amdgpu_bo_move(struct ttm_buffer_object *bo, bool evict,
 
 	adev = amdgpu_ttm_adev(bo->bdev);
 
+	amdgpu_bo_move_invalidate(abo, evict);
+	/* remember the eviction */
+	if (evict)
+		atomic64_inc(&adev->num_evictions);
+	trace_amdgpu_bo_move(abo, new_mem->mem_type, bo->mem.mem_type);
+
 	if (old_mem->mem_type == TTM_PL_SYSTEM && bo->ttm == NULL) {
 		ttm_bo_move_null(bo, new_mem);
 		return 0;
@@ -726,12 +732,12 @@ memcpy:
 		if (!amdgpu_mem_visible(adev, old_mem) ||
 		    !amdgpu_mem_visible(adev, new_mem)) {
 			pr_err("Move buffer fallback to memcpy unavailable\n");
-			return r;
+			goto out_invalidate;
 		}
 
 		r = ttm_bo_move_memcpy(bo, ctx, new_mem);
 		if (r)
-			return r;
+			goto out_invalidate;
 	}
 
 	if (bo->type == ttm_bo_type_device &&
@@ -746,6 +752,9 @@ memcpy:
 	/* update statistics */
 	atomic64_add((u64)bo->num_pages << PAGE_SHIFT, &adev->num_bytes_moved);
 	return 0;
+out_invalidate:
+	amdgpu_bo_move_invalidate(abo, evict);
+	return r;
 }
 
 /**
