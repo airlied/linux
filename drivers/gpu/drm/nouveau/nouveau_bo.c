@@ -915,7 +915,14 @@ nouveau_bo_move_flipd(struct ttm_buffer_object *bo, bool evict,
 	if (ret)
 		goto out;
 
-	ret = ttm_bo_move_ttm(bo, ctx, new_reg);
+	ret = ttm_bo_move_old_to_system(bo, ctx);
+	if (ret)
+		goto out;
+
+	ret = ttm_tt_set_placement_caching(bo->ttm, new_reg->placement);
+	if (ret)
+		goto out;
+	ttm_bo_assign_mem(bo, new_reg);
 out:
 	ttm_resource_free(bo, &tmp_reg);
 	return ret;

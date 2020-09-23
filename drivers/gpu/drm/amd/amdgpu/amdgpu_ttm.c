@@ -568,7 +568,14 @@ static int amdgpu_move_vram_ram(struct ttm_buffer_object *bo, bool evict,
 	}
 
 	/* move BO (in tmp_mem) to new_mem */
-	r = ttm_bo_move_ttm(bo, ctx, new_mem);
+	r = ttm_bo_move_old_to_system(bo, ctx);
+	if (unlikely(r))
+		goto out_cleanup;
+
+	r = ttm_tt_set_placement_caching(bo->ttm, new_mem->placement);
+	if (unlikely(r))
+		goto out_cleanup;
+	ttm_bo_assign_mem(bo, new_mem);
 out_cleanup:
 	ttm_resource_free(bo, &tmp_mem);
 	return r;
