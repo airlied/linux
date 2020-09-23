@@ -563,6 +563,9 @@ int ttm_bo_create_tt_tmp(struct ttm_buffer_object *bo,
 			 struct ttm_operation_ctx *ctx,
 			 struct ttm_resource *new_mem,
 			 struct ttm_resource *new_temp);
+
+int ttm_bo_cleanup_ram_move(struct ttm_buffer_object *bo,
+			    struct ttm_resource *new_mem);
 /**
  * ttm_bo_move_memcpy
  *

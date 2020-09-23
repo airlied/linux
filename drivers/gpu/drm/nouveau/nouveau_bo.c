@@ -904,12 +904,8 @@ nouveau_bo_move_flipd(struct ttm_buffer_object *bo, bool evict,
 		goto out;
 
 	nouveau_ttm_tt_unbind(bo->bdev, bo->ttm);
-	ttm_resource_free(bo, &bo->mem);
 
-	ret = ttm_tt_set_placement_caching(bo->ttm, new_reg->placement);
-	if (ret)
-		goto out;
-	ttm_bo_assign_mem(bo, new_reg);
+	ret = ttm_bo_cleanup_ram_move(bo, new_reg);
 out:
 	ttm_resource_free(bo, &tmp_reg);
 	return ret;
@@ -1072,13 +1068,9 @@ nouveau_bo_move(struct ttm_buffer_object *bo, bool evict,
 	if (old_reg->mem_type == TTM_PL_TT &&
 	    new_reg->mem_type == TTM_PL_SYSTEM) {
 		nouveau_ttm_tt_unbind(bo->bdev, bo->ttm);
-		ttm_resource_free(bo, &bo->mem);
 
-		ret = ttm_tt_set_placement_caching(bo->ttm, new_reg->placement);
-		if (ret)
-			goto out;
-		ttm_bo_assign_mem(bo, new_reg);
-		return 0;
+		ret = ttm_bo_cleanup_ram_move(bo, new_reg);
+		goto out;
 	}
 
 	/* Hardware assisted copy. */

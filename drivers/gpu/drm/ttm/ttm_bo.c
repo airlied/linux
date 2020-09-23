@@ -1573,3 +1573,18 @@ int ttm_bo_create_tt_tmp(struct ttm_buffer_object *bo,
 	return 0;
 }
 EXPORT_SYMBOL(ttm_bo_create_tt_tmp);
+
+int ttm_bo_cleanup_ram_move(struct ttm_buffer_object *bo,
+			    struct ttm_resource *new_mem)
+{
+	int ret;
+
+	ttm_resource_free(bo, &bo->mem);
+
+	ret = ttm_tt_set_placement_caching(bo->ttm, new_mem->placement);
+	if (ret)
+		return ret;
+	ttm_bo_assign_mem(bo, new_mem);
+	return 0;
+}
+EXPORT_SYMBOL(ttm_bo_cleanup_ram_move);
