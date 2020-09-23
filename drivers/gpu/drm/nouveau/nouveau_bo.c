@@ -891,7 +891,7 @@ nouveau_bo_move_flipd(struct ttm_buffer_object *bo, bool evict,
 	if (ret)
 		return ret;
 
-	ret = ttm_tt_populate(bo->bdev, bo->ttm, ctx);
+	ret = ttm_bo_move_to_new_tt_mem(bo, ctx, &tmp_reg);
 	if (ret)
 		return ret;
 
