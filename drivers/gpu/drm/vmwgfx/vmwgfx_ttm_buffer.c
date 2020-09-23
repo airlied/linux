@@ -704,11 +704,8 @@ static int vmw_ttm_io_mem_reserve(struct ttm_bo_device *bdev, struct ttm_resourc
  * (currently only resources).
  */
 static void vmw_move_notify(struct ttm_buffer_object *bo,
-			    bool evict,
 			    struct ttm_resource *mem)
 {
-	if (!mem)
-		return;
 	vmw_bo_move_notify(bo, mem);
 	vmw_query_move_notify(bo, mem);
 }
@@ -732,15 +729,21 @@ static int vmw_move(struct ttm_buffer_object *bo,
 {
 	struct ttm_resource_manager *old_man = ttm_manager_type(bo->bdev, bo->mem.mem_type);
 	struct ttm_resource_manager *new_man = ttm_manager_type(bo->bdev, new_mem->mem_type);
+	int ret;
 
+	vmw_move_notify(bo, new_mem);
 	if (old_man->use_tt && new_man->use_tt) {
 		if (bo->mem.mem_type == TTM_PL_SYSTEM) {
 			ttm_bo_assign_mem(bo, new_mem);
 			return 0;
 		}
-		return ttm_bo_move_ttm(bo, ctx, new_mem);
+		ret = ttm_bo_move_ttm(bo, ctx, new_mem);
 	} else
-		return ttm_bo_move_memcpy(bo, ctx, new_mem);
+		ret = ttm_bo_move_memcpy(bo, ctx, new_mem);
+
+	if (ret)
+		vmw_move_notify(bo, &bo->mem);
+	return ret;
 }
 
 struct ttm_bo_driver vmw_bo_driver = {
@@ -754,7 +757,6 @@ struct ttm_bo_driver vmw_bo_driver = {
 	.evict_flags = vmw_evict_flags,
 	.move = vmw_move,
 	.verify_access = vmw_verify_access,
-	.move_notify = vmw_move_notify,
 	.swap_notify = vmw_swap_notify,
 	.io_mem_reserve = &vmw_ttm_io_mem_reserve,
 };
