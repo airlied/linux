@@ -103,12 +103,6 @@ int ttm_bo_move_ttm(struct ttm_buffer_object *bo,
 	if (ret)
 		return ret;
 
-	if (new_mem->mem_type != TTM_PL_SYSTEM) {
-		ret = ttm_bo_tt_bind(bo, new_mem);
-		if (unlikely(ret != 0))
-			return ret;
-	}
-
 	ttm_bo_assign_mem(bo, new_mem);
 	return 0;
 }

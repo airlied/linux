@@ -322,6 +322,14 @@ static int radeon_bo_move(struct ttm_buffer_object *bo, bool evict,
 
 	rbo = container_of(bo, struct radeon_bo, tbo);
 
+	if ((new_mem->mem_type == TTM_PL_TT ||
+	     new_mem->mem_type == TTM_PL_SYSTEM) &&
+	    old_mem->mem_type == TTM_PL_VRAM) {
+		r = radeon_ttm_tt_bind(bo->bdev, bo->ttm, new_mem);
+		if (r)
+			return r;
+	}
+
 	radeon_bo_invalidate(rbo);
 	radeon_bo_memory_usage(rbo, bo->mem.mem_type, new_mem->mem_type);
 

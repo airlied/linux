@@ -731,6 +731,11 @@ static int vmw_move(struct ttm_buffer_object *bo,
 	struct ttm_resource_manager *new_man = ttm_manager_type(bo->bdev, new_mem->mem_type);
 	int ret;
 
+	if (new_man->use_tt && bo->mem.mem_type != TTM_PL_SYSTEM) {
+		ret = vmw_ttm_bind(bo->bdev, bo->ttm, new_mem);
+		if (ret)
+			return ret;
+	}
 	vmw_move_notify(bo, new_mem);
 	if (old_man->use_tt && new_man->use_tt) {
 		if (bo->mem.mem_type == TTM_PL_SYSTEM) {

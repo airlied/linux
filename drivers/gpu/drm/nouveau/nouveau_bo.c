@@ -1069,6 +1069,14 @@ nouveau_bo_move(struct ttm_buffer_object *bo, bool evict,
 	struct nouveau_drm_tile *new_tile = NULL;
 	int ret = 0;
 
+	if ((new_reg->mem_type == TTM_PL_TT ||
+	     new_reg->mem_type == TTM_PL_SYSTEM) &&
+	    old_reg->mem_type == TTM_PL_VRAM) {
+		ret = nouveau_ttm_tt_bind(bo->bdev, bo->ttm, new_reg);
+		if (ret)
+			return ret;
+	}
+
 	ret = ttm_bo_wait_ctx(bo, ctx);
 	if (ret)
 		return ret;

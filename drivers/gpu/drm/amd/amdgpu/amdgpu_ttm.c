@@ -683,6 +683,14 @@ static int amdgpu_bo_move(struct ttm_buffer_object *bo, bool evict,
 
 	adev = amdgpu_ttm_adev(bo->bdev);
 
+	if ((new_mem->mem_type == TTM_PL_TT ||
+	     new_mem->mem_type == TTM_PL_SYSTEM) &&
+	    old_mem->mem_type == TTM_PL_VRAM) {
+		r = amdgpu_ttm_backend_bind(bo->bdev, bo->ttm, new_mem);
+		if (r)
+			return r;
+	}
+
 	amdgpu_bo_move_invalidate(abo, evict);
 	/* remember the eviction */
 	if (evict)
