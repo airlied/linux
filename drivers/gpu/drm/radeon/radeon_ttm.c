@@ -59,6 +59,8 @@ static void radeon_ttm_debugfs_fini(struct radeon_device *rdev);
 static int radeon_ttm_tt_bind(struct ttm_bo_device *bdev,
 			      struct ttm_tt *ttm,
 			      struct ttm_resource *bo_mem);
+static void radeon_ttm_tt_unbind(struct ttm_bo_device *bdev,
+				 struct ttm_tt *ttm);
 
 struct radeon_device *radeon_get_rdev(struct ttm_bo_device *bdev)
 {
@@ -249,9 +251,12 @@ static int radeon_move_vram_ram(struct ttm_buffer_object *bo,
 	if (unlikely(r)) {
 		goto out_cleanup;
 	}
-	r = ttm_bo_move_old_to_system(bo, ctx);
+	r = ttm_bo_wait_ctx(bo, ctx);
 	if (unlikely(r))
 		goto out_cleanup;
+
+	radeon_ttm_tt_unbind(bo->bdev, bo->ttm);
+	ttm_resource_free(bo, &bo->mem);
 
 	r = ttm_tt_set_placement_caching(bo->ttm, new_mem->placement);
 	if (unlikely(r))

@@ -46,7 +46,7 @@
 
 static int nouveau_ttm_tt_bind(struct ttm_bo_device *bdev, struct ttm_tt *ttm,
 			       struct ttm_resource *reg);
-
+static void nouveau_ttm_tt_unbind(struct ttm_bo_device *bdev, struct ttm_tt *ttm);
 /*
  * NV10-NV40 tiling helpers
  */
@@ -915,9 +915,12 @@ nouveau_bo_move_flipd(struct ttm_buffer_object *bo, bool evict,
 	if (ret)
 		goto out;
 
-	ret = ttm_bo_move_old_to_system(bo, ctx);
+	ret = ttm_bo_wait_ctx(bo, ctx);
 	if (ret)
 		goto out;
+
+	nouveau_ttm_tt_unbind(bo->bdev, bo->ttm);
+	ttm_resource_free(bo, &bo->mem);
 
 	ret = ttm_tt_set_placement_caching(bo->ttm, new_reg->placement);
 	if (ret)
