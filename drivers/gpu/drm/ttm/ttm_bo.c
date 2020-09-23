@@ -1541,3 +1541,31 @@ void ttm_bo_tt_destroy(struct ttm_buffer_object *bo)
 	ttm_tt_destroy(bo->bdev, bo->ttm);
 	bo->ttm = NULL;
 }
+
+int ttm_bo_create_tt_tmp(struct ttm_buffer_object *bo,
+			 struct ttm_operation_ctx *ctx,
+			 struct ttm_resource *new_mem,
+			 struct ttm_resource *new_temp)
+{
+	struct ttm_place placement_memtype = {
+		.fpfn = 0,
+		.lpfn = 0,
+		.mem_type = TTM_PL_TT,
+		.flags = TTM_PL_MASK_CACHING
+	};
+	struct ttm_placement placement;
+	int ret;
+
+	placement.num_placement = placement.num_busy_placement = 1;
+	placement.placement = placement.busy_placement = &placement_memtype;
+
+	*new_temp = *new_mem;
+	new_temp->mm_node = NULL;
+
+	ret = ttm_bo_mem_space(bo, &placement, new_temp, ctx);
+	if (ret)
+		return ret;
+
+	return 0;
+}
+EXPORT_SYMBOL(ttm_bo_create_tt_tmp);
