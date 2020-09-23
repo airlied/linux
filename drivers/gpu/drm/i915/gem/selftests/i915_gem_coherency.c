@@ -159,7 +159,7 @@ static int wc_set(struct context *ctx, unsigned long offset, u32 v)
 	if (err)
 		return err;
 
-	map = i915_gem_object_pin_map(ctx->obj, I915_MAP_WC);
+	map = i915_gem_object_pin_map_unlocked(ctx->obj, I915_MAP_WC);
 	if (IS_ERR(map))
 		return PTR_ERR(map);
 
@@ -182,7 +182,7 @@ static int wc_get(struct context *ctx, unsigned long offset, u32 *v)
 	if (err)
 		return err;
 
-	map = i915_gem_object_pin_map(ctx->obj, I915_MAP_WC);
+	map = i915_gem_object_pin_map_unlocked(ctx->obj, I915_MAP_WC);
 	if (IS_ERR(map))
 		return PTR_ERR(map);
 
