@@ -1269,18 +1269,14 @@ void amdgpu_bo_move_invalidate(struct amdgpu_bo *abo,
  * bookkeeping.
  * TTM driver callback which is called when ttm moves a buffer.
  */
-void amdgpu_bo_move_notify(struct ttm_buffer_object *bo,
-			   bool evict,
-			   struct ttm_resource *new_mem)
+void amdgpu_bo_invalidate_notify(struct ttm_buffer_object *bo)
 {
 	struct amdgpu_bo *abo;
 
 	if (!amdgpu_bo_is_amdgpu_bo(bo))
 		return;
 
-	/* new_mem path is handled in move */
-	if (!new_mem)
-		amdgpu_bo_move_invalidate(abo, false);
+	amdgpu_bo_move_invalidate(abo, false);
 }
 
 /**
