@@ -82,7 +82,6 @@ int ttm_bo_move_old_to_system(struct ttm_buffer_object *bo,
 		return ret;
 	}
 
-	ttm_bo_tt_unbind(bo);
 	ttm_resource_free(bo, &bo->mem);
 	old_mem->mem_type = TTM_PL_SYSTEM;
 	return 0;

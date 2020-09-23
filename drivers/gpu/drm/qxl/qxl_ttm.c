@@ -102,24 +102,6 @@ struct qxl_ttm_tt {
 	struct ttm_tt		        ttm;
 };
 
-static int qxl_ttm_backend_bind(struct ttm_bo_device *bdev,
-				struct ttm_tt *ttm,
-				struct ttm_resource *bo_mem)
-{
-	if (!ttm->num_pages) {
-		WARN(1, "nothing to bind %lu pages for mreg %p back %p!\n",
-		     ttm->num_pages, bo_mem, ttm);
-	}
-	/* Not implemented */
-	return -1;
-}
-
-static void qxl_ttm_backend_unbind(struct ttm_bo_device *bdev,
-				   struct ttm_tt *ttm)
-{
-	/* Not implemented */
-}
-
 static void qxl_ttm_backend_destroy(struct ttm_bo_device *bdev,
 				    struct ttm_tt *ttm)
 {
@@ -186,9 +168,7 @@ static void qxl_bo_move_notify(struct ttm_buffer_object *bo,
 
 static struct ttm_bo_driver qxl_bo_driver = {
 	.ttm_tt_create = &qxl_ttm_tt_create,
-	.ttm_tt_bind = &qxl_ttm_backend_bind,
 	.ttm_tt_destroy = &qxl_ttm_backend_destroy,
-	.ttm_tt_unbind = &qxl_ttm_backend_unbind,
 	.eviction_valuable = ttm_bo_eviction_valuable,
 	.evict_flags = &qxl_evict_flags,
 	.move = &qxl_bo_move,

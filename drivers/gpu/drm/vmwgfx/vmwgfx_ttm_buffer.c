@@ -742,9 +742,13 @@ static int vmw_move(struct ttm_buffer_object *bo,
 			ttm_bo_assign_mem(bo, new_mem);
 			return 0;
 		}
-		ret = ttm_bo_move_old_to_system(bo, ctx);
+
+		ret = ttm_bo_wait_ctx(bo, ctx);
 		if (ret)
 			return ret;
+
+		vmw_ttm_unbind(bo->bdev, bo->ttm);
+		ttm_resource_free(bo, &bo->mem);
 
 		ret = ttm_bo_move_to_new_tt_mem(bo, ctx, new_mem);
 		if (ret)
@@ -763,8 +767,6 @@ struct ttm_bo_driver vmw_bo_driver = {
 	.ttm_tt_create = &vmw_ttm_tt_create,
 	.ttm_tt_populate = &vmw_ttm_populate,
 	.ttm_tt_unpopulate = &vmw_ttm_unpopulate,
-	.ttm_tt_bind = &vmw_ttm_bind,
-	.ttm_tt_unbind = &vmw_ttm_unbind,
 	.ttm_tt_destroy = &vmw_ttm_destroy,
 	.eviction_valuable = ttm_bo_eviction_valuable,
 	.evict_flags = vmw_evict_flags,

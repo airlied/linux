@@ -354,9 +354,9 @@ static int radeon_bo_move(struct ttm_buffer_object *bo, bool evict,
 
 	if (old_mem->mem_type == TTM_PL_TT &&
 	    new_mem->mem_type == TTM_PL_SYSTEM) {
-		r = ttm_bo_move_old_to_system(bo, ctx);
-		if (r)
-			return r;
+		radeon_ttm_tt_unbind(bo->bdev, bo->ttm);
+		ttm_resource_free(bo, &bo->mem);
+
 		r = ttm_tt_set_placement_caching(bo->ttm, new_mem->placement);
 		if (r)
 			return r;
@@ -835,8 +835,6 @@ static struct ttm_bo_driver radeon_bo_driver = {
 	.ttm_tt_create = &radeon_ttm_tt_create,
 	.ttm_tt_populate = &radeon_ttm_tt_populate,
 	.ttm_tt_unpopulate = &radeon_ttm_tt_unpopulate,
-	.ttm_tt_bind = &radeon_ttm_tt_bind,
-	.ttm_tt_unbind = &radeon_ttm_tt_unbind,
 	.ttm_tt_destroy = &radeon_ttm_tt_destroy,
 	.eviction_valuable = ttm_bo_eviction_valuable,
 	.evict_flags = &radeon_evict_flags,
