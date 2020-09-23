@@ -60,11 +60,8 @@ int ttm_bo_move_to_new_tt_mem(struct ttm_buffer_object *bo,
 		ret = ttm_tt_populate(bo->bdev, ttm, ctx);
 		if (unlikely(ret != 0))
 			return ret;
-
-		ret = ttm_bo_tt_bind(bo, new_mem);
-		if (unlikely(ret != 0))
-			return ret;
 	}
+
 	return 0;
 }
 EXPORT_SYMBOL(ttm_bo_move_to_new_tt_mem);
@@ -105,6 +102,13 @@ int ttm_bo_move_ttm(struct ttm_buffer_object *bo,
 	ret = ttm_bo_move_to_new_tt_mem(bo, ctx, new_mem);
 	if (ret)
 		return ret;
+
+	if (new_mem->mem_type != TTM_PL_SYSTEM) {
+		ret = ttm_bo_tt_bind(bo, new_mem);
+		if (unlikely(ret != 0))
+			return ret;
+	}
+
 	ttm_bo_assign_mem(bo, new_mem);
 	return 0;
 }

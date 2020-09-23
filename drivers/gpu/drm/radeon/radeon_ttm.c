@@ -297,6 +297,10 @@ static int radeon_move_ram_vram(struct ttm_buffer_object *bo,
 	if (unlikely(r)) {
 		goto out_cleanup;
 	}
+	r = radeon_ttm_tt_bind(bo->bdev, bo->ttm, &tmp_mem);
+	if (unlikely(r))
+		goto out_cleanup;
+
 	ttm_bo_assign_mem(bo, &tmp_mem);
 	r = radeon_move_blit(bo, true, new_mem, old_mem);
 	if (unlikely(r)) {

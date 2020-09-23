@@ -255,6 +255,13 @@ static int ttm_bo_handle_move_mem(struct ttm_buffer_object *bo,
 		ret = ttm_bo_move_to_new_tt_mem(bo, ctx, mem);
 		if (ret)
 			goto out_err;
+
+		if (mem->mem_type != TTM_PL_SYSTEM) {
+			ret = ttm_bo_tt_bind(bo, mem);
+			if (ret)
+				goto out_err;
+		}
+
 	}
 
 	ret = bdev->driver->move(bo, evict, ctx, mem);
