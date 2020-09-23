@@ -742,7 +742,15 @@ static int vmw_move(struct ttm_buffer_object *bo,
 			ttm_bo_assign_mem(bo, new_mem);
 			return 0;
 		}
-		ret = ttm_bo_move_ttm(bo, ctx, new_mem);
+		ret = ttm_bo_move_old_to_system(bo, ctx);
+		if (ret)
+			return ret;
+
+		ret = ttm_bo_move_to_new_tt_mem(bo, ctx, new_mem);
+		if (ret)
+			return ret;
+
+		ttm_bo_assign_mem(bo, new_mem);
 	} else
 		ret = ttm_bo_move_memcpy(bo, ctx, new_mem);
 

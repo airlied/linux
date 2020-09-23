@@ -353,8 +353,16 @@ static int radeon_bo_move(struct ttm_buffer_object *bo, bool evict,
 	}
 
 	if (old_mem->mem_type == TTM_PL_TT &&
-	    new_mem->mem_type == TTM_PL_SYSTEM)
-		return ttm_bo_move_ttm(bo, ctx, new_mem);
+	    new_mem->mem_type == TTM_PL_SYSTEM) {
+		r = ttm_bo_move_old_to_system(bo, ctx);
+		if (r)
+			return r;
+		r = ttm_tt_set_placement_caching(bo->ttm, new_mem->placement);
+		if (r)
+			return r;
+		ttm_bo_assign_mem(bo, new_mem);
+		return 0;
+	}
 
 	if (!rdev->ring[radeon_copy_ring_index(rdev)].ready ||
 	    rdev->asic->copy.copy == NULL) {
