@@ -160,6 +160,10 @@ extern void radeon_bo_get_tiling_flags(struct radeon_bo *bo,
 				u32 *tiling_flags, u32 *pitch);
 extern int radeon_bo_check_tiling(struct radeon_bo *bo, bool has_moved,
 				bool force_drop);
+void radeon_bo_memory_usage(struct radeon_bo *rbo,
+			    uint32_t old_mem_type,
+			    uint32_t new_mem_type);
+void radeon_bo_invalidate(struct radeon_bo *rbo);
 extern void radeon_bo_move_notify(struct ttm_buffer_object *bo,
 				  bool evict,
 				  struct ttm_resource *new_mem);

@@ -316,12 +316,16 @@ static int radeon_bo_move(struct ttm_buffer_object *bo, bool evict,
 	struct ttm_resource *old_mem = &bo->mem;
 	int r;
 
+	rbo = container_of(bo, struct radeon_bo, tbo);
+
+	radeon_bo_invalidate(rbo);
+	radeon_bo_memory_usage(rbo, bo->mem.mem_type, new_mem->mem_type);
+
 	r = ttm_bo_wait_ctx(bo, ctx);
 	if (r)
 		return r;
 
 	/* Can't move a pinned BO */
-	rbo = container_of(bo, struct radeon_bo, tbo);
 	if (WARN_ON_ONCE(rbo->tbo.pin_count > 0))
 		return -EINVAL;
 
@@ -361,6 +365,8 @@ static int radeon_bo_move(struct ttm_buffer_object *bo, bool evict,
 memcpy:
 		r = ttm_bo_move_memcpy(bo, ctx, new_mem);
 		if (r) {
+			radeon_bo_invalidate(rbo);
+			radeon_bo_memory_usage(rbo, new_mem->mem_type, old_mem->mem_type);
 			return r;
 		}
 	}
