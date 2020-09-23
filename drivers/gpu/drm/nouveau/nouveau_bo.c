@@ -970,38 +970,42 @@ out:
 }
 
 static void
-nouveau_bo_move_ntfy(struct ttm_buffer_object *bo, bool evict,
-		     struct ttm_resource *new_reg)
+nouveau_bo_vma_map_update(struct nouveau_bo *nvbo,
+			  uint32_t mem_type,
+			  struct nouveau_mem *mem)
 {
-	struct nouveau_mem *mem = new_reg ? nouveau_mem(new_reg) : NULL;
-	struct nouveau_bo *nvbo = nouveau_bo(bo);
 	struct nouveau_vma *vma;
 
-	/* ttm can now (stupidly) pass the driver bos it didn't create... */
-	if (bo->destroy != nouveau_bo_del_ttm)
-		return;
-
-	nouveau_bo_del_io_reserve_lru(bo);
-
-	if (mem && new_reg->mem_type != TTM_PL_SYSTEM &&
+	if (mem && mem_type != TTM_PL_SYSTEM &&
 	    mem->mem.page == nvbo->page) {
 		list_for_each_entry(vma, &nvbo->vma_list, head) {
 			nouveau_vma_map(vma, mem);
 		}
 	} else {
 		list_for_each_entry(vma, &nvbo->vma_list, head) {
-			WARN_ON(ttm_bo_wait(bo, false, false));
+			WARN_ON(ttm_bo_wait(&nvbo->bo, false, false));
 			nouveau_vma_unmap(vma);
 		}
 	}
+}
 
-	if (new_reg) {
-		if (new_reg->mm_node)
-			nvbo->offset = (new_reg->start << PAGE_SHIFT);
-		else
-			nvbo->offset = 0;
-	}
+static void
+nouveau_bo_move_ntfy(struct ttm_buffer_object *bo, bool evict,
+		     struct ttm_resource *new_reg)
+{
+	struct nouveau_bo *nvbo = nouveau_bo(bo);
 
+	/* ttm can now (stupidly) pass the driver bos it didn't create... */
+	if (bo->destroy != nouveau_bo_del_ttm)
+		return;
+
+	/* handle new_reg path in move */
+	if (new_reg)
+		return;
+
+	nouveau_bo_del_io_reserve_lru(bo);
+
+	nouveau_bo_vma_map_update(nvbo, 0, NULL);
 }
 
 static int
@@ -1038,6 +1042,20 @@ nouveau_bo_vm_cleanup(struct ttm_buffer_object *bo,
 	*old_tile = new_tile;
 }
 
+
+static void
+nouveau_bo_update_mem(struct nouveau_bo *nvbo,
+		      struct ttm_resource *new_reg)
+{
+	nouveau_bo_vma_map_update(nvbo, new_reg->mem_type, nouveau_mem(new_reg));
+	if (new_reg) {
+		if (new_reg->mm_node)
+			nvbo->offset = (new_reg->start << PAGE_SHIFT);
+		else
+			nvbo->offset = 0;
+	}
+}
+
 static int
 nouveau_bo_move(struct ttm_buffer_object *bo, bool evict,
 		struct ttm_operation_ctx *ctx,
@@ -1052,6 +1070,9 @@ nouveau_bo_move(struct ttm_buffer_object *bo, bool evict,
 	ret = ttm_bo_wait_ctx(bo, ctx);
 	if (ret)
 		return ret;
+
+	nouveau_bo_del_io_reserve_lru(bo);
+	nouveau_bo_update_mem(nvbo, new_reg);
 
 	if (nvbo->bo.pin_count)
 		NV_WARN(drm, "Moving pinned object %p!\n", nvbo);
@@ -1106,6 +1127,11 @@ out:
 			nouveau_bo_vm_cleanup(bo, NULL, &new_tile);
 		else
 			nouveau_bo_vm_cleanup(bo, new_tile, &nvbo->tile);
+	}
+
+	if (ret) {
+		nouveau_bo_del_io_reserve_lru(bo);
+		nouveau_bo_update_mem(nvbo, &bo->mem);
 	}
 
 	return ret;
