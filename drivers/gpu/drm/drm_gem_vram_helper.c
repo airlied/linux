@@ -433,7 +433,7 @@ static void drm_gem_vram_kunmap_locked(struct drm_gem_vram_object *gbo)
 	 * Permanently mapping and unmapping buffers adds overhead from
 	 * updating the page tables and creates debugging output. Therefore,
 	 * we delay the actual unmap operation until the BO gets evicted
-	 * from memory. See drm_gem_vram_bo_driver_move_notify().
+	 * from memory. See drm_gem_vram_bo_driver_invalidate_notify().
 	 */
 }
 
@@ -585,9 +585,7 @@ static void drm_gem_vram_bo_driver_evict_flags(struct drm_gem_vram_object *gbo,
 	*pl = gbo->placement;
 }
 
-static void drm_gem_vram_bo_driver_move_notify(struct drm_gem_vram_object *gbo,
-					       bool evict,
-					       struct ttm_resource *new_mem)
+static void drm_gem_vram_bo_driver_invalidate_notify(struct drm_gem_vram_object *gbo)
 {
 	struct ttm_bo_kmap_obj *kmap = &gbo->kmap;
 
@@ -605,7 +603,7 @@ static int drm_gem_vram_bo_driver_move(struct drm_gem_vram_object *gbo,
 				       struct ttm_operation_ctx *ctx,
 				       struct ttm_resource *new_mem)
 {
-	drm_gem_vram_bo_driver_move_notify(gbo, evict, new_mem);
+	drm_gem_vram_bo_driver_invalidate_notify(gbo);
 	return ttm_bo_move_memcpy(&gbo->bo, ctx, new_mem);
 }
 
@@ -956,9 +954,7 @@ static void bo_driver_evict_flags(struct ttm_buffer_object *bo,
 	drm_gem_vram_bo_driver_evict_flags(gbo, placement);
 }
 
-static void bo_driver_move_notify(struct ttm_buffer_object *bo,
-				  bool evict,
-				  struct ttm_resource *new_mem)
+static void bo_driver_invalidate_notify(struct ttm_buffer_object *bo)
 {
 	struct drm_gem_vram_object *gbo;
 
@@ -968,7 +964,7 @@ static void bo_driver_move_notify(struct ttm_buffer_object *bo,
 
 	gbo = drm_gem_vram_of_bo(bo);
 
-	drm_gem_vram_bo_driver_move_notify(gbo, evict, new_mem);
+	drm_gem_vram_bo_driver_invalidate_notify(gbo);
 }
 
 static int bo_driver_move(struct ttm_buffer_object *bo,
@@ -1008,7 +1004,7 @@ static struct ttm_bo_driver bo_driver = {
 	.eviction_valuable = ttm_bo_eviction_valuable,
 	.evict_flags = bo_driver_evict_flags,
 	.move = bo_driver_move,
-	.move_notify = bo_driver_move_notify,
+	.invalidate_notify = bo_driver_invalidate_notify,
 	.io_mem_reserve = bo_driver_io_mem_reserve,
 };
 
