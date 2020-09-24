@@ -57,8 +57,6 @@ int i915_ttm_vram_mgr_init(struct drm_i915_private *i915)
 	man = &mgr->manager;
 
 	man->use_tt = true;
-	man->available_caching = TTM_PL_FLAG_UNCACHED | TTM_PL_FLAG_WC;
-	man->default_caching = TTM_PL_FLAG_WC;
 	man->func = &i915_ttm_vram_mgr_func;
 
 	ttm_resource_manager_init(man, vram_size);

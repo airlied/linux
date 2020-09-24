@@ -38,8 +38,6 @@ int i915_ttm_stolen_mgr_init(struct drm_i915_private *i915)
 
 	man->use_tt = true;
 	man->func = &i915_ttm_stolen_mgr_func;
-	man->available_caching = TTM_PL_MASK_CACHING;
-	man->default_caching = TTM_PL_FLAG_CACHED;
 
 	ttm_resource_manager_init(man, p_size);
 	drm_mm_init(&mgr->mm, 0, p_size);
