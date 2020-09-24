@@ -605,6 +605,7 @@ static int drm_gem_vram_bo_driver_move(struct drm_gem_vram_object *gbo,
 				       struct ttm_operation_ctx *ctx,
 				       struct ttm_resource *new_mem)
 {
+	drm_gem_vram_bo_driver_move_notify(gbo, evict, new_mem);
 	return ttm_bo_move_memcpy(&gbo->bo, ctx, new_mem);
 }
 
