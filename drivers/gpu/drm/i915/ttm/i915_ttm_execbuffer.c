@@ -309,7 +309,7 @@ static int i915_ttm_cs_bo_validate(struct i915_ttm_execbuffer *eb,
 	};
 	int r;
 
-	if (obj->ttm.pin_count)
+	if (obj->base.pin_count)
 		return 0;
 
 retry:

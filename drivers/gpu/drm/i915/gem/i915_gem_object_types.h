@@ -151,7 +151,6 @@ struct drm_i915_gem_object {
 		struct ttm_placement placement;
 		struct ttm_bo_kmap_obj kmap;
 		u32 prime_shared_count;
-		u32 pin_count;
 
 #ifdef CONFIG_MMU_NOTIFIER
 		struct mmu_interval_notifier notifier;
