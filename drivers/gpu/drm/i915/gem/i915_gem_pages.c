@@ -421,8 +421,13 @@ void __i915_gem_object_flush_map(struct drm_i915_gem_object *obj,
 	enum i915_map_type has_type;
 	void *ptr;
 
-	if (i915_gem_object_is_ttm(obj)) //TODO
+	if (i915_gem_object_is_ttm(obj)) { //TODO
+		wmb(); /* let all previous writes be visible to coherent partners */
+		obj->mm.dirty = true;
+
+		WARN_ON(!(obj->cache_coherent & I915_BO_CACHE_COHERENT_FOR_WRITE));
 		return;
+	}
 
 	GEM_BUG_ON(!i915_gem_object_has_pinned_pages(obj));
 	GEM_BUG_ON(range_overflows_t(typeof(i915_gem_object_size(obj)),
