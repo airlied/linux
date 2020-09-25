@@ -1388,6 +1388,7 @@ struct drm_i915_gem_object *i915_ttm_object_create_internal(struct drm_i915_priv
 		return ERR_PTR(r);
 	}
 	ttm_bo_unreserve(&obj->base);
+	i915_gem_object_set_cache_coherency(obj, I915_CACHE_LLC);
 	return obj;
 }
 
@@ -1434,6 +1435,7 @@ struct drm_i915_gem_object *i915_ttm_object_create_region(struct intel_memory_re
 	}
 	if (!obj->base.base.resv)
 		ttm_bo_unreserve(&obj->base);
+	i915_gem_object_set_cache_coherency(obj, obj->base.mem.mem_type == TTM_PL_VRAM ? I915_CACHE_NONE : I915_CACHE_LLC);
 	return obj;
 
 
