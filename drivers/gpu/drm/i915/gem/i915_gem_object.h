@@ -126,11 +126,42 @@ static inline void assert_object_held_shared(struct drm_i915_gem_object *obj)
 		assert_object_held(obj);
 }
 
+static inline int
+i915_gem_object_lock_to_evict(struct drm_i915_gem_object *obj,
+			      struct i915_gem_ww_ctx *ww)
+{
+	int ret;
+
+	if (ww->intr)
+		ret = dma_resv_lock_interruptible(obj->base.resv, &ww->ctx);
+	else
+		ret = dma_resv_lock(obj->base.resv, &ww->ctx);
+
+	if (!ret) {
+		list_add_tail(&obj->obj_link, &ww->eviction_list);
+		i915_gem_object_get(obj);
+	}
+
+	if (ret == -EALREADY &&
+	    obj == list_first_entry(&ww->eviction_list, struct drm_i915_gem_object, obj_link))
+		ret = 0;
+
+	ww->evicting = true;
+
+	if (ret == -EDEADLK)
+		ww->contended = i915_gem_object_get(obj);
+
+	return ret;
+}
+
 static inline int __i915_gem_object_lock(struct drm_i915_gem_object *obj,
 					 struct i915_gem_ww_ctx *ww,
 					 bool intr)
 {
 	int ret;
+
+	if (ww && GEM_WARN_ON(ww->evicting))
+		ww->evicting = false;
 
 	if (intr)
 		ret = dma_resv_lock_interruptible(obj->base.resv, ww ? &ww->ctx : NULL);
@@ -139,8 +170,14 @@ static inline int __i915_gem_object_lock(struct drm_i915_gem_object *obj,
 
 	if (!ret && ww)
 		list_add_tail(&obj->obj_link, &ww->obj_list);
-	if (ret == -EALREADY)
+	if (ret == -EALREADY) {
 		ret = 0;
+		if (obj == list_first_entry(&ww->eviction_list, struct drm_i915_gem_object, obj_link)) {
+			i915_gem_object_put(obj);
+			list_del(&obj->obj_link);
+			list_add_tail(&obj->obj_link, &ww->obj_list);
+		}
+	}
 
 	if (ret == -EDEADLK)
 		ww->contended = obj;

@@ -1370,8 +1370,23 @@ void i915_gem_ww_ctx_init(struct i915_gem_ww_ctx *ww, bool intr)
 {
 	ww_acquire_init(&ww->ctx, &reservation_ww_class);
 	INIT_LIST_HEAD(&ww->obj_list);
+	INIT_LIST_HEAD(&ww->eviction_list);
 	ww->intr = intr;
+	ww->evicting = false;
 	ww->contended = NULL;
+}
+
+void i915_gem_ww_ctx_unlock_evictions(struct i915_gem_ww_ctx *ww)
+{
+	struct drm_i915_gem_object *obj;
+
+	while ((obj = list_first_entry_or_null(&ww->eviction_list, struct drm_i915_gem_object, obj_link))) {
+		list_del(&obj->obj_link);
+		i915_gem_object_unlock(obj);
+		i915_gem_object_put(obj);
+	}
+
+	ww->evicting = false;
 }
 
 static void i915_gem_ww_ctx_unlock_all(struct i915_gem_ww_ctx *ww)
@@ -1381,6 +1396,12 @@ static void i915_gem_ww_ctx_unlock_all(struct i915_gem_ww_ctx *ww)
 	while ((obj = list_first_entry_or_null(&ww->obj_list, struct drm_i915_gem_object, obj_link))) {
 		list_del(&obj->obj_link);
 		i915_gem_object_unlock(obj);
+	}
+
+	while ((obj = list_first_entry_or_null(&ww->eviction_list, struct drm_i915_gem_object, obj_link))) {
+		list_del(&obj->obj_link);
+		i915_gem_object_unlock(obj);
+		i915_gem_object_put(obj);
 	}
 }
 
@@ -1411,9 +1432,15 @@ int __must_check i915_gem_ww_ctx_backoff(struct i915_gem_ww_ctx *ww)
 		dma_resv_lock_slow(ww->contended->base.resv, &ww->ctx);
 
 	if (!ret)
-		list_add_tail(&ww->contended->obj_link, &ww->obj_list);
+		list_add_tail(&ww->contended->obj_link,
+			      ww->evicting ? &ww->eviction_list :
+			      &ww->obj_list);
+	else if (ret && ww->evicting) {
+	      i915_gem_object_put(ww->contended);
+	}
 
 	ww->contended = NULL;
+	ww->evicting = false;
 
 	return ret;
 }
