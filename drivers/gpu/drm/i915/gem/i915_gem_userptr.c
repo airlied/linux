@@ -71,6 +71,13 @@ static bool i915_gem_userptr_invalidate(struct mmu_interval_notifier *mni,
 
 	mmu_interval_set_seq(mni, cur_seq);
 
+	/* drop the lazy reference we kept */
+	if (!obj->userptr.page_ref && obj->userptr.pvec) {
+		unpin_user_pages(obj->userptr.pvec, obj->base.size >> PAGE_SHIFT);
+		kvfree(obj->userptr.pvec);
+		obj->userptr.pvec = NULL;
+	}
+
 	spin_unlock(&i915->mm.notifier_lock);
 
 	/* we will unbind on next submission, still have userptr pins */
@@ -94,13 +101,13 @@ i915_gem_userptr_init__mmu_notifier(struct drm_i915_gem_object *obj)
 					    &i915_gem_userptr_notifier_ops);
 }
 
-static void i915_gem_object_userptr_drop_ref(struct drm_i915_gem_object *obj)
+static void i915_gem_object_userptr_drop_ref(struct drm_i915_gem_object *obj, bool free)
 {
 	struct drm_i915_private *i915 = to_i915(obj->base.dev);
 	struct page **pvec = NULL;
 
 	spin_lock(&i915->mm.notifier_lock);
-	if (!--obj->userptr.page_ref) {
+	if (!--obj->userptr.page_ref && free) {
 		pvec = obj->userptr.pvec;
 		obj->userptr.pvec = NULL;
 	}
@@ -169,7 +176,7 @@ alloc_table:
 	return 0;
 
 err:
-	i915_gem_object_userptr_drop_ref(obj);
+	i915_gem_object_userptr_drop_ref(obj, true);
 err_free:
 	kfree(st);
 	return ret;
@@ -227,7 +234,7 @@ i915_gem_userptr_put_pages(struct drm_i915_gem_object *obj,
 	sg_free_table(pages);
 	kfree(pages);
 
-	i915_gem_object_userptr_drop_ref(obj);
+	i915_gem_object_userptr_drop_ref(obj, true);
 }
 
 static int i915_gem_object_userptr_unbind(struct drm_i915_gem_object *obj, bool get_pages)
@@ -328,10 +335,8 @@ int i915_gem_object_userptr_submit_init(struct drm_i915_gem_object *obj)
 	}
 
 	if (!obj->userptr.page_ref++) {
-		obj->userptr.pvec = pvec;
+		swap(obj->userptr.pvec, pvec);
 		obj->userptr.notifier_seq = notifier_seq;
-
-		pvec = NULL;
 	}
 
 out_unlock:
@@ -360,7 +365,7 @@ int i915_gem_object_userptr_submit_done(struct drm_i915_gem_object *obj)
 
 void i915_gem_object_userptr_submit_fini(struct drm_i915_gem_object *obj)
 {
-	i915_gem_object_userptr_drop_ref(obj);
+	i915_gem_object_userptr_drop_ref(obj, false);
 }
 
 static void
@@ -370,6 +375,13 @@ i915_gem_userptr_release(struct drm_i915_gem_object *obj)
 
 	mmu_interval_notifier_remove(&obj->userptr.notifier);
 	obj->userptr.notifier.mm = NULL;
+	GEM_WARN_ON(obj->userptr.page_ref);
+
+	if (obj->userptr.pvec) {
+		unpin_user_pages(obj->userptr.pvec, obj->base.size >> PAGE_SHIFT);
+		kvfree(obj->userptr.pvec);
+		obj->userptr.pvec = NULL;
+	}
 }
 
 static int
