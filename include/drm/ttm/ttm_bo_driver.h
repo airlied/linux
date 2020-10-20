@@ -133,12 +133,15 @@ struct ttm_bo_driver {
 	 * the graphics address space
 	 * @ctx: context for this move with parameters
 	 * @new_mem: the new memory region receiving the buffer
+	 @ @hop: placement for driver directed intermediate hop
 	 *
 	 * Move a buffer between two memory regions.
+	 * Returns errno -EMULTIHOP if driver requests a hop
 	 */
 	int (*move)(struct ttm_buffer_object *bo, bool evict,
 		    struct ttm_operation_ctx *ctx,
-		    struct ttm_resource *new_mem);
+		    struct ttm_resource *new_mem,
+		    struct ttm_place *hop);
 
 	/**
 	 * struct ttm_bo_driver_member verify_access
