@@ -217,23 +217,28 @@ static int radeon_bo_move(struct ttm_buffer_object *bo, bool evict,
 	struct ttm_resource *old_mem = &bo->mem;
 	int r;
 
-	if ((old_mem->mem_type == TTM_PL_SYSTEM &&
-	     new_mem->mem_type == TTM_PL_VRAM) ||
-	    (old_mem->mem_type == TTM_PL_VRAM &&
-	     new_mem->mem_type == TTM_PL_SYSTEM)) {
-		hop->fpfn = 0;
-		hop->lpfn = 0;
-		hop->mem_type = TTM_PL_TT;
-		hop->flags = 0;
-		return -EMULTIHOP;
-	}
+	if (new_mem) {
+		if ((old_mem->mem_type == TTM_PL_SYSTEM &&
+		     new_mem->mem_type == TTM_PL_VRAM) ||
+		    (old_mem->mem_type == TTM_PL_VRAM &&
+		     new_mem->mem_type == TTM_PL_SYSTEM)) {
+			hop->fpfn = 0;
+			hop->lpfn = 0;
+			hop->mem_type = TTM_PL_TT;
+			hop->flags = 0;
+			return -EMULTIHOP;
+		}
 
-	if (new_mem->mem_type == TTM_PL_TT) {
-		r = radeon_ttm_tt_bind(bo->bdev, bo->ttm, new_mem);
-		if (r)
-			return r;
+		if (new_mem->mem_type == TTM_PL_TT) {
+			r = radeon_ttm_tt_bind(bo->bdev, bo->ttm, new_mem);
+			if (r)
+				return r;
+		}
 	}
 	radeon_bo_move_notify(bo, evict, new_mem);
+
+	if (!new_mem)
+		return 0;
 
 	r = ttm_bo_wait_ctx(bo, ctx);
 	if (r)
@@ -732,12 +737,6 @@ bool radeon_ttm_tt_is_readonly(struct radeon_device *rdev,
 	return !!(gtt->userflags & RADEON_GEM_USERPTR_READONLY);
 }
 
-static void
-radeon_bo_delete_mem_notify(struct ttm_buffer_object *bo)
-{
-	radeon_bo_move_notify(bo, false, NULL);
-}
-
 static struct ttm_bo_driver radeon_bo_driver = {
 	.ttm_tt_create = &radeon_ttm_tt_create,
 	.ttm_tt_populate = &radeon_ttm_tt_populate,
@@ -747,7 +746,6 @@ static struct ttm_bo_driver radeon_bo_driver = {
 	.evict_flags = &radeon_evict_flags,
 	.move = &radeon_bo_move,
 	.verify_access = &radeon_verify_access,
-	.delete_mem_notify = &radeon_bo_delete_mem_notify,
 	.io_mem_reserve = &radeon_ttm_io_mem_reserve,
 };
 

@@ -554,24 +554,29 @@ static int amdgpu_bo_move(struct ttm_buffer_object *bo, bool evict,
 	struct ttm_resource *old_mem = &bo->mem;
 	int r;
 
-	if ((old_mem->mem_type == TTM_PL_SYSTEM &&
-	     new_mem->mem_type == TTM_PL_VRAM) ||
-	    (old_mem->mem_type == TTM_PL_VRAM &&
-	     new_mem->mem_type == TTM_PL_SYSTEM)) {
-		hop->fpfn = 0;
-		hop->lpfn = 0;
-		hop->mem_type = TTM_PL_TT;
-		hop->flags = 0;
-		return -EMULTIHOP;
-	}
+	if (new_mem) {
+		if ((old_mem->mem_type == TTM_PL_SYSTEM &&
+		     new_mem->mem_type == TTM_PL_VRAM) ||
+		    (old_mem->mem_type == TTM_PL_VRAM &&
+		     new_mem->mem_type == TTM_PL_SYSTEM)) {
+			hop->fpfn = 0;
+			hop->lpfn = 0;
+			hop->mem_type = TTM_PL_TT;
+			hop->flags = 0;
+			return -EMULTIHOP;
+		}
 
-	if (new_mem->mem_type == TTM_PL_TT) {
-		r = amdgpu_ttm_backend_bind(bo->bdev, bo->ttm, new_mem);
-		if (r)
-			return r;
+		if (new_mem->mem_type == TTM_PL_TT) {
+			r = amdgpu_ttm_backend_bind(bo->bdev, bo->ttm, new_mem);
+			if (r)
+				return r;
+		}
 	}
 
 	amdgpu_bo_move_notify(bo, evict, new_mem);
+
+	if (!new_mem)
+		return 0;
 
 	/* Can't move a pinned BO */
 	abo = ttm_to_amdgpu_bo(bo);
@@ -1621,12 +1626,6 @@ static int amdgpu_ttm_access_memory(struct ttm_buffer_object *bo,
 	return ret;
 }
 
-static void
-amdgpu_bo_delete_mem_notify(struct ttm_buffer_object *bo)
-{
-	amdgpu_bo_move_notify(bo, false, NULL);
-}
-
 static struct ttm_bo_driver amdgpu_bo_driver = {
 	.ttm_tt_create = &amdgpu_ttm_tt_create,
 	.ttm_tt_populate = &amdgpu_ttm_tt_populate,
@@ -1636,7 +1635,6 @@ static struct ttm_bo_driver amdgpu_bo_driver = {
 	.evict_flags = &amdgpu_evict_flags,
 	.move = &amdgpu_bo_move,
 	.verify_access = &amdgpu_verify_access,
-	.delete_mem_notify = &amdgpu_bo_delete_mem_notify,
 	.release_notify = &amdgpu_bo_release_notify,
 	.io_mem_reserve = &amdgpu_ttm_io_mem_reserve,
 	.io_mem_pfn = amdgpu_ttm_io_mem_pfn,

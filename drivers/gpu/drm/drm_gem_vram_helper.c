@@ -593,6 +593,9 @@ static int drm_gem_vram_bo_driver_move(struct drm_gem_vram_object *gbo,
 	int ret;
 
 	drm_gem_vram_bo_driver_move_notify(gbo, evict, new_mem);
+
+	if (!new_mem)
+		return 0;
 	ret = ttm_bo_move_memcpy(&gbo->bo, ctx, new_mem);
 	if (ret) {
 		swap(*new_mem, gbo->bo.mem);
@@ -949,19 +952,6 @@ static void bo_driver_evict_flags(struct ttm_buffer_object *bo,
 	drm_gem_vram_bo_driver_evict_flags(gbo, placement);
 }
 
-static void bo_driver_delete_mem_notify(struct ttm_buffer_object *bo)
-{
-	struct drm_gem_vram_object *gbo;
-
-	/* TTM may pass BOs that are not GEM VRAM BOs. */
-	if (!drm_is_gem_vram(bo))
-		return;
-
-	gbo = drm_gem_vram_of_bo(bo);
-
-	drm_gem_vram_bo_driver_move_notify(gbo, false, NULL);
-}
-
 static int bo_driver_move(struct ttm_buffer_object *bo,
 			  bool evict,
 			  struct ttm_operation_ctx *ctx,
@@ -1001,7 +991,6 @@ static struct ttm_bo_driver bo_driver = {
 	.eviction_valuable = ttm_bo_eviction_valuable,
 	.evict_flags = bo_driver_evict_flags,
 	.move = bo_driver_move,
-	.delete_mem_notify = bo_driver_delete_mem_notify,
 	.io_mem_reserve = bo_driver_io_mem_reserve,
 };
 
