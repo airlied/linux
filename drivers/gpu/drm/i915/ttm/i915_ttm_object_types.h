@@ -28,6 +28,7 @@ struct i915_ttm_gtt_mgr {
 	struct drm_mm mm;
 	spinlock_t lock;
 	atomic64_t available;
+	struct drm_mm_node error_capture;
 };
 
 struct i915_ttm_stolen_mgr {

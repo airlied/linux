@@ -73,6 +73,8 @@ void i915_ttm_stolen_mgr_fini(struct drm_i915_private *i915);
 
 int i915_ttm_stolen_get_pages(struct drm_i915_gem_object *obj);
 
+int i915_ttm_ggtt_pin(struct i915_vma *vma, struct i915_gem_ww_ctx *ww,
+		      u32 align, unsigned int flags);
 
 struct drm_i915_gem_object *i915_ttm_object_create_region(struct intel_memory_region **placements,
 							  int n_placements,

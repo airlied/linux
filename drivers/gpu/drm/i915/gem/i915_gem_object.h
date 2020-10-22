@@ -17,6 +17,7 @@
 #include "i915_vma_types.h"
 
 #include "ttm/i915_ttm_object.h"
+#include "ttm/i915_ttm_object_types.h"
 
 void i915_gem_init__objects(struct drm_i915_private *i915);
 
@@ -619,4 +620,13 @@ static inline int i915_gem_object_userptr_submit_done(struct drm_i915_gem_object
 static inline void i915_gem_object_userptr_submit_fini(struct drm_i915_gem_object *obj) { GEM_BUG_ON(1); }
 #endif
 
+static inline bool
+i915_gem_object_is_stolen(struct drm_i915_gem_object *obj)
+{
+	if (i915_gem_object_is_ttm(obj)) {
+		return obj->base.mem.mem_type == I915_TTM_PL_STOLEN;
+	} else {
+		return obj->stolen ? true : false;
+	}
+}
 #endif
