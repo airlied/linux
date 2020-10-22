@@ -277,7 +277,7 @@ int i915_ttm_vram_get_pages(struct drm_i915_gem_object *obj)
 }
 
 unsigned long i915_ttm_vram_obj_gtt_offset(struct drm_i915_gem_object *obj,
-					   struct ttm_resource *mem)
+					   struct ttm_resource *mem, bool high, u32 fpfn)
 {
 	struct drm_i915_private *i915 = to_i915_ttm_dev(obj->base.bdev);
 	struct i915_ttm_vram_node *node = mem->mm_node;
@@ -289,9 +289,11 @@ unsigned long i915_ttm_vram_obj_gtt_offset(struct drm_i915_gem_object *obj,
 	}
 	if (node->gtt_res.start == I915_TTM_BO_INVALID_OFFSET) {
 		struct ttm_place gtt_place = obj->ttm.placements[0];
-		gtt_place.fpfn = 0;
+		gtt_place.fpfn = fpfn;
 		/* force gtt mgr to give us a node */
-		gtt_place.lpfn = i915->ggtt.vm.total >> PAGE_SHIFT;
+		gtt_place.lpfn = (i915->ggtt.vm.total >> PAGE_SHIFT);
+		if (high)
+			gtt_place.flags |= TTM_PL_FLAG_TOPDOWN;
 		node->gtt_res = *mem;
 		node->gtt_res.mm_node = NULL;
 		/* allocate a gtt node as well */

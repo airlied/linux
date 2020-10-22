@@ -122,19 +122,8 @@ static int i915_ttm_stolen_mgr_new(struct ttm_resource_manager *man,
 		goto err_free;
 	}
 
-	{
-		struct ttm_place gtt_place = *place;
-		gtt_place.fpfn = 0;
-		/* force gtt mgr to give us a node */
-		gtt_place.lpfn = i915->ggtt.vm.total >> PAGE_SHIFT;
-		node->gtt_res = *mem;
-		node->gtt_res.mm_node = NULL;
-		/* allocate a gtt node as well */
-		r = gtt_mgr->func->alloc(gtt_mgr, tbo, &gtt_place, &node->gtt_res);
-		if (unlikely(r)) {
-			goto err_free;
-		}
-	}
+
+	node->gtt_res.start = I915_TTM_BO_INVALID_OFFSET;
 	mem->mm_node = node;
 	mem->start = node->node.start;
 
@@ -201,15 +190,34 @@ int i915_ttm_stolen_get_pages(struct drm_i915_gem_object *obj)
 	return 0;
 }
 
-unsigned long i915_ttm_stolen_obj_get_gtt_offset(struct ttm_resource *mem)
+unsigned long i915_ttm_stolen_obj_get_gtt_offset(struct drm_i915_gem_object *obj,
+						 struct ttm_resource *mem, bool high, u32 fpfn)
 {
+	struct drm_i915_private *i915 = to_i915_ttm_dev(obj->base.bdev);	
 	struct i915_ttm_stolen_node *node = mem->mm_node;
-
+	struct ttm_resource_manager *gtt_mgr = ttm_manager_type(obj->base.bdev, TTM_PL_TT);
+	int r;
 	if (!mem) {
 		WARN_ON(1);
 		return 0;
 	}
 	if (!node)
 	    return 0;
+
+	if (node->gtt_res.start == I915_TTM_BO_INVALID_OFFSET) {
+		struct ttm_place gtt_place = obj->ttm.placements[0];
+		gtt_place.fpfn = fpfn;
+		/* force gtt mgr to give us a node */
+		gtt_place.lpfn = (i915->ggtt.vm.total >> PAGE_SHIFT);
+		if (high)
+			gtt_place.flags |= TTM_PL_FLAG_TOPDOWN;
+		node->gtt_res = *mem;
+		node->gtt_res.mm_node = NULL;
+		/* allocate a gtt node as well */
+		r = gtt_mgr->func->alloc(gtt_mgr, &obj->base, &gtt_place, &node->gtt_res);
+		if (unlikely(r)) {
+			node->gtt_res.start = I915_TTM_BO_INVALID_OFFSET;
+		}
+	}
 	return node->gtt_res.start;
 }

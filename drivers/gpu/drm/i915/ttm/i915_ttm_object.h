@@ -24,7 +24,8 @@ int i915_ttm_bo_pin(struct drm_i915_gem_object *obj, unsigned int region);
 bool i915_ttm_gtt_mgr_has_gart_addr(struct ttm_resource *mem);
 
 unsigned long i915_ttm_vram_obj_gtt_offset(struct drm_i915_gem_object *obj,
-					   struct ttm_resource *mem);
-unsigned long i915_ttm_stolen_obj_get_gtt_offset(struct ttm_resource *mem);
+					   struct ttm_resource *mem, bool high, u32 fpfn);
+unsigned long i915_ttm_stolen_obj_get_gtt_offset(struct drm_i915_gem_object *obj,
+						 struct ttm_resource *mem, bool high, u32 fpfn);
 bool i915_ttm_vram_obj_premap_allowed(struct ttm_resource *mem);
 #endif

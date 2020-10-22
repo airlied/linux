@@ -1027,7 +1027,7 @@ int i915_ggtt_pin(struct i915_vma *vma, struct i915_gem_ww_ctx *ww,
 	GEM_BUG_ON(!i915_vma_is_ggtt(vma));
 
 	if (i915_gem_object_is_ttm(vma->obj)) {
-		return i915_ttm_alloc_gtt(&vma->obj->base);
+		return i915_ttm_ggtt_pin(vma, ww, align, flags);
 	} else {
 		do {
 			err = i915_vma_pin_ww(vma, ww, 0, align, flags | PIN_GLOBAL);

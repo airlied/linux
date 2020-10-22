@@ -34,6 +34,15 @@ int i915_ttm_gtt_mgr_init(struct drm_i915_private *i915)
 
 	ttm_set_driver_manager(&i915->ttm_mman.bdev, TTM_PL_TT, &mgr->manager);
 	ttm_resource_manager_set_used(man, true);
+
+	if (i915->ggtt.mappable_end) {
+		drm_mm_insert_node_in_range(&mgr->mm,
+					    &mgr->error_capture,
+					    1, 0,
+					    0, 0, i915->ggtt.mappable_end >> PAGE_SHIFT,
+					    DRM_MM_INSERT_LOW);
+		printk(KERN_ERR "error capture %llx->%llx\n", mgr->error_capture.start, mgr->error_capture.size);
+	}
 	return 0;
 }
 
@@ -76,6 +85,7 @@ static int i915_ttm_gtt_mgr_new(struct ttm_resource_manager *man,
 {
 	struct i915_ttm_gtt_mgr *mgr = to_gtt_mgr(man);
 	struct i915_ttm_gtt_node *node;
+	enum drm_mm_insert_mode mode;
 	int r;
 
 	spin_lock(&mgr->lock);
@@ -100,10 +110,14 @@ static int i915_ttm_gtt_mgr_new(struct ttm_resource_manager *man,
 		goto err_out;
 	}
 
+	mode = DRM_MM_INSERT_BEST;
+	if (place->flags & TTM_PL_FLAG_TOPDOWN)
+		mode = DRM_MM_INSERT_HIGH;
+
 	spin_lock(&mgr->lock);
 	r = drm_mm_insert_node_in_range(&mgr->mm, &node->node, mem->num_pages,
 					mem->page_alignment, 0, place->fpfn,
-					place->lpfn, DRM_MM_INSERT_BEST);
+					place->lpfn, mode);
 	spin_unlock(&mgr->lock);
 
 	if (unlikely(r))

@@ -848,7 +848,7 @@ void i915_ttm_bo_placement_from_region(struct drm_i915_gem_object *obj, u32 regi
 	}
 
 	if (region & REGION_LMEM) {
-		places[c].fpfn = 0x100000 >> PAGE_SHIFT;
+		places[c].fpfn = 0x1000 >> PAGE_SHIFT;
 		places[c].lpfn = 0;
 		places[c].mem_type = TTM_PL_VRAM;
 		places[c].flags = TTM_PL_FLAG_WC | TTM_PL_FLAG_UNCACHED;
@@ -1198,7 +1198,7 @@ static void i915_ttm_release_gtt(struct ttm_buffer_object *tbo)
 /**
  * amdgpu_ttm_alloc_gart - Allocate GART memory for buffer object
  */
-int i915_ttm_alloc_gtt(struct ttm_buffer_object *tbo)
+static int i915_ttm_alloc_gtt_internal(struct ttm_buffer_object *tbo, bool high, bool mappable, u32 fpfn)
 {
 	struct drm_i915_private *i915 = to_i915_ttm_dev(tbo->bdev);
 	struct ttm_operation_ctx ctx = { false, false };
@@ -1210,13 +1210,13 @@ int i915_ttm_alloc_gtt(struct ttm_buffer_object *tbo)
 	u64 map_flag = 0;
 	unsigned long start;
 
-	if (!HAS_LMEM(i915))
+	if (mappable)
 		map_flag = PIN_MAPPABLE;
 
 	if (tbo->mem.mem_type == TTM_PL_VRAM)
-		start = i915_ttm_vram_obj_gtt_offset(gtt->obj, &tbo->mem);
+		start = i915_ttm_vram_obj_gtt_offset(gtt->obj, &tbo->mem, high, fpfn);
 	else if (tbo->mem.mem_type == I915_TTM_PL_STOLEN)
-		start = i915_ttm_stolen_obj_get_gtt_offset(&tbo->mem);
+		start = i915_ttm_stolen_obj_get_gtt_offset(gtt->obj, &tbo->mem, high, fpfn);
 	else
 		start = tbo->mem.start;
 
@@ -1233,9 +1233,11 @@ int i915_ttm_alloc_gtt(struct ttm_buffer_object *tbo)
 	placement.placement = &placements;
 	placement.num_busy_placement = 1;
 	placement.busy_placement = &placements;
-	placements.fpfn = 0;
-	placements.lpfn = i915->ggtt.vm.total >> PAGE_SHIFT;
+	placements.fpfn = fpfn;
+	placements.lpfn = (i915->ggtt.vm.total >> PAGE_SHIFT) - 1;
 	placements.flags = tbo->mem.placement;
+	if (high)
+		placements.flags |= TTM_PL_FLAG_TOPDOWN;
 	placements.mem_type = tbo->mem.mem_type;
 
 	r = ttm_bo_mem_space(tbo, &placement, &tmp, &ctx);
@@ -1244,9 +1246,9 @@ int i915_ttm_alloc_gtt(struct ttm_buffer_object *tbo)
 
 	/* Bind pages */
 	if (tbo->mem.mem_type == TTM_PL_VRAM)
-		start = i915_ttm_vram_obj_gtt_offset(gtt->obj, &tmp);
+		start = i915_ttm_vram_obj_gtt_offset(gtt->obj, &tmp, high, fpfn);
 	else if (tbo->mem.mem_type == I915_TTM_PL_STOLEN)
-		start = i915_ttm_stolen_obj_get_gtt_offset(&tmp);
+		start = i915_ttm_stolen_obj_get_gtt_offset(gtt->obj, &tmp, high, fpfn);
 	else
 		start = tmp.start;
 	gtt->offset = (u64)start << PAGE_SHIFT;
@@ -1264,6 +1266,32 @@ int i915_ttm_alloc_gtt(struct ttm_buffer_object *tbo)
 	tbo->mem = tmp;
 
 	return 0;
+}
+
+int i915_ttm_alloc_gtt(struct ttm_buffer_object *tbo)
+{
+	struct drm_i915_private *i915 = to_i915_ttm_dev(tbo->bdev);
+	bool mappable = true;
+	if (HAS_LMEM(i915))
+		mappable = false;
+	return i915_ttm_alloc_gtt_internal(tbo, false, mappable, 0);
+}
+
+int i915_ttm_ggtt_pin(struct i915_vma *vma, struct i915_gem_ww_ctx *ww,
+		      u32 align, unsigned int flags)
+{
+	bool high = false, mappable = false;
+	u32 fpfn = 0;
+	if (flags & PIN_HIGH)
+		high = true;
+	if (flags & PIN_MAPPABLE)
+		mappable = true;
+
+	if (flags & PIN_OFFSET_BIAS)
+		fpfn = (flags & PIN_OFFSET_MASK) >> PAGE_SHIFT;
+	
+	/* pin the object into GTT at a certain location */
+	return i915_ttm_alloc_gtt_internal(&vma->obj->base, high, mappable, fpfn);
 }
 
 /**
@@ -1300,7 +1328,7 @@ void i915_ttm_bo_placement_from_mrs(struct drm_i915_gem_object *obj,
 		}
 
 		if (placements[i]->id == INTEL_REGION_LMEM) {
-			places[c].fpfn = 0x100000 >> PAGE_SHIFT;
+			places[c].fpfn = 0;
 			places[c].lpfn = 0;
 			places[c].mem_type = TTM_PL_VRAM;
 			places[c].flags = TTM_PL_FLAG_WC | TTM_PL_FLAG_UNCACHED;
@@ -1313,7 +1341,7 @@ void i915_ttm_bo_placement_from_mrs(struct drm_i915_gem_object *obj,
 		}
 
 		if (placements[i]->id == INTEL_REGION_SMEM) {
-			places[c].fpfn = 0;
+			places[c].fpfn = 1;
 			places[c].lpfn = 0;
 			places[c].mem_type = TTM_PL_TT;
 			places[c].flags = 0;

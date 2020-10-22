@@ -11,6 +11,7 @@
 #include "intel_ring.h"
 #include "intel_workarounds.h"
 
+#include "ttm/i915_ttm.h"
 /**
  * DOC: Hardware workarounds
  *
@@ -2063,8 +2064,13 @@ create_scratch(struct i915_address_space *vm, int count)
 		goto err_obj;
 	}
 
-	err = i915_vma_pin(vma, 0, 0,
-			   i915_vma_is_ggtt(vma) ? PIN_GLOBAL : PIN_USER);
+	if (i915_gem_object_is_ttm(vma->obj)) {
+		err = i915_ttm_ggtt_pin(vma, NULL, 0,
+					i915_vma_is_ggtt(vma) ? PIN_GLOBAL : PIN_USER);
+	} else {
+		err = i915_vma_pin(vma, 0, 0,
+				   i915_vma_is_ggtt(vma) ? PIN_GLOBAL : PIN_USER);
+	}
 	if (err)
 		goto err_obj;
 
