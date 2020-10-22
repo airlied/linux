@@ -49,7 +49,7 @@ struct drm_i915_gem_object *i915_gem_object_alloc(void)
 	obj = kmem_cache_zalloc(global.slab_objects, GFP_KERNEL);
 	if (!obj)
 		return NULL;
-	obj->base.funcs = &i915_gem_object_funcs;
+	obj->base.base.funcs = &i915_gem_object_funcs;
 
 	return obj;
 }

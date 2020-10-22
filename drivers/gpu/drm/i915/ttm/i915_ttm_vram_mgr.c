@@ -76,7 +76,7 @@ void i915_ttm_vram_mgr_fini(struct drm_i915_private *i915)
 
 	ttm_resource_manager_set_used(man, false);
 
-	ret = ttm_resource_manager_force_list_clean(&i915->ttm_mman.bdev, man);
+	ret = ttm_resource_manager_evict_all(&i915->ttm_mman.bdev, man);
 	if (ret)
 		return;
 	spin_lock(&mgr->lock);

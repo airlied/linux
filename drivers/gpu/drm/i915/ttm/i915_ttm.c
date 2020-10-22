@@ -42,7 +42,7 @@ static void i915_ttm_evict_flags(struct ttm_buffer_object *tbo,
 		.fpfn = 0,
 		.lpfn = 0,
 		.mem_type = TTM_PL_SYSTEM,
-		.flags = TTM_PL_MASK_CACHING,
+		.flags = 0,
 	};
 
 	/* Don't handle scatter gather BOs */
@@ -130,25 +130,39 @@ static struct drm_mm_node *i915_ttm_find_mm_node(struct ttm_resource *mem,
 
 static int i915_ttm_bo_move(struct ttm_buffer_object *tbo, bool evict,
 			    struct ttm_operation_ctx *ctx,
-			    struct ttm_resource *new_mem)
+			    struct ttm_resource *new_mem,
+			    struct ttm_place *hop)
 {
 	struct ttm_resource *old_mem = &tbo->mem;
 	struct drm_i915_gem_object *obj = ttm_to_i915_gem(tbo);
 	struct drm_i915_private *i915;
 	int r;
 
+	if (new_mem) {
+		if ((old_mem->mem_type == TTM_PL_SYSTEM &&
+		     new_mem->mem_type == TTM_PL_VRAM) ||
+		    (old_mem->mem_type == TTM_PL_VRAM &&
+		     new_mem->mem_type == TTM_PL_SYSTEM)) {
+			hop->fpfn = 0;
+			hop->lpfn = 0;
+			hop->mem_type = TTM_PL_TT;
+			hop->flags = 0;
+			return -EMULTIHOP;
+		}
+
+		if (new_mem->mem_type == TTM_PL_TT) {
+			r = i915_ttm_tt_bind(tbo->bdev, tbo->ttm, new_mem);
+			if (r)
+				return r;
+		}
+	}
 	if (WARN_ON_ONCE(obj->base.pin_count > 0))
 		return -EINVAL;
 
-	i915 = to_i915_ttm_dev(tbo->bdev);
+	if (!new_mem)
+		return 0;
 
-	if ((new_mem->mem_type == TTM_PL_TT ||
-	     new_mem->mem_type == TTM_PL_SYSTEM) &&
-	    old_mem->mem_type == TTM_PL_VRAM) {
-		r = i915_ttm_tt_bind(tbo->bdev, tbo->ttm, new_mem);
-		if (r)
-			return r;
-	}
+	i915 = to_i915_ttm_dev(tbo->bdev);
 
 	if (old_mem->mem_type == TTM_PL_SYSTEM && tbo->ttm == NULL) {
 		i915_ttm_move_null(tbo, new_mem);
@@ -167,8 +181,9 @@ static int i915_ttm_bo_move(struct ttm_buffer_object *tbo, bool evict,
 		if (r)
 			return r;
 		i915_ttm_tt_unbind(tbo->bdev, tbo->ttm);
-
-		return ttm_bo_cleanup_ram_move(tbo, new_mem);
+		ttm_resource_free(tbo, &tbo->mem);
+		ttm_bo_assign_mem(tbo, new_mem);
+		return 0;
 	}
 
 	if (old_mem->mem_type == TTM_PL_VRAM &&
@@ -557,6 +572,7 @@ static struct ttm_tt *i915_ttm_tt_create(struct ttm_buffer_object *tbo,
 {
 	struct i915_ttm_tt *gtt;
 	struct drm_i915_gem_object *obj = ttm_to_i915_gem(tbo);
+	enum ttm_caching caching;
 
 	gtt = kzalloc(sizeof(struct i915_ttm_tt), GFP_KERNEL);
 	if (gtt == NULL)
@@ -564,11 +580,15 @@ static struct ttm_tt *i915_ttm_tt_create(struct ttm_buffer_object *tbo,
 
 	gtt->obj = obj;
 
+	//	if (abo->flags & AMDGPU_GEM_CREATE_CPU_GTT_USWC)
+	//		caching = ttm_write_combined;
+	//	else
+	caching = ttm_cached;
 	/* flags to disallows mapping */
 	if (obj->base.mem.mem_type == I915_TTM_PL_STOLEN)
 		page_flags |= TTM_PAGE_FLAG_SG;
 
-	if (ttm_sg_tt_init(&gtt->ttm, tbo, page_flags)) {
+	if (ttm_sg_tt_init(&gtt->ttm, tbo, page_flags, caching)) {
 		kfree(gtt);
 		return NULL;
 	}
@@ -841,7 +861,7 @@ void i915_ttm_bo_placement_from_region(struct drm_i915_gem_object *obj, u32 regi
 		/* WaSkipStolenMemoryFirstPage:bdw+ */
 		if (INTEL_GEN(i915) >= 8)
 			places[c].fpfn = 1;
-		places[c].flags = TTM_PL_FLAG_WC | TTM_PL_FLAG_UNCACHED;
+		places[c].flags = 0;
 
 		places[c].flags |= TTM_PL_FLAG_CONTIGUOUS;
 		c++;
@@ -851,7 +871,7 @@ void i915_ttm_bo_placement_from_region(struct drm_i915_gem_object *obj, u32 regi
 		places[c].fpfn = 0x1000 >> PAGE_SHIFT;
 		places[c].lpfn = 0;
 		places[c].mem_type = TTM_PL_VRAM;
-		places[c].flags = TTM_PL_FLAG_WC | TTM_PL_FLAG_UNCACHED;
+		places[c].flags = 0;
 
 //		places[c].flags |= TTM_PL_FLAG_TOPDOWN;
 
@@ -866,11 +886,6 @@ void i915_ttm_bo_placement_from_region(struct drm_i915_gem_object *obj, u32 regi
 		places[c].lpfn = 0;
 		places[c].mem_type = TTM_PL_TT;
 		places[c].flags = 0;
-		if (flags & I915_TTM_CREATE_CPU_GTT_USWC)
-			places[c].flags |= TTM_PL_FLAG_WC |
-				TTM_PL_FLAG_UNCACHED;
-		else
-			places[c].flags |= TTM_PL_FLAG_CACHED;
 		c++;
 	}
 
@@ -879,11 +894,6 @@ void i915_ttm_bo_placement_from_region(struct drm_i915_gem_object *obj, u32 regi
 		places[c].lpfn = 0;
 		places[c].mem_type = TTM_PL_SYSTEM;
 		places[c].flags = 0;
-		if (flags & I915_TTM_CREATE_CPU_GTT_USWC)
-			places[c].flags |= TTM_PL_FLAG_WC |
-				TTM_PL_FLAG_UNCACHED;
-		else
-			places[c].flags |= TTM_PL_FLAG_CACHED;
 		c++;
 	}
 
@@ -891,7 +901,7 @@ void i915_ttm_bo_placement_from_region(struct drm_i915_gem_object *obj, u32 regi
 		places[c].fpfn = 0;
 		places[c].lpfn = 0;
 		places[c].mem_type = TTM_PL_SYSTEM;
-		places[c].flags = TTM_PL_MASK_CACHING;
+		places[c].flags = 0;
 		c++;
 	}
 
@@ -1320,7 +1330,7 @@ void i915_ttm_bo_placement_from_mrs(struct drm_i915_gem_object *obj,
 			/* WaSkipStolenMemoryFirstPage:bdw+ */
 			if (INTEL_GEN(i915) >= 8)
 				places[c].fpfn = 1;
-			places[c].flags = TTM_PL_FLAG_WC | TTM_PL_FLAG_UNCACHED;
+			places[c].flags = 0;
 
 			if (flags & I915_BO_ALLOC_CONTIGUOUS)
 				places[c].flags |= TTM_PL_FLAG_CONTIGUOUS;
@@ -1331,7 +1341,7 @@ void i915_ttm_bo_placement_from_mrs(struct drm_i915_gem_object *obj,
 			places[c].fpfn = 0;
 			places[c].lpfn = 0;
 			places[c].mem_type = TTM_PL_VRAM;
-			places[c].flags = TTM_PL_FLAG_WC | TTM_PL_FLAG_UNCACHED;
+			places[c].flags = 0;
 
 //		places[c].flags |= TTM_PL_FLAG_TOPDOWN;
 
@@ -1345,11 +1355,6 @@ void i915_ttm_bo_placement_from_mrs(struct drm_i915_gem_object *obj,
 			places[c].lpfn = 0;
 			places[c].mem_type = TTM_PL_TT;
 			places[c].flags = 0;
-			if (flags & I915_TTM_CREATE_CPU_GTT_USWC)
-				places[c].flags |= TTM_PL_FLAG_WC |
-					TTM_PL_FLAG_UNCACHED;
-			else
-				places[c].flags |= TTM_PL_FLAG_CACHED;
 			c++;
 		}
 	}
@@ -1359,11 +1364,6 @@ void i915_ttm_bo_placement_from_mrs(struct drm_i915_gem_object *obj,
 		places[c].lpfn = 0;
 		places[c].mem_type = TTM_PL_SYSTEM;
 		places[c].flags = 0;
-		if (flags & I915_TTM_CREATE_CPU_GTT_USWC)
-			places[c].flags |= TTM_PL_FLAG_WC |
-				TTM_PL_FLAG_UNCACHED;
-		else
-			places[c].flags |= TTM_PL_FLAG_CACHED;
 		c++;
 	}
 
@@ -1371,7 +1371,7 @@ void i915_ttm_bo_placement_from_mrs(struct drm_i915_gem_object *obj,
 		places[c].fpfn = 0;
 		places[c].lpfn = 0;
 		places[c].mem_type = TTM_PL_SYSTEM;
-		places[c].flags = TTM_PL_MASK_CACHING;
+		places[c].flags = 0;
 		c++;
 	}
 
