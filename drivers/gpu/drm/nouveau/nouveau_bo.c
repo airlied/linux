@@ -943,24 +943,29 @@ nouveau_bo_move(struct ttm_buffer_object *bo, bool evict,
 	struct nouveau_drm_tile *new_tile = NULL;
 	int ret = 0;
 
-	if ((old_reg->mem_type == TTM_PL_SYSTEM &&
-	     new_reg->mem_type == TTM_PL_VRAM) ||
-	    (old_reg->mem_type == TTM_PL_VRAM &&
-	     new_reg->mem_type == TTM_PL_SYSTEM)) {
-		hop->fpfn = 0;
-		hop->lpfn = 0;
-		hop->mem_type = TTM_PL_TT;
-		hop->flags = 0;
-		return -EMULTIHOP;
-	}
+	if (new_reg) {
+		if ((old_reg->mem_type == TTM_PL_SYSTEM &&
+		     new_reg->mem_type == TTM_PL_VRAM) ||
+		    (old_reg->mem_type == TTM_PL_VRAM &&
+		     new_reg->mem_type == TTM_PL_SYSTEM)) {
+			hop->fpfn = 0;
+			hop->lpfn = 0;
+			hop->mem_type = TTM_PL_TT;
+			hop->flags = 0;
+			return -EMULTIHOP;
+		}
 
-	if (new_reg->mem_type == TTM_PL_TT) {
-		ret = nouveau_ttm_tt_bind(bo->bdev, bo->ttm, new_reg);
-		if (ret)
-			return ret;
+		if (new_reg->mem_type == TTM_PL_TT) {
+			ret = nouveau_ttm_tt_bind(bo->bdev, bo->ttm, new_reg);
+			if (ret)
+				return ret;
+		}
 	}
 
 	nouveau_bo_move_ntfy(bo, evict, new_reg);
+	if (!new_reg)
+		return 0;
+
 	ret = ttm_bo_wait_ctx(bo, ctx);
 	if (ret)
 		goto out_ntfy;
@@ -1315,12 +1320,6 @@ nouveau_bo_fence(struct nouveau_bo *nvbo, struct nouveau_fence *fence, bool excl
 		dma_resv_add_shared_fence(resv, &fence->base);
 }
 
-static void
-nouveau_bo_delete_mem_notify(struct ttm_buffer_object *bo)
-{
-	nouveau_bo_move_ntfy(bo, false, NULL);
-}
-
 struct ttm_bo_driver nouveau_bo_driver = {
 	.ttm_tt_create = &nouveau_ttm_tt_create,
 	.ttm_tt_populate = &nouveau_ttm_tt_populate,
@@ -1328,7 +1327,6 @@ struct ttm_bo_driver nouveau_bo_driver = {
 	.ttm_tt_destroy = &nouveau_ttm_tt_destroy,
 	.eviction_valuable = ttm_bo_eviction_valuable,
 	.evict_flags = nouveau_bo_evict_flags,
-	.delete_mem_notify = nouveau_bo_delete_mem_notify,
 	.move = nouveau_bo_move,
 	.verify_access = nouveau_bo_verify_access,
 	.io_mem_reserve = &nouveau_ttm_io_mem_reserve,

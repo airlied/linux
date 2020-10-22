@@ -149,6 +149,9 @@ static int qxl_bo_move(struct ttm_buffer_object *bo, bool evict,
 
 	qxl_bo_move_notify(bo, evict, new_mem);
 
+	if (!new_mem)
+		return 0;
+
 	ret = ttm_bo_wait_ctx(bo, ctx);
 	if (ret)
 		goto out;
@@ -167,10 +170,6 @@ out:
 	return ret;
 }
 
-static void qxl_bo_delete_mem_notify(struct ttm_buffer_object *bo)
-{
-	qxl_bo_move_notify(bo, false, NULL);
-}
 
 static struct ttm_bo_driver qxl_bo_driver = {
 	.ttm_tt_create = &qxl_ttm_tt_create,
@@ -179,7 +178,6 @@ static struct ttm_bo_driver qxl_bo_driver = {
 	.evict_flags = &qxl_evict_flags,
 	.move = &qxl_bo_move,
 	.io_mem_reserve = &qxl_ttm_io_mem_reserve,
-	.delete_mem_notify = &qxl_bo_delete_mem_notify,
 };
 
 static int qxl_ttm_init_mem_type(struct qxl_device *qdev,

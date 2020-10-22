@@ -159,11 +159,6 @@ struct ttm_bo_driver {
 			     struct file *filp);
 
 	/**
-	 * Hook to notify driver about a resource delete.
-	 */
-	void (*delete_mem_notify)(struct ttm_buffer_object *bo);
-
-	/**
 	 * notify the driver that we're about to swap out this bo
 	 */
 	void (*swap_notify)(struct ttm_buffer_object *bo);
