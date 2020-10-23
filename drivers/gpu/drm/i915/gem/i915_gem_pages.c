@@ -463,7 +463,7 @@ void __i915_gem_object_flush_map(struct drm_i915_gem_object *obj,
 		wmb(); /* let all previous writes be visible to coherent partners */
 		obj->mm.dirty = true;
 
-		WARN_ON(!(obj->cache_coherent & I915_BO_CACHE_COHERENT_FOR_WRITE));
+		//		WARN_ON(!(obj->cache_coherent & I915_BO_CACHE_COHERENT_FOR_WRITE));
 		return;
 	}
 

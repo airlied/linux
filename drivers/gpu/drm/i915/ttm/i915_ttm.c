@@ -156,11 +156,11 @@ static int i915_ttm_bo_move(struct ttm_buffer_object *tbo, bool evict,
 				return r;
 		}
 	}
-	if (WARN_ON_ONCE(obj->base.pin_count > 0))
-		return -EINVAL;
-
 	if (!new_mem)
 		return 0;
+
+	if (WARN_ON_ONCE(obj->base.pin_count > 0))
+		return -EINVAL;
 
 	i915 = to_i915_ttm_dev(tbo->bdev);
 

@@ -474,7 +474,8 @@ i915_gem_pread_ioctl(struct drm_device *dev, void *data,
 		return 0;
 
 	if (i915->use_ttm)
-		return -EINVAL;
+		return -ENOSYS;
+
 	if (!access_ok(u64_to_user_ptr(args->data_ptr),
 		       args->size))
 		return -EFAULT;
@@ -744,7 +745,7 @@ i915_gem_pwrite_ioctl(struct drm_device *dev, void *data,
 		return 0;
 
 	if (i915->use_ttm)
-		return -EINVAL;
+		return -ENOSYS;
 
 	if (!access_ok(u64_to_user_ptr(args->data_ptr), args->size))
 		return -EFAULT;

@@ -89,8 +89,6 @@ static int i915_ttm_stolen_mgr_new(struct ttm_resource_manager *man,
 {
 	struct i915_ttm_stolen_mgr *mgr = to_stolen_mgr(man);
 	struct i915_ttm_stolen_node *node;
-	struct drm_i915_private *i915 = stolen_mgr_to_i915(man);
-	struct ttm_resource_manager *gtt_mgr = ttm_manager_type(tbo->bdev, TTM_PL_TT);
 	unsigned long lpfn;
 	int r;
 

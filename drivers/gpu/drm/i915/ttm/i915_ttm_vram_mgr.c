@@ -262,14 +262,15 @@ int i915_ttm_vram_get_pages(struct drm_i915_gem_object *obj)
 		pages -= nodes->size;
 
 		sg_dma_address(sg) = nodes->start << PAGE_SHIFT;
-
 		sg_dma_len(sg) = nodes->size << PAGE_SHIFT;
 		sg->length = nodes->size << PAGE_SHIFT;
+
+		if (!pages)
+			sg_mark_end(sg);
 		sg++;
 		st->nents++;
 		++nodes;
 	}
-	sg_mark_end(sg);
 	obj->mm.pages = st;
 	obj->mm.page_sizes.phys = PAGE_SIZE;
 	obj->mm.page_sizes.sg = PAGE_SIZE;
