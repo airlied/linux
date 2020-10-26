@@ -853,8 +853,8 @@ __i915_request_create(struct intel_context *ce, gfp_t gfp)
 	rq->fence.seqno = seqno;
 
 	RCU_INIT_POINTER(rq->timeline, tl);
-	RCU_INIT_POINTER(rq->hwsp_cacheline, tl->hwsp_cacheline);
 	rq->hwsp_seqno = tl->hwsp_seqno;
+	rq->hwsp_offset = tl->hwsp_offset;
 	GEM_BUG_ON(i915_request_completed(rq));
 
 	rq->rcustate = get_state_synchronize_rcu(); /* acts as smp_mb() */
@@ -1090,9 +1090,6 @@ emit_semaphore_wait(struct i915_request *to,
 		goto await_fence;
 
 	if (i915_request_has_initial_breadcrumb(to))
-		goto await_fence;
-
-	if (!rcu_access_pointer(from->hwsp_cacheline))
 		goto await_fence;
 
 	/*
