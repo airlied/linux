@@ -1,0 +1,32 @@
+drm drm-fixes 3650b228f83adda7e5ee532e2b90429c03f7b9ec
+	Linux 5.10-rc1
+drm-misc drm-misc-fixes 58d043690deb7c145f8a0bd07370dcaefa97a733
+	drm/vc4: hdmi: Avoid sleeping in atomic context
+drm-intel drm-intel-fixes c9f7fc65564f840cdcb9f8b822889c426b6c77ea
+	Merge tag 'gvt-fixes-2020-10-27' of https://github.com/intel/gvt-linux into drm-intel-fixes
+drm-amd drm-amd-fixes 2b702e72e33bbdec0764cfb6e1dd00fe1142ae55
+	Merge tag 'drm-misc-fixes-2017-09-28-1' of git://anongit.freedesktop.org/git/drm-misc into drm-fixes
+drm drm-next b45b6fbc671c60f56fd119c443e5570f83175928
+	Merge tag 'drm-intel-next-fixes-2020-10-22' of git://anongit.freedesktop.org/drm/drm-intel into drm-next
+drm-misc drm-misc-next-fixes 2580a493a97da4a302cb66251b558bfc04c16e68
+	dt-binding: display: Require two resets on mantix panel
+drm-intel drm-intel-next-fixes b45b6fbc671c60f56fd119c443e5570f83175928
+	Merge tag 'drm-intel-next-fixes-2020-10-22' of git://anongit.freedesktop.org/drm/drm-intel into drm-next
+drm-amd drm-amd-next-fixes 2bd6bf03f4c1c59381d62c61d03f6cc3fe71f66e
+	Linux 4.14-rc1
+drm-misc drm-misc-next 65b7da27d2f6a9ad7da11ed502d0ba564bbdf17d
+	drm/tilcdc: avoid 'make W=2' build failure
+drm-intel drm-intel-next-queued 859d74f65d8734df8f41a923496eca5df7e04f29
+	drm/i915/display: remove debug message from error path
+drm-intel drm-intel-next 8fea92536e3efff14fa4cde7ed37c595b40a52b5
+	drm/i915: Update DRIVER_DATE to 20200917
+drm-amd drm-amd-next 754270c7c56292e97d0eff924a5d5d83f92add07
+	Merge branch 'drm-next-4.15' of git://people.freedesktop.org/~agd5f/linux into drm-next
+sound-upstream for-linus f15cfca818d756dd1c9492530091dfd583359db3
+	ALSA: usb-audio: Add implicit feedback quirk for Zoom UAC-2
+sound-upstream for-next ad26098970b637f4565b110df929d74eb2c2652e
+	ALSA: remove unneeded break
+drm-intel topic/core-for-CI 77dbec734a2e0558f7a01140e039a2e252d174cc
+	perf/core: Only copy-to-user after completely unlocking all locks, v3.
+drm-intel drm-intel-gt-next 6e7a21e7ab27dd5e42e212155200c1c84bbadbc7
+	drm/i915/selftests: Exercise intel_timeline_read_hwsp()
