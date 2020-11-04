@@ -582,7 +582,7 @@ static int i915_gem_object_get_pages_stolen(struct drm_i915_gem_object *obj)
 	if (IS_ERR(pages))
 		return PTR_ERR(pages);
 
-	dbg_poison(&to_i915(obj->base.dev)->ggtt,
+	dbg_poison(&to_i915(obj->base.base.dev)->ggtt,
 		   sg_dma_address(pages->sgl),
 		   sg_dma_len(pages->sgl),
 		   POISON_INUSE);

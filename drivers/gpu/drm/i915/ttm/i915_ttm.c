@@ -272,7 +272,7 @@ static unsigned long i915_ttm_io_mem_pfn(struct ttm_buffer_object *bo,
 }
 
 struct i915_ttm_tt {
-	struct ttm_dma_tt ttm;
+	struct ttm_tt ttm;
 	struct drm_i915_gem_object *obj;
 	uint64_t offset;
 	uint64_t userptr;
@@ -411,8 +411,8 @@ bool i915_ttm_tt_get_user_pages_done(struct ttm_tt *ttm)
 	if (!gtt || !gtt->userptr)
 		return false;
 
-	DRM_DEBUG_DRIVER("user_pages_done 0x%llx pages 0x%lx\n",
-		gtt->userptr, ttm->num_pages);
+	DRM_DEBUG_DRIVER("user_pages_done 0x%llx pages 0x%x\n",
+			 gtt->userptr, ttm->num_pages);
 
 	WARN_ONCE(!gtt->range || !gtt->range->hmm_pfns,
 		"No user pages to check\n");
@@ -557,13 +557,13 @@ static void i915_ttm_tt_unbind(struct ttm_bo_device *bdev,
 }
 
 static void i915_ttm_tt_destroy(struct ttm_bo_device *bdev,
-				     struct ttm_tt *ttm)
+				struct ttm_tt *ttm)
 {
 	struct i915_ttm_tt *gtt = (void *)ttm;
 
 	if (gtt->usertask)
 		put_task_struct(gtt->usertask);
-	ttm_dma_tt_fini(&gtt->ttm);
+	ttm_tt_fini(&gtt->ttm);
 	kfree(gtt);
 }
 
@@ -592,7 +592,7 @@ static struct ttm_tt *i915_ttm_tt_create(struct ttm_buffer_object *tbo,
 		kfree(gtt);
 		return NULL;
 	}
-	return &gtt->ttm.ttm;
+	return &gtt->ttm;
 }
 
 static int i915_ttm_tt_populate(struct ttm_bo_device *bdev,
@@ -609,7 +609,6 @@ static int i915_ttm_tt_populate(struct ttm_bo_device *bdev,
 			return -ENOMEM;
 
 		ttm->page_flags |= TTM_PAGE_FLAG_SG;
-		ttm_tt_set_populated(ttm);
 		return 0;
 	}
 
@@ -1145,7 +1144,7 @@ int i915_ttm_create_bo_pages(struct drm_i915_gem_object *obj)
 	if (mem->mem_type == I915_TTM_PL_STOLEN) {
 		ret = i915_ttm_stolen_get_pages(obj);
 	} else if (mem->mem_type == TTM_PL_TT || mem->mem_type == TTM_PL_SYSTEM) {
-		struct ttm_dma_tt *ttm;
+		struct ttm_tt *ttm;
 		dma_addr_t *pages_addr;
 		int i;
 		struct sg_table *st;
@@ -1155,11 +1154,11 @@ int i915_ttm_create_bo_pages(struct drm_i915_gem_object *obj)
 		st = kmalloc(sizeof(*st), GFP_KERNEL);
 		if (!st)
 			return -ENOMEM;
-		ttm = container_of(obj->base.ttm, struct ttm_dma_tt, ttm);
+		ttm = obj->base.ttm;
 		pages_addr = ttm->dma_address;
 
-		sg_alloc_table_from_pages(st, ttm->ttm.pages, ttm->ttm.num_pages, 0,
-					  (unsigned long)ttm->ttm.num_pages << PAGE_SHIFT,
+		sg_alloc_table_from_pages(st, ttm->pages, ttm->num_pages, 0,
+					  (unsigned long)ttm->num_pages << PAGE_SHIFT,
 					  GFP_KERNEL);
 
 		//TODO scatter list binding for real life
@@ -1394,7 +1393,7 @@ struct drm_i915_gem_object *i915_ttm_object_create_internal(struct drm_i915_priv
 	if (!obj)
 		return ERR_PTR(-ENOMEM);
 	drm_gem_private_object_init(&i915->drm, &obj->base.base, size);
-	i915_gem_object_init(obj, &ttm_ops, &lock_class);
+	i915_gem_object_init(obj, &ttm_ops, &lock_class, 0);
 
 	i915_ttm_bo_placement_from_region(obj, REGION_SMEM, 0);
 	{
@@ -1441,7 +1440,7 @@ struct drm_i915_gem_object *i915_ttm_object_create_region(struct intel_memory_re
 		return ERR_PTR(-ENOMEM);
 
 	drm_gem_private_object_init(&i915->drm, &obj->base.base, size);
-	i915_gem_object_init(obj, &ttm_ops, &lock_class);
+	i915_gem_object_init(obj, &ttm_ops, &lock_class, 0);
 	i915_ttm_bo_placement_from_mrs(obj, placements, n_placements, flags);
 	{
 		struct ttm_operation_ctx ctx = {

@@ -60,7 +60,7 @@ static bool i915_gem_userptr_invalidate(struct mmu_interval_notifier *mni,
 					unsigned long cur_seq)
 {
 	struct drm_i915_gem_object *obj = container_of(mni, struct drm_i915_gem_object, userptr.notifier);
-	struct drm_i915_private *i915 = to_i915(obj->base.dev);
+	struct drm_i915_private *i915 = to_i915(obj_to_dev(obj));
 	long r;
 
 	if (!mmu_notifier_range_blockable(range))
@@ -102,7 +102,7 @@ i915_gem_userptr_init__mmu_notifier(struct drm_i915_gem_object *obj)
 
 static void i915_gem_object_userptr_drop_ref(struct drm_i915_gem_object *obj, bool free)
 {
-	struct drm_i915_private *i915 = to_i915(obj->base.dev);
+	struct drm_i915_private *i915 = to_i915(obj_to_dev(obj));
 	struct page **pvec = NULL;
 
 	spin_lock(&i915->mm.notifier_lock);
@@ -123,7 +123,7 @@ static void i915_gem_object_userptr_drop_ref(struct drm_i915_gem_object *obj, bo
 
 static int i915_gem_userptr_get_pages(struct drm_i915_gem_object *obj)
 {
-	struct drm_i915_private *i915 = to_i915(obj->base.dev);
+	struct drm_i915_private *i915 = to_i915(obj_to_dev(obj));
 	const unsigned long num_pages = i915_gem_object_size(obj) >> PAGE_SHIFT;
 	unsigned int max_segment = i915_sg_segment_size();
 	struct sg_table *st;
@@ -262,7 +262,7 @@ static int i915_gem_object_userptr_unbind(struct drm_i915_gem_object *obj, bool 
 
 int i915_gem_object_userptr_submit_init(struct drm_i915_gem_object *obj)
 {
-	struct drm_i915_private *i915 = to_i915(obj->base.dev);
+	struct drm_i915_private *i915 = to_i915(obj_to_dev(obj));
 	const unsigned long num_pages = i915_gem_object_size(obj) >> PAGE_SHIFT;
 	struct page **pvec;
 	unsigned int gup_flags = 0;
@@ -386,7 +386,7 @@ i915_gem_userptr_release(struct drm_i915_gem_object *obj)
 static int
 i915_gem_userptr_dmabuf_export(struct drm_i915_gem_object *obj)
 {
-	drm_dbg(obj->base.dev, "Exporting userptr no longer allowed\n");
+	drm_dbg(obj_to_dev(obj), "Exporting userptr no longer allowed\n");
 
 	return -EINVAL;
 }
@@ -395,7 +395,7 @@ static int
 i915_gem_userptr_pwrite(struct drm_i915_gem_object *obj,
 			const struct drm_i915_gem_pwrite *args)
 {
-	drm_dbg(obj->base.dev, "pwrite to userptr no longer allowed\n");
+	drm_dbg(obj_to_dev(obj), "pwrite to userptr no longer allowed\n");
 
 	return -EINVAL;
 }
@@ -404,7 +404,7 @@ static int
 i915_gem_userptr_pread(struct drm_i915_gem_object *obj,
 		       const struct drm_i915_gem_pread *args)
 {
-	drm_dbg(obj->base.dev, "pread from userptr no longer allowed\n");
+	drm_dbg(obj_to_dev(obj), "pread from userptr no longer allowed\n");
 
 	return -EINVAL;
 }
