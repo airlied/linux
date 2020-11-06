@@ -238,7 +238,7 @@ int i915_ttm_vram_get_pages(struct drm_i915_gem_object *obj)
 	if (!mem->mm_node)
 		return -EINVAL;
 
-	st = kmalloc(sizeof(*st), GFP_KERNEL);
+	st = kzalloc(sizeof(*st), GFP_KERNEL);
 	if (!st)
 		return -ENOMEM;
 

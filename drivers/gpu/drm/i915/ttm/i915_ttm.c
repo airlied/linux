@@ -1206,7 +1206,9 @@ static void i915_ttm_release_gtt(struct ttm_buffer_object *tbo)
 /**
  * amdgpu_ttm_alloc_gart - Allocate GART memory for buffer object
  */
-static int i915_ttm_alloc_gtt_internal(struct ttm_buffer_object *tbo, bool high, bool mappable, u32 fpfn)
+static int i915_ttm_alloc_gtt_internal(struct ttm_buffer_object *tbo,
+				       struct i915_gem_ww_ctx *ww,
+				       bool high, bool mappable, u32 fpfn)
 {
 	struct drm_i915_private *i915 = to_i915_ttm_dev(tbo->bdev);
 	struct ttm_operation_ctx ctx = { false, false };
@@ -1231,7 +1233,7 @@ static int i915_ttm_alloc_gtt_internal(struct ttm_buffer_object *tbo, bool high,
 	if (start != I915_TTM_BO_INVALID_OFFSET) {
 		struct i915_vma *vma = i915_vma_instance(gtt->obj,
 							 &i915->ggtt.vm, NULL);
-		return i915_vma_pin(vma, 0, 0, map_flag | PIN_OFFSET_FIXED | PIN_GLOBAL | (start << PAGE_SHIFT));
+		return i915_vma_pin_ww(vma, ww, 0, 0, map_flag | PIN_OFFSET_FIXED | PIN_GLOBAL | (start << PAGE_SHIFT));
 	}
 
 	/* allocate GART space */
@@ -1263,7 +1265,7 @@ static int i915_ttm_alloc_gtt_internal(struct ttm_buffer_object *tbo, bool high,
 	{
 		struct i915_vma *vma = i915_vma_instance(gtt->obj,
 							 &i915->ggtt.vm, NULL);
-		r = i915_vma_pin(vma, 0, 0, map_flag | PIN_OFFSET_FIXED | PIN_GLOBAL | (start << PAGE_SHIFT));
+		r = i915_vma_pin_ww(vma, ww, 0, 0, map_flag | PIN_OFFSET_FIXED | PIN_GLOBAL | (start << PAGE_SHIFT));
 	}
 	if (unlikely(r)) {
 		ttm_resource_free(tbo, &tmp);
@@ -1282,7 +1284,7 @@ int i915_ttm_alloc_gtt(struct ttm_buffer_object *tbo)
 	bool mappable = true;
 	if (HAS_LMEM(i915))
 		mappable = false;
-	return i915_ttm_alloc_gtt_internal(tbo, false, mappable, 0);
+	return i915_ttm_alloc_gtt_internal(tbo, NULL, false, mappable, 0);
 }
 
 int i915_ttm_ggtt_pin(struct i915_vma *vma, struct i915_gem_ww_ctx *ww,
@@ -1299,7 +1301,7 @@ int i915_ttm_ggtt_pin(struct i915_vma *vma, struct i915_gem_ww_ctx *ww,
 		fpfn = (flags & PIN_OFFSET_MASK) >> PAGE_SHIFT;
 	
 	/* pin the object into GTT at a certain location */
-	return i915_ttm_alloc_gtt_internal(&vma->obj->base, high, mappable, fpfn);
+	return i915_ttm_alloc_gtt_internal(&vma->obj->base, ww, high, mappable, fpfn);
 }
 
 /**
@@ -1457,7 +1459,6 @@ struct drm_i915_gem_object *i915_ttm_object_create_region(struct intel_memory_re
 					 NULL, obj->base.base.resv, &i915_ttm_bo_destroy);
 	}
 	if (r != 0) {
-		i915_gem_object_free(obj);
 		return ERR_PTR(r);
 	}
 	if (!obj->base.base.resv)
