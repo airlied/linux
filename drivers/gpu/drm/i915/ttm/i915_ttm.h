@@ -11,9 +11,7 @@
  * EXEC_OBJECT_PINNED is assumed to be true.
  */
 #include "drm/ttm/ttm_bo_driver.h"
-#include "drm/ttm/ttm_execbuf_util.h"
 #include "i915_ttm_object_types.h"
-#include "i915_ttm_bo_list.h"
 #include "intel_memory_region.h"
 #define I915_TTM_BO_INVALID_OFFSET     LONG_MAX
 
@@ -52,12 +50,6 @@ uint32_t i915_ttm_bo_get_preferred_pin_region(struct drm_i915_private *i915,
 
 struct drm_i915_gem_object *i915_ttm_object_create_internal(struct drm_i915_private *i915, unsigned long size);
 
-int
-i915_ttm_do_execbuffer(struct drm_device *dev,
-		       struct drm_file *file,
-		       struct drm_i915_gem_execbuffer2 *args,
-		       struct drm_i915_gem_exec_object2 *exec);
-
 int i915_ttm_vram_mgr_init(struct drm_i915_private *i915);
 void i915_ttm_vram_mgr_fini(struct drm_i915_private *i915);
 
@@ -95,4 +87,6 @@ struct drm_mm_node *i915_ttm_vram_find_node(struct ttm_buffer_object *bo, u64 *o
 
 int i915_ttm_vram_vram_copy(struct ttm_buffer_object *obj,
 			    struct ttm_resource *new_mem);
+
+int i915_ttm_gem_bo_validate(struct drm_i915_gem_object *obj);
 #endif

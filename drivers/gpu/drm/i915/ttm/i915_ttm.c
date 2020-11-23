@@ -1371,3 +1371,27 @@ void __iomem *i915_ttm_pin_iomap(struct drm_i915_gem_object *obj)
 		return ERR_PTR(ret);
 	return vaddr;
 }
+
+
+int i915_ttm_gem_bo_validate(struct drm_i915_gem_object *obj)
+{
+	struct ttm_operation_ctx ctx = {
+		.interruptible = true,
+		.no_wait_gpu = false,
+		.resv = obj->base.base.resv,
+		.flags = 0
+	};
+	int r;
+
+	if (obj->base.pin_count)
+		return 0;
+
+retry:
+	r = ttm_bo_validate(&obj->base, &obj->ttm.placement, &ctx);
+	if (unlikely(r == -ENOMEM)) {
+		/* fallback to gtt */
+		i915_ttm_bo_placement_from_region(obj, REGION_SMEM, 0);
+		goto retry;
+	}
+	return r;
+}
