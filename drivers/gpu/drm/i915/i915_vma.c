@@ -449,7 +449,12 @@ void __iomem *i915_vma_pin_iomap(struct i915_vma *vma)
 	int err;
 
 	if (i915_gem_object_is_ttm(vma->obj)) {
-		return i915_ttm_pin_iomap(vma->obj);
+		ptr = i915_ttm_pin_iomap(vma->obj);
+		if (IS_ERR(ptr))
+			return ptr;
+		__i915_vma_pin(vma);
+		i915_vma_set_ggtt_write(vma);
+		return ptr;
 	}
 	if (!i915_gem_object_is_devmem(vma->obj)) {
 		if (GEM_WARN_ON(!i915_vma_is_map_and_fenceable(vma))) {

@@ -925,6 +925,11 @@ static int eb_validate_vmas(struct i915_execbuffer *eb)
 		if (err)
 			return err;
 
+		if (eb->i915->use_ttm) {
+			err = i915_ttm_gem_bo_validate(vma->obj);
+			if (err)
+				return err;
+		}
 		err = eb_pin_vma(eb, entry, ev);
 		if (err < 0)
 			return err;
@@ -3690,10 +3695,10 @@ i915_gem_execbuffer2_ioctl(struct drm_device *dev, void *data,
 		return -EFAULT;
 	}
 
-	if (i915->use_ttm)
-		err = i915_ttm_do_execbuffer(dev, file, args, exec2_list);
-	else
-		err = i915_gem_do_execbuffer(dev, file, args, exec2_list);
+	//	if (i915->use_ttm)
+	//		err = i915_ttm_do_execbuffer(dev, file, args, exec2_list);
+	//	else
+	err = i915_gem_do_execbuffer(dev, file, args, exec2_list);
 
 	/*
 	 * Now that we have begun execution of the batchbuffer, we ignore
