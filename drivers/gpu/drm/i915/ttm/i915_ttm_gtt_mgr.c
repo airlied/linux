@@ -84,9 +84,6 @@ static int i915_ttm_gtt_mgr_new(struct ttm_resource_manager *man,
 				 struct ttm_resource *mem)
 {
 	struct i915_ttm_gtt_mgr *mgr = to_gtt_mgr(man);
-	struct i915_ttm_gtt_node *node;
-	enum drm_mm_insert_mode mode;
-	int r;
 
 	spin_lock(&mgr->lock);
 	if ((&tbo->mem == mem || (tbo->mem.mem_type != TTM_PL_TT && tbo->mem.mem_type != I915_TTM_PL_STOLEN)) &&
@@ -97,53 +94,16 @@ static int i915_ttm_gtt_mgr_new(struct ttm_resource_manager *man,
 	atomic64_sub(mem->num_pages, &mgr->available);
 	spin_unlock(&mgr->lock);
 
-	if (!place->lpfn) {
-		mem->mm_node = NULL;
-		mem->start = I915_TTM_BO_INVALID_OFFSET;
-		return 0;
-	}
-
-
-	node = kzalloc(sizeof(*node), GFP_KERNEL);
-	if (!node) {
-		r = -ENOMEM;
-		goto err_out;
-	}
-
-	mode = DRM_MM_INSERT_BEST;
-	if (place->flags & TTM_PL_FLAG_TOPDOWN)
-		mode = DRM_MM_INSERT_HIGH;
-
-	spin_lock(&mgr->lock);
-	r = drm_mm_insert_node_in_range(&mgr->mm, &node->node, mem->num_pages,
-					mem->page_alignment, 0, place->fpfn,
-					place->lpfn, mode);
-	spin_unlock(&mgr->lock);
-
-	if (unlikely(r))
-		goto err_free;
-	mem->mm_node = node;
-	mem->start = node->node.start;
+	mem->mm_node = NULL;
+	mem->start = I915_TTM_BO_INVALID_OFFSET;
 	return 0;
-err_free:
-	kfree(node);
-err_out:
-	atomic64_add(mem->num_pages, &mgr->available);
-	return r;
 }
 
 static void i915_ttm_gtt_mgr_del(struct ttm_resource_manager *man,
 				  struct ttm_resource *mem)
 {
 	struct i915_ttm_gtt_mgr *mgr = to_gtt_mgr(man);
-	struct i915_ttm_gtt_node *node = mem->mm_node;
 
-	if (node) {
-		spin_lock(&mgr->lock);
-		drm_mm_remove_node(&node->node);
-		spin_unlock(&mgr->lock);
-		kfree(node);
-	}
 	atomic64_add(mem->num_pages, &mgr->available);
 }
 

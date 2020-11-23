@@ -196,11 +196,7 @@ retry:
 	if (err)
 		goto err_context;
 
-	if (i915_gem_object_is_ttm(so->vma->obj)) {
-		err = i915_ttm_ggtt_pin(so->vma, &so->ww, 0, PIN_GLOBAL | PIN_HIGH);
-	} else {
-		err = i915_vma_pin_ww(so->vma, &so->ww, 0, 0, PIN_GLOBAL | PIN_HIGH);
-	}
+	err = i915_vma_pin_ww(so->vma, &so->ww, 0, 0, PIN_GLOBAL | PIN_HIGH);
 	if (err)
 		goto err_context;
 

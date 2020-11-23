@@ -944,20 +944,11 @@ new_vma:
 		return vma;
 
 	if (i915_gem_object_is_ttm(vma->obj)) {
-
 		if (vma->obj->base.mem.mem_type == TTM_PL_VRAM) {
 			ret = i915_ttm_bo_pin(vma->obj, REGION_LMEM);
 			if (ret)
 				return ERR_PTR(ret);
 		}
-		i915_ttm_destroy_bo_pages(vma->obj);
-		ret = i915_ttm_create_bo_pages(vma->obj);
-		if (ret)
-			return ERR_PTR(ret);
-		ret = i915_ttm_alloc_gtt(&vma->obj->base);
-		if (ret)
-			return ERR_PTR(ret);
-		return vma;
 	}
 	if (i915_vma_misplaced(vma, size, alignment, flags)) {
 		if (flags & PIN_NONBLOCK) {
@@ -1092,6 +1083,11 @@ int i915_gem_init(struct drm_i915_private *dev_priv)
 	if (ret)
 		return ret;
 
+	if (dev_priv->use_ttm) {
+		ret = i915_ttm_init(dev_priv);
+		if (ret)
+			return ret;
+	}
 	intel_uc_fetch_firmwares(&dev_priv->gt.uc);
 	intel_wopcm_init(&dev_priv->wopcm);
 

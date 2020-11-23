@@ -118,12 +118,6 @@ int __i915_gem_object_get_pages(struct drm_i915_gem_object *obj)
 
 	assert_object_held_shared(obj);
 
-	if (i915_gem_object_is_ttm(obj)) {
-		err = i915_ttm_create_bo_pages(obj);
-		atomic_inc(&obj->mm.pages_pin_count);
-		return err;
-	}
-
 	if (unlikely(!i915_gem_object_has_pages(obj))) {
 		GEM_BUG_ON(i915_gem_object_has_pinned_pages(obj));
 
@@ -226,9 +220,6 @@ int __i915_gem_object_put_pages(struct drm_i915_gem_object *obj)
 {
 	struct sg_table *pages;
 
-	if (i915_gem_object_is_ttm(obj)) {
-		return 0;
-	}
 	if (i915_gem_object_has_pinned_pages(obj))
 		return -EBUSY;
 
@@ -374,9 +365,20 @@ void *i915_gem_object_pin_map(struct drm_i915_gem_object *obj,
 		if (err)
 			return ERR_PTR(err);
 
-		err = i915_ttm_create_bo_pages(obj);
-		if (err)
-			return ERR_PTR(err);
+		if (!atomic_inc_not_zero(&obj->mm.pages_pin_count)) {
+			if (unlikely(!i915_gem_object_has_pages(obj))) {
+				GEM_BUG_ON(i915_gem_object_has_pinned_pages(obj));
+
+				err = ____i915_gem_object_get_pages(obj);
+				if (err)
+					goto err_unlock;
+
+				smp_mb__before_atomic();
+			}
+			atomic_inc(&obj->mm.pages_pin_count);
+			pinned = false;
+		}
+		GEM_BUG_ON(!i915_gem_object_has_pages(obj));
 		return ptr;
 	}
 

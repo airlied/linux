@@ -1037,31 +1037,27 @@ int i915_ggtt_pin(struct i915_vma *vma, struct i915_gem_ww_ctx *ww,
 	WARN_ON(!ww && vma->resv && dma_resv_held(vma->resv));
 #endif
 
-	if (i915_gem_object_is_ttm(vma->obj)) {
-		return i915_ttm_ggtt_pin(vma, ww, align, flags);
-	} else {
-		do {
-			if (ww)
-				err = i915_vma_pin_ww(vma, ww, 0, align, flags | PIN_GLOBAL);
-			else
-				err = i915_vma_pin(vma, 0, align, flags | PIN_GLOBAL);
-			if (err != -ENOSPC) {
-				if (!err) {
-					err = i915_vma_wait_for_bind(vma);
-					if (err)
-						i915_vma_unpin(vma);
-				}
-				return err;
+	do {
+		if (ww)
+			err = i915_vma_pin_ww(vma, ww, 0, align, flags | PIN_GLOBAL);
+		else
+			err = i915_vma_pin(vma, 0, align, flags | PIN_GLOBAL);
+		if (err != -ENOSPC) {
+			if (!err) {
+				err = i915_vma_wait_for_bind(vma);
+				if (err)
+					i915_vma_unpin(vma);
 			}
+			return err;
+		}
 
-			/* Unlike i915_vma_pin, we don't take no for an answer! */
-			flush_idle_contexts(vm->gt);
-			if (mutex_lock_interruptible(&vm->mutex) == 0) {
-				i915_gem_evict_vm(vm);
-				mutex_unlock(&vm->mutex);
-			}
-		} while (1);
-	}
+		/* Unlike i915_vma_pin, we don't take no for an answer! */
+		flush_idle_contexts(vm->gt);
+		if (mutex_lock_interruptible(&vm->mutex) == 0) {
+			i915_gem_evict_vm(vm);
+			mutex_unlock(&vm->mutex);
+		}
+	} while (1);
 }
 
 static void __vma_close(struct i915_vma *vma, struct intel_gt *gt)

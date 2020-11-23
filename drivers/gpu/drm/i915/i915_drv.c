@@ -875,10 +875,7 @@ int i915_driver_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	if (ret)
 		goto out_cleanup_irq;
 
-	if (i915->use_ttm)
-		ret = i915_ttm_init(i915);
-	else
-		ret = i915_gem_init(i915);
+	ret = i915_gem_init(i915);
 	if (ret)
 		goto out_cleanup_modeset2;
 

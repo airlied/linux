@@ -755,16 +755,6 @@ int i915_ttm_init(struct drm_i915_private *i915)
 		r = i915_ttm_stolen_mgr_init(i915);
 	}
 
-	intel_uc_fetch_firmwares(&i915->gt.uc);
-	intel_wopcm_init(&i915->wopcm);
-
-	intel_init_clock_gating(i915);
-
-	r = intel_gt_init(&i915->gt);
-	if (r)
-		goto err_unlock;
-	return 0;
-err_unlock:
 	return r;
 }
 
@@ -1133,60 +1123,6 @@ uint32_t i915_ttm_bo_get_preferred_pin_region(struct drm_i915_private *i915,
 	return region;
 }
 
-int i915_ttm_create_bo_pages(struct drm_i915_gem_object *obj)
-{
-	/* create pages for LMEM bindings here */
-	struct ttm_resource *mem = &obj->base.mem;
-	int ret = 0;
-
-	if (obj->mm.pages)
-		return 0;
-	if (mem->mem_type == I915_TTM_PL_STOLEN) {
-		ret = i915_ttm_stolen_get_pages(obj);
-	} else if (mem->mem_type == TTM_PL_TT || mem->mem_type == TTM_PL_SYSTEM) {
-		struct ttm_tt *ttm;
-		dma_addr_t *pages_addr;
-		int i;
-		struct sg_table *st;
-		struct scatterlist *sgx;
-		int count = 0;
-
-		st = kmalloc(sizeof(*st), GFP_KERNEL);
-		if (!st)
-			return -ENOMEM;
-		ttm = obj->base.ttm;
-		pages_addr = ttm->dma_address;
-
-		sg_alloc_table_from_pages(st, ttm->pages, ttm->num_pages, 0,
-					  (unsigned long)ttm->num_pages << PAGE_SHIFT,
-					  GFP_KERNEL);
-
-		//TODO scatter list binding for real life
-
-		for_each_sg(st->sgl, sgx, st->nents, i) {
-			sg_dma_address(sgx) = ttm->dma_address[count];
-			count += __sg_page_count(sgx);
-		}
-		obj->mm.pages = st;
-
-		obj->mm.page_sizes.sg = PAGE_SIZE;
-
-	} else {
-		ret = i915_ttm_vram_get_pages(obj);
-	}
-
-	return ret;
-}
-
-void i915_ttm_destroy_bo_pages(struct drm_i915_gem_object *obj)
-{
-	if (!obj->mm.pages)
-		return;
-
-	obj->mm.pages = NULL;
-}
-
-
 static void i915_ttm_release_gtt(struct ttm_buffer_object *tbo)
 {
 	struct drm_i915_private *i915 = to_i915_ttm_dev(tbo->bdev);
@@ -1201,107 +1137,6 @@ static void i915_ttm_release_gtt(struct ttm_buffer_object *tbo)
 	ret = i915_vma_unbind(vma);
 	if (ret)
 		printk(KERN_ERR "reelase gtt %d\n", ret);
-}
-
-/**
- * amdgpu_ttm_alloc_gart - Allocate GART memory for buffer object
- */
-static int i915_ttm_alloc_gtt_internal(struct ttm_buffer_object *tbo,
-				       struct i915_gem_ww_ctx *ww,
-				       bool high, bool mappable, u32 fpfn)
-{
-	struct drm_i915_private *i915 = to_i915_ttm_dev(tbo->bdev);
-	struct ttm_operation_ctx ctx = { false, false };
-	struct i915_ttm_tt *gtt = (void*)tbo->ttm;
-	struct ttm_resource tmp;
-	struct ttm_placement placement;
-	struct ttm_place placements;
-	int r;
-	u64 map_flag = 0;
-	unsigned long start;
-
-	if (mappable)
-		map_flag = PIN_MAPPABLE;
-
-	if (tbo->mem.mem_type == TTM_PL_VRAM)
-		start = i915_ttm_vram_obj_gtt_offset(gtt->obj, &tbo->mem, high, fpfn);
-	else if (tbo->mem.mem_type == I915_TTM_PL_STOLEN)
-		start = i915_ttm_stolen_obj_get_gtt_offset(gtt->obj, &tbo->mem, high, fpfn);
-	else
-		start = tbo->mem.start;
-
-	if (start != I915_TTM_BO_INVALID_OFFSET) {
-		struct i915_vma *vma = i915_vma_instance(gtt->obj,
-							 &i915->ggtt.vm, NULL);
-		return i915_vma_pin_ww(vma, ww, 0, 0, map_flag | PIN_OFFSET_FIXED | PIN_GLOBAL | (start << PAGE_SHIFT));
-	}
-
-	/* allocate GART space */
-	tmp = tbo->mem;
-	tmp.mm_node = NULL;
-	placement.num_placement = 1;
-	placement.placement = &placements;
-	placement.num_busy_placement = 1;
-	placement.busy_placement = &placements;
-	placements.fpfn = fpfn;
-	placements.lpfn = (i915->ggtt.vm.total >> PAGE_SHIFT) - 1;
-	placements.flags = tbo->mem.placement;
-	if (high)
-		placements.flags |= TTM_PL_FLAG_TOPDOWN;
-	placements.mem_type = tbo->mem.mem_type;
-
-	r = ttm_bo_mem_space(tbo, &placement, &tmp, &ctx);
-	if (unlikely(r))
-		return r;
-
-	/* Bind pages */
-	if (tbo->mem.mem_type == TTM_PL_VRAM)
-		start = i915_ttm_vram_obj_gtt_offset(gtt->obj, &tmp, high, fpfn);
-	else if (tbo->mem.mem_type == I915_TTM_PL_STOLEN)
-		start = i915_ttm_stolen_obj_get_gtt_offset(gtt->obj, &tmp, high, fpfn);
-	else
-		start = tmp.start;
-	gtt->offset = (u64)start << PAGE_SHIFT;
-	{
-		struct i915_vma *vma = i915_vma_instance(gtt->obj,
-							 &i915->ggtt.vm, NULL);
-		r = i915_vma_pin_ww(vma, ww, 0, 0, map_flag | PIN_OFFSET_FIXED | PIN_GLOBAL | (start << PAGE_SHIFT));
-	}
-	if (unlikely(r)) {
-		ttm_resource_free(tbo, &tmp);
-		return r;
-	}
-
-	ttm_resource_free(tbo, &tbo->mem);
-	tbo->mem = tmp;
-
-	return 0;
-}
-
-int i915_ttm_alloc_gtt(struct ttm_buffer_object *tbo)
-{
-	struct drm_i915_private *i915 = to_i915_ttm_dev(tbo->bdev);
-	bool mappable = true;
-	if (HAS_LMEM(i915))
-		mappable = false;
-	return i915_ttm_alloc_gtt_internal(tbo, NULL, false, mappable, 0);
-}
-
-int i915_ttm_ggtt_pin(struct i915_vma *vma, struct i915_gem_ww_ctx *ww,
-		      u32 align, unsigned int flags)
-{
-	bool high = false, mappable = false;
-	u32 fpfn = 0;
-	if (flags & PIN_HIGH)
-		high = true;
-	if (flags & PIN_MAPPABLE)
-		mappable = true;
-
-	if (flags & PIN_OFFSET_BIAS)
-		fpfn = (flags & PIN_OFFSET_MASK) >> PAGE_SHIFT;
-	
-	/* pin the object into GTT at a certain location */
-	return i915_ttm_alloc_gtt_internal(&vma->obj->base, ww, high, mappable, fpfn);
 }
 
 /**
@@ -1384,7 +1219,64 @@ void i915_ttm_bo_placement_from_mrs(struct drm_i915_gem_object *obj,
 	placement->busy_placement = places;
 }
 
-static const struct drm_i915_gem_object_ops ttm_ops;
+static int i915_ttm_get_pages(struct drm_i915_gem_object *obj)
+{
+	/* create pages for LMEM bindings here */
+	struct ttm_resource *mem = &obj->base.mem;
+	int ret = 0;
+
+	if (obj->mm.pages)
+		return 0;
+	if (mem->mem_type == I915_TTM_PL_STOLEN) {
+		ret = i915_ttm_stolen_get_pages(obj);
+	} else if (mem->mem_type == TTM_PL_TT || mem->mem_type == TTM_PL_SYSTEM) {
+		struct ttm_tt *ttm;
+		dma_addr_t *pages_addr;
+		int i;
+		struct sg_table *st;
+		struct scatterlist *sgx;
+		int count = 0;
+
+		st = kmalloc(sizeof(*st), GFP_KERNEL);
+		if (!st)
+			return -ENOMEM;
+		ttm = obj->base.ttm;
+		pages_addr = ttm->dma_address;
+
+		sg_alloc_table_from_pages(st, ttm->pages, ttm->num_pages, 0,
+					  (unsigned long)ttm->num_pages << PAGE_SHIFT,
+					  GFP_KERNEL);
+
+		//TODO scatter list binding for real life
+
+		for_each_sg(st->sgl, sgx, st->nents, i) {
+			sg_dma_address(sgx) = ttm->dma_address[count];
+			count += __sg_page_count(sgx);
+		}
+		obj->mm.pages = st;
+
+		obj->mm.page_sizes.sg = PAGE_SIZE;
+
+	} else {
+		ret = i915_ttm_vram_get_pages(obj);
+	}
+
+	return ret;
+}
+
+static void
+i915_ttm_put_pages(struct drm_i915_gem_object *obj,
+		   struct sg_table *pages)
+{
+	printk(KERN_ERR "%s\n", __func__);
+
+	sg_free_table(pages);
+}
+
+static const struct drm_i915_gem_object_ops ttm_ops = {
+	.get_pages = i915_ttm_get_pages,
+	.put_pages = i915_ttm_put_pages,
+};
 
 struct drm_i915_gem_object *i915_ttm_object_create_internal(struct drm_i915_private *i915, unsigned long size)
 {

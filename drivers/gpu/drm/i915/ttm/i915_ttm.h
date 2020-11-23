@@ -58,8 +58,6 @@ i915_ttm_do_execbuffer(struct drm_device *dev,
 		       struct drm_i915_gem_execbuffer2 *args,
 		       struct drm_i915_gem_exec_object2 *exec);
 
-int i915_ttm_create_bo_pages(struct drm_i915_gem_object *obj);
-void i915_ttm_destroy_bo_pages(struct drm_i915_gem_object *obj);
 int i915_ttm_vram_mgr_init(struct drm_i915_private *i915);
 void i915_ttm_vram_mgr_fini(struct drm_i915_private *i915);
 
@@ -72,9 +70,6 @@ int i915_ttm_stolen_mgr_init(struct drm_i915_private *i915);
 void i915_ttm_stolen_mgr_fini(struct drm_i915_private *i915);
 
 int i915_ttm_stolen_get_pages(struct drm_i915_gem_object *obj);
-
-int i915_ttm_ggtt_pin(struct i915_vma *vma, struct i915_gem_ww_ctx *ww,
-		      u32 align, unsigned int flags);
 
 struct drm_i915_gem_object *i915_ttm_object_create_region(struct intel_memory_region **placements,
 							  int n_placements,

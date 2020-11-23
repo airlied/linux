@@ -12,7 +12,6 @@ static inline struct i915_ttm_vram_mgr *to_vram_mgr(struct ttm_resource_manager 
 
 struct i915_ttm_vram_node {
 	struct drm_mm_node *nodes;
-	struct ttm_resource gtt_res;
 };
 
 static inline struct drm_i915_private *vram_mgr_to_i915(struct ttm_resource_manager *man)
@@ -173,7 +172,6 @@ static int i915_ttm_vram_mgr_new(struct ttm_resource_manager *man,
 	}
 	spin_unlock(&mgr->lock);
 
-	node->gtt_res.start = I915_TTM_BO_INVALID_OFFSET;
 	mem->mm_node = node;
 	mem->start = node->nodes[0].start;
 	return 0;
@@ -198,8 +196,6 @@ static void i915_ttm_vram_mgr_del(struct ttm_resource_manager *man,
 	struct drm_mm_node *nodes;
 	unsigned pages = mem->num_pages;
 	uint64_t usage = 0;
-	struct drm_i915_private *i915 = vram_mgr_to_i915(man);
-	struct ttm_resource_manager *gtt_mgr = ttm_manager_type(&i915->ttm_mman.bdev, TTM_PL_TT);
 
 	if (!node)
 		return;
@@ -213,7 +209,6 @@ static void i915_ttm_vram_mgr_del(struct ttm_resource_manager *man,
 		++nodes;
 	}
 	spin_unlock(&mgr->lock);
-	gtt_mgr->func->free(gtt_mgr, &node->gtt_res);
 
 	kvfree(node->nodes);
 	kfree(node);
@@ -275,35 +270,6 @@ int i915_ttm_vram_get_pages(struct drm_i915_gem_object *obj)
 	obj->mm.page_sizes.phys = PAGE_SIZE;
 	obj->mm.page_sizes.sg = PAGE_SIZE;
 	return 0;
-}
-
-unsigned long i915_ttm_vram_obj_gtt_offset(struct drm_i915_gem_object *obj,
-					   struct ttm_resource *mem, bool high, u32 fpfn)
-{
-	struct drm_i915_private *i915 = to_i915_ttm_dev(obj->base.bdev);
-	struct i915_ttm_vram_node *node = mem->mm_node;
-	struct ttm_resource_manager *gtt_mgr = ttm_manager_type(obj->base.bdev, TTM_PL_TT);
-	int r;
-	if (!mem || !node) {
-		WARN_ON(1);
-		return 0;
-	}
-	if (node->gtt_res.start == I915_TTM_BO_INVALID_OFFSET) {
-		struct ttm_place gtt_place = obj->ttm.placements[0];
-		gtt_place.fpfn = fpfn;
-		/* force gtt mgr to give us a node */
-		gtt_place.lpfn = (i915->ggtt.vm.total >> PAGE_SHIFT);
-		if (high)
-			gtt_place.flags |= TTM_PL_FLAG_TOPDOWN;
-		node->gtt_res = *mem;
-		node->gtt_res.mm_node = NULL;
-		/* allocate a gtt node as well */
-		r = gtt_mgr->func->alloc(gtt_mgr, &obj->base, &gtt_place, &node->gtt_res);
-		if (unlikely(r)) {
-			node->gtt_res.start = I915_TTM_BO_INVALID_OFFSET;
-		}
-	}
-	return node->gtt_res.start;
 }
 
 bool i915_ttm_vram_obj_premap_allowed(struct ttm_resource *mem)
