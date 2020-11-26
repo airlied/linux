@@ -1231,7 +1231,6 @@ static int i915_ttm_get_pages(struct drm_i915_gem_object *obj)
 		ret = i915_ttm_stolen_get_pages(obj);
 	} else if (mem->mem_type == TTM_PL_TT || mem->mem_type == TTM_PL_SYSTEM) {
 		struct ttm_tt *ttm;
-		dma_addr_t *pages_addr;
 		int i;
 		struct sg_table *st;
 		struct scatterlist *sgx;
@@ -1241,7 +1240,6 @@ static int i915_ttm_get_pages(struct drm_i915_gem_object *obj)
 		if (!st)
 			return -ENOMEM;
 		ttm = obj->base.ttm;
-		pages_addr = ttm->dma_address;
 
 		sg_alloc_table_from_pages(st, ttm->pages, ttm->num_pages, 0,
 					  (unsigned long)ttm->num_pages << PAGE_SHIFT,
@@ -1251,6 +1249,7 @@ static int i915_ttm_get_pages(struct drm_i915_gem_object *obj)
 
 		for_each_sg(st->sgl, sgx, st->nents, i) {
 			sg_dma_address(sgx) = ttm->dma_address[count];
+			sg_dma_len(sgx) = sgx->length;
 			count += __sg_page_count(sgx);
 		}
 		obj->mm.pages = st;
