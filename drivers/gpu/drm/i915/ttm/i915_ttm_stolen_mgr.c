@@ -173,7 +173,7 @@ int i915_ttm_stolen_get_pages(struct drm_i915_gem_object *obj)
 	sg->offset = 0;
 	sg->length = obj->base.num_pages * PAGE_SIZE;
 
-	sg_dma_address(sg) = (dma_addr_t)i915->dsm.start + node->start;
+	sg_dma_address(sg) = (dma_addr_t)i915->dsm.start + (node->start << PAGE_SHIFT);
 	sg_dma_len(sg) = sg->length;
 
 	obj->mm.pages = st;
