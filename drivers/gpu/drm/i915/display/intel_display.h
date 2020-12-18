@@ -525,6 +525,14 @@ void intel_disable_pipe(const struct intel_crtc_state *old_crtc_state);
 void i830_enable_pipe(struct drm_i915_private *dev_priv, enum pipe pipe);
 void i830_disable_pipe(struct drm_i915_private *dev_priv, enum pipe pipe);
 enum pipe intel_crtc_pch_transcoder(struct intel_crtc *crtc);
+void intel_cpu_transcoder_set_m_n(const struct intel_crtc_state *crtc_state,
+				  const struct intel_link_m_n *m_n,
+				  const struct intel_link_m_n *m2_n2);
+void intel_cpu_transcoder_get_m_n(struct intel_crtc *crtc,
+				  enum transcoder transcoder,
+				  struct intel_link_m_n *m_n,
+				  struct intel_link_m_n *m2_n2);
+
 int vlv_get_hpll_vco(struct drm_i915_private *dev_priv);
 int vlv_get_cck_clock(struct drm_i915_private *dev_priv,
 		      const char *name, u32 reg, int ref_freq);
@@ -555,11 +563,24 @@ enum tc_port intel_port_to_tc(struct drm_i915_private *dev_priv,
 			      enum port port);
 int intel_get_pipe_from_crtc_id_ioctl(struct drm_device *dev, void *data,
 				      struct drm_file *file_priv);
+bool hsw_crtc_supports_ips(struct intel_crtc *crtc);
+void intel_crtc_readout_derived_state(struct intel_crtc_state *crtc_state);
 u32 intel_crtc_get_vblank_counter(struct intel_crtc *crtc);
 void intel_crtc_vblank_on(const struct intel_crtc_state *crtc_state);
 void intel_crtc_vblank_off(const struct intel_crtc_state *crtc_state);
 
+void intel_pre_plane_update(struct intel_atomic_state *state,
+			    struct intel_crtc *crtc);
+void intel_encoders_pre_pll_enable(struct intel_atomic_state *state,
+				   struct intel_crtc *crtc);
+
+void intel_encoders_update_pipe(struct intel_atomic_state *state,
+				struct intel_crtc *crtc);
+void bdw_set_pipemisc(const struct intel_crtc_state *crtc_state);
 int ilk_get_lanes_required(int target_clock, int link_bw, int bpp);
+void ilk_pfit_enable(const struct intel_crtc_state *crtc_state);
+void hsw_set_linetime_wm(const struct intel_crtc_state *crtc_state);
+void icl_set_pipe_chicken(struct intel_crtc *crtc);
 void vlv_wait_port_ready(struct drm_i915_private *dev_priv,
 			 struct intel_digital_port *dig_port,
 			 unsigned int expected_mask);
@@ -583,8 +604,21 @@ int intel_prepare_plane_fb(struct drm_plane *plane,
 void intel_cleanup_plane_fb(struct drm_plane *plane,
 			    struct drm_plane_state *old_state);
 
+void assert_planes_disabled(struct intel_crtc *crtc);
 void assert_pch_transcoder_disabled(struct drm_i915_private *dev_priv,
 				    enum pipe pipe);
+void assert_pch_ports_disabled(struct drm_i915_private *dev_priv,
+			       enum pipe pipe);
+void assert_fdi_tx(struct drm_i915_private *dev_priv,
+		   enum pipe pipe, bool state);
+#define assert_fdi_tx_enabled(d, p) assert_fdi_tx(d, p, true)
+#define assert_fdi_tx_disabled(d, p) assert_fdi_tx(d, p, false)
+void assert_fdi_tx_pll_enabled(struct drm_i915_private *dev_priv,
+			       enum pipe pipe);
+void assert_fdi_rx(struct drm_i915_private *dev_priv,
+		   enum pipe pipe, bool state);
+#define assert_fdi_rx_enabled(d, p) assert_fdi_rx(d, p, true)
+#define assert_fdi_rx_disabled(d, p) assert_fdi_rx(d, p, false)
 
 int lpt_get_iclkip(struct drm_i915_private *dev_priv);
 bool intel_fuzzy_clock_check(int clock1, int clock2);
@@ -617,6 +651,7 @@ u32 skl_scaler_get_filter_select(enum drm_scaling_filter filter, int set);
 void skl_scaler_setup_filter(struct drm_i915_private *dev_priv, enum pipe pipe,
 			     int id, int set, enum drm_scaling_filter filter);
 void ilk_pfit_disable(const struct intel_crtc_state *old_crtc_state);
+void skl_pfit_enable(const struct intel_crtc_state *crtc_state);
 int bdw_get_pipemisc_bpp(struct intel_crtc *crtc);
 unsigned int intel_plane_fence_y_offset(const struct intel_plane_state *plane_state);
 
