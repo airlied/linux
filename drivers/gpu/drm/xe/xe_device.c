@@ -7,6 +7,7 @@
 #include <drm/drm_file.h>
 #include <drm/drm_ioctl.h>
 
+#include "xe_bo.h"
 #include "xe_device.h"
 #include "xe_drv.h"
 
@@ -82,6 +83,10 @@ xe_device_create(struct pci_dev *pdev, const struct pci_device_id *ent)
 	xe = devm_drm_dev_alloc(&pdev->dev, &driver, struct xe_device, drm);
 	if (IS_ERR(xe))
 		return xe;
+
+	ret = ttm_device_init(&xe->ttm, &xe_ttm_funcs, xe->drm.dev,
+			      xe->drm.anon_inode->i_mapping,
+			      xe->drm.vma_offset_manager, false, false);
 
 	ret = drm_dev_register(&xe->drm, 0);
 	if (ret)

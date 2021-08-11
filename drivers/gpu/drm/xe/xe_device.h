@@ -10,9 +10,12 @@
 #include <linux/pci.h>
 
 #include <drm/drm_device.h>
+#include <drm/ttm/ttm_device.h>
 
 struct xe_device {
 	struct drm_device drm;
+
+	struct ttm_device ttm;
 };
 
 struct xe_file {

@@ -32,7 +32,8 @@ subdir-ccflags-y += -I$(srctree)/$(src)
 # Please keep these build lists sorted!
 
 # core driver code
-xe-y += xe_device.o \
+xe-y += xe_bo.o \
+	xe_device.o \
 	xe_module.o \
 	xe_pci.o
 
