@@ -1358,7 +1358,7 @@ static int xe_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 
 static void xe_pci_shutdown(struct pci_dev *pdev)
 {
-	xe_device_shutdown(pci_get_drvdata(pdev));
+	xe_device_shutdown(pdev_to_xe_device(pdev));
 }
 
 static struct pci_driver i915_pci_driver = {

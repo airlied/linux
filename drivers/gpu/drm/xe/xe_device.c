@@ -10,21 +10,23 @@
 #include "xe_device.h"
 #include "xe_drv.h"
 
-static int xe_driver_open(struct drm_device *dev, struct drm_file *file)
+static int xe_file_open(struct drm_device *dev, struct drm_file *file)
 {
+	struct xe_file *xef;
+
+	xef = kzalloc(sizeof(*xef), GFP_KERNEL);
+	if (!xef)
+		return -ENOMEM;
+
+	file->driver_priv = xef;
 	return 0;
 }
 
-static void xe_driver_release(struct drm_device *dev)
+static void xe_file_close(struct drm_device *dev, struct drm_file *file)
 {
-}
+	struct xe_file *xef = file->driver_priv;
 
-static void xe_driver_lastclose(struct drm_device *dev)
-{
-}
-
-static void xe_driver_postclose(struct drm_device *dev, struct drm_file *file)
-{
+	kfree(xef);
 }
 
 static const struct drm_ioctl_desc xe_ioctls[] = {
@@ -50,10 +52,8 @@ static const struct drm_driver driver = {
 	    DRIVER_GEM |
 	    DRIVER_RENDER | DRIVER_MODESET | DRIVER_ATOMIC | DRIVER_SYNCOBJ |
 	    DRIVER_SYNCOBJ_TIMELINE,
-	.release = xe_driver_release,
-	.open = xe_driver_open,
-	.lastclose = xe_driver_lastclose,
-	.postclose = xe_driver_postclose,
+	.open = xe_file_open,
+	.postclose = xe_file_close,
 
 	.prime_handle_to_fd = drm_gem_prime_handle_to_fd,
 	.prime_fd_to_handle = drm_gem_prime_fd_to_handle,
@@ -77,16 +77,22 @@ struct xe_device *
 xe_device_create(struct pci_dev *pdev, const struct pci_device_id *ent)
 {
 	struct xe_device *xe;
+	int ret;
 
 	xe = devm_drm_dev_alloc(&pdev->dev, &driver, struct xe_device, drm);
 	if (IS_ERR(xe))
 		return xe;
+
+	ret = drm_dev_register(&xe->drm, 0);
+	if (ret)
+		return ERR_PTR(ret);
 
 	return xe;
 }
 
 void xe_device_remove(struct xe_device *xe)
 {
+	drm_dev_unregister(&xe->drm);
 }
 
 void xe_device_shutdown(struct xe_device *xe)
