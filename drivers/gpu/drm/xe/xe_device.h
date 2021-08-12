@@ -22,6 +22,9 @@ struct xe_device {
 struct xe_file {
 	struct xarray vm_xa;
 	struct mutex vm_lock;
+
+	struct xarray engine_xa;
+	struct mutex engine_lock;
 };
 
 static inline struct xe_device *to_xe_device(const struct drm_device *dev)
