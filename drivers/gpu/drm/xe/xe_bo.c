@@ -4,10 +4,11 @@
  * Copyright © 2021 Intel Corporation
  */
 
-#include <drm/xe_drm.h>
+#include <drm/drm_gem_ttm_helper.h>
 #include <drm/ttm/ttm_device.h>
 #include <drm/ttm/ttm_placement.h>
 #include <drm/ttm/ttm_tt.h>
+#include <drm/xe_drm.h>
 
 #include "xe_bo.h"
 #include "xe_device.h"
@@ -69,8 +70,6 @@ struct ttm_device_funcs xe_ttm_funcs = {
 static void xe_ttm_bo_destroy(struct ttm_buffer_object *ttm_bo)
 {
 	struct xe_bo *bo = ttm_to_xe_bo(ttm_bo);
-
-	drm_gem_free_mmap_offset(&bo->ttm.base);
 	kfree(bo);
 }
 
@@ -90,6 +89,7 @@ static void xe_gem_object_free(struct drm_gem_object *obj)
 
 static const struct drm_gem_object_funcs xe_gem_object_funcs = {
 	.free = xe_gem_object_free,
+	.mmap = drm_gem_ttm_mmap,
 };
 
 struct xe_bo *xe_bo_create(struct xe_device *xe, size_t size,
@@ -117,12 +117,6 @@ struct xe_bo *xe_bo_create(struct xe_device *xe, size_t size,
 		return ERR_PTR(err);
 
 	dma_resv_unlock(bo->ttm.base.resv);
-
-	err = drm_gem_create_mmap_offset(&bo->ttm.base);
-	if (err) {
-		xe_bo_put(bo);
-		return ERR_PTR(err);
-	}
 
 	if (vm)
 		bo->vm = vm;
@@ -175,5 +169,28 @@ int xe_gem_create_ioctl(struct drm_device *dev, void *data,
 		return err;
 
 	args->handle = handle;
+	return 0;
+}
+
+int xe_gem_mmap_offset_ioctl(struct drm_device *dev, void *data,
+			     struct drm_file *file)
+{
+	struct drm_xe_gem_mmap_offset *args = data;
+	struct drm_gem_object *gem_obj;
+
+	if (args->extensions)
+		return -EINVAL;
+
+	if (args->flags)
+		return -EINVAL;
+
+	gem_obj = drm_gem_object_lookup(file, args->handle);
+	if (!gem_obj)
+		return -ENOENT;
+
+	/* The mmap offset was set up at BO allocation time. */
+	args->offset = drm_vma_node_offset_addr(&gem_obj->vma_node);
+
+	drm_gem_object_put(gem_obj);
 	return 0;
 }

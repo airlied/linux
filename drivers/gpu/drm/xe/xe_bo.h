@@ -43,5 +43,7 @@ extern struct ttm_device_funcs xe_ttm_funcs;
 
 int xe_gem_create_ioctl(struct drm_device *dev, void *data,
 			struct drm_file *file);
+int xe_gem_mmap_offset_ioctl(struct drm_device *dev, void *data,
+			     struct drm_file *file);
 
 #endif /* _XE_BO_H_ */

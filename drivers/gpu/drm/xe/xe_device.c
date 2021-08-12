@@ -4,6 +4,7 @@
  * Copyright © 2021 Intel Corporation
  */
 
+#include <drm/drm_gem_ttm_helper.h>
 #include <drm/drm_ioctl.h>
 #include <drm/xe_drm.h>
 
@@ -51,6 +52,7 @@ static void xe_file_close(struct drm_device *dev, struct drm_file *file)
 
 static const struct drm_ioctl_desc xe_ioctls[] = {
 	DRM_IOCTL_DEF_DRV(XE_GEM_CREATE, xe_gem_create_ioctl, DRM_RENDER_ALLOW),
+	DRM_IOCTL_DEF_DRV(XE_GEM_MMAP_OFFSET, xe_gem_mmap_offset_ioctl, DRM_RENDER_ALLOW),
 	DRM_IOCTL_DEF_DRV(XE_VM_CREATE, xe_vm_create_ioctl, DRM_RENDER_ALLOW),
 	DRM_IOCTL_DEF_DRV(XE_VM_DESTROY, xe_vm_destroy_ioctl, DRM_RENDER_ALLOW),
 	DRM_IOCTL_DEF_DRV(XE_ENGINE_CREATE, xe_engine_create_ioctl, DRM_RENDER_ALLOW),
@@ -62,7 +64,7 @@ static const struct file_operations xe_driver_fops = {
 	.open = drm_open,
 	.release = drm_release_noglobal,
 	.unlocked_ioctl = drm_ioctl,
-//	.mmap = i915_gem_mmap,
+	.mmap = drm_gem_mmap,
 	.poll = drm_poll,
 	.read = drm_read,
 //	.compat_ioctl = i915_ioc32_compat_ioctl,
@@ -85,7 +87,7 @@ static const struct drm_driver driver = {
 //	.gem_prime_import = i915_gem_prime_import,
 //
 //	.dumb_create = i915_gem_dumb_create,
-//	.dumb_map_offset = i915_gem_dumb_mmap_offset,
+	.dumb_map_offset = drm_gem_ttm_dumb_map_offset,
 
 	.ioctls = xe_ioctls,
 	.num_ioctls = ARRAY_SIZE(xe_ioctls),

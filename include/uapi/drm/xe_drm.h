@@ -107,16 +107,18 @@ struct xe_user_extension {
  */
 #define DRM_XE_DEVICE_QUERY	0x00
 #define DRM_XE_GEM_CREATE	0x01
-#define DRM_XE_VM_CREATE	0x02
-#define DRM_XE_VM_DESTROY	0x03
-#define DRM_XE_VM_BIND		0x04
-#define DRM_XE_ENGINE_CREATE	0x05
-#define DRM_XE_ENGINE_DESTROY	0x06
-#define DRM_XE_EXEC		0x07
+#define DRM_XE_GEM_MMAP_OFFSET	0x02
+#define DRM_XE_VM_CREATE	0x03
+#define DRM_XE_VM_DESTROY	0x04
+#define DRM_XE_VM_BIND		0x05
+#define DRM_XE_ENGINE_CREATE	0x06
+#define DRM_XE_ENGINE_DESTROY	0x07
+#define DRM_XE_EXEC		0x08
 
 /* Must be kept compact -- no holes */
 #define DRM_IOCTL_XE_DEVICE_QUERY	DRM_IOWR(DRM_COMMAND_BASE + DRM_XE_GEM_CREATE, struct drm_xe_device_query)
 #define DRM_IOCTL_XE_GEM_CREATE		DRM_IOWR(DRM_COMMAND_BASE + DRM_XE_GEM_CREATE, struct drm_xe_gem_create)
+#define DRM_IOCTL_XE_GEM_MMAP_OFFSET	DRM_IOWR(DRM_COMMAND_BASE + DRM_XE_GEM_MMAP_OFFSET, struct drm_xe_gem_mmap_offset)
 #define DRM_IOCTL_XE_VM_CREATE		DRM_IOWR(DRM_COMMAND_BASE + DRM_XE_VM_CREATE, struct drm_xe_vm_create)
 #define DRM_IOCTL_XE_VM_DESTROY		DRM_IOW( DRM_COMMAND_BASE + DRM_XE_VM_DESTROY, struct drm_xe_vm_destroy)
 #define DRM_IOCTL_XE_VM_BIND		DRM_IOW( DRM_COMMAND_BASE + DRM_XE_VM_BIND, struct drm_xe_vm_bind)
@@ -183,6 +185,20 @@ struct drm_xe_gem_create {
 	 * Object handles are nonzero.
 	 */
 	__u32 handle;
+};
+
+struct drm_xe_gem_mmap_offset {
+	/** @extensions: Pointer to the first extension struct, if any */
+	__u64 extensions;
+
+	/** @handle: Handle for the object being mapped. */
+	__u32 handle;
+
+	/** @flags: Must be zero */
+	__u32 flags;
+
+	/** @offset: The fake offset to use for subsequent mmap call */
+	__u64 offset;
 };
 
 struct drm_xe_vm_create {
