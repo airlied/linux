@@ -23,7 +23,7 @@ static inline struct xe_bo *ttm_to_xe_bo(const struct ttm_buffer_object *bo)
 	return container_of(bo, struct xe_bo, ttm);
 }
 
-static inline struct xe_bo *drm_to_xe_bo(const struct drm_gem_object *obj)
+static inline struct xe_bo *gem_to_xe_bo(const struct drm_gem_object *obj)
 {
 	return container_of(obj, struct xe_bo, ttm.base);
 }

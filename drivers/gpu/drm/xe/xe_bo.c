@@ -84,7 +84,7 @@ static void xe_gem_object_free(struct drm_gem_object *obj)
 	 * drop that reference here.  When ttm_buffer_object.kref hits zero,
 	 * xe_ttm_bo_destroy() is invoked to do the actual free.
 	 */
-	xe_bo_put(drm_to_xe_bo(obj));
+	xe_bo_put(gem_to_xe_bo(obj));
 }
 
 static const struct drm_gem_object_funcs xe_gem_object_funcs = {
