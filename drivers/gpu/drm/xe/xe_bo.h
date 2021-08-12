@@ -23,15 +23,20 @@ static inline struct xe_bo *ttm_to_xe_bo(const struct ttm_buffer_object *bo)
 	return container_of(bo, struct xe_bo, ttm);
 }
 
+static inline struct xe_bo *drm_to_xe_bo(const struct drm_gem_object *obj)
+{
+	return container_of(obj, struct xe_bo, ttm.base);
+}
+
 static inline struct xe_bo *xe_bo_get(struct xe_bo *bo)
 {
-	drm_gem_object_get(&bo->ttm.base);
+	ttm_bo_get(&bo->ttm);
 	return bo;
 }
 
 static inline void xe_bo_put(struct xe_bo *bo)
 {
-	drm_gem_object_put(&bo->ttm.base);
+	ttm_bo_put(&bo->ttm);
 }
 
 extern struct ttm_device_funcs xe_ttm_funcs;

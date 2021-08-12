@@ -126,6 +126,7 @@ xe_device_create(struct pci_dev *pdev, const struct pci_device_id *ent)
 void xe_device_remove(struct xe_device *xe)
 {
 	drm_dev_unregister(&xe->drm);
+	ttm_device_fini(&xe->ttm);
 }
 
 void xe_device_shutdown(struct xe_device *xe)
