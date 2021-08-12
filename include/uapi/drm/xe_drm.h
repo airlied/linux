@@ -115,13 +115,13 @@ struct xe_user_extension {
 #define DRM_XE_EXEC		0x07
 
 /* Must be kept compact -- no holes */
-#define DRM_IOCTL_XE_DEVICE_QUERY	DRM_IOWR(DRM_COMMAND_BASE + DRM_XE_GEM_CREATE, drm_xe_device_query)
-#define DRM_IOCTL_XE_GEM_CREATE		DRM_IOWR(DRM_COMMAND_BASE + DRM_XE_GEM_CREATE, drm_xe_gem_create)
-#define DRM_IOCTL_XE_VM_CREATE		DRM_IOWR(DRM_COMMAND_BASE + DRM_XE_VM_CREATE, drm_xe_vm_create)
-#define DRM_IOCTL_XE_VM_DESTROY		DRM_IOW( DRM_COMMAND_BASE + DRM_XE_VM_DESTROY, drm_xe_vm_destroy)
-#define DRM_IOCTL_XE_VM_BIND		DRM_IOW( DRM_COMMAND_BASE + DRM_XE_VM_BIND, drm_xe_vm_bind)
-#define DRM_IOCTL_XE_ENGINE_CREATE	DRM_IOWR(DRM_COMMAND_BASE + DRM_XE_ENGINE_CREATE, drm_xe_engine_create)
-#define DRM_IOCTL_XE_ENGINE_DESTROY	DRM_IOW( DRM_COMMAND_BASE + DRM_XE_ENGINE_DESTROY, drm_xe_engine_destroy)
+#define DRM_IOCTL_XE_DEVICE_QUERY	DRM_IOWR(DRM_COMMAND_BASE + DRM_XE_GEM_CREATE, struct drm_xe_device_query)
+#define DRM_IOCTL_XE_GEM_CREATE		DRM_IOWR(DRM_COMMAND_BASE + DRM_XE_GEM_CREATE, struct drm_xe_gem_create)
+#define DRM_IOCTL_XE_VM_CREATE		DRM_IOWR(DRM_COMMAND_BASE + DRM_XE_VM_CREATE, struct drm_xe_vm_create)
+#define DRM_IOCTL_XE_VM_DESTROY		DRM_IOW( DRM_COMMAND_BASE + DRM_XE_VM_DESTROY, struct drm_xe_vm_destroy)
+#define DRM_IOCTL_XE_VM_BIND		DRM_IOW( DRM_COMMAND_BASE + DRM_XE_VM_BIND, struct drm_xe_vm_bind)
+#define DRM_IOCTL_XE_ENGINE_CREATE	DRM_IOWR(DRM_COMMAND_BASE + DRM_XE_ENGINE_CREATE, struct drm_xe_engine_create)
+#define DRM_IOCTL_XE_ENGINE_DESTROY	DRM_IOW( DRM_COMMAND_BASE + DRM_XE_ENGINE_DESTROY, struct drm_xe_engine_destroy)
 #define DRM_IOCTL_XE_EXEC		DRM_IOW( DRM_COMMAND_BASE + DRM_XE_EXEC, drm_xe_exec)
 
 struct drm_xe_engine_class_instance {
