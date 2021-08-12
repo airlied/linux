@@ -17,6 +17,7 @@ struct xe_vm *xe_vm_create(struct xe_device *xe)
 		return ERR_PTR(-ENOMEM);
 
 	kref_init(&vm->refcount);
+	dma_resv_init(&vm->resv);
 
 	return vm;
 }
@@ -24,6 +25,8 @@ struct xe_vm *xe_vm_create(struct xe_device *xe)
 void xe_vm_free(struct kref *ref)
 {
 	struct xe_vm *vm = container_of(ref, struct xe_vm, refcount);
+
+	dma_resv_fini(&vm->resv);
 
 	kfree(vm);
 }

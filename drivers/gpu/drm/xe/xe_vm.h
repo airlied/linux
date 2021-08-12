@@ -8,11 +8,14 @@
 #define _XE_VM_H_
 
 #include <linux/kref.h>
+#include <linux/dma-resv.h>
 
 #include "xe_device.h"
 
 struct xe_vm {
 	struct kref refcount;
+
+	struct dma_resv resv;
 };
 
 struct xe_vm *xe_vm_create(struct xe_device *xe);

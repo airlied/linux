@@ -110,16 +110,19 @@ struct xe_bo *xe_bo_create(struct xe_device *xe, size_t size,
 
 	drm_gem_private_object_init(&xe->drm, &bo->ttm.base, size);
 
+	if (vm) {
+		dma_resv_lock(&vm->resv, NULL);
+		bo->vm = xe_vm_get(vm);
+	}
+
 	err = ttm_bo_init_reserved(&xe->ttm, &bo->ttm, size, ttm_bo_type_device,
 				   &sys_placement, SZ_64K >> PAGE_SHIFT,
-				   &ctx, NULL, NULL, xe_ttm_bo_destroy);
+				   &ctx, NULL, vm ? &vm->resv : NULL,
+				   xe_ttm_bo_destroy);
 	if (err)
 		return ERR_PTR(err);
 
 	dma_resv_unlock(bo->ttm.base.resv);
-
-	if (vm)
-		bo->vm = vm;
 
 	return bo;
 }
