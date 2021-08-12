@@ -32,4 +32,7 @@ static inline void xe_bo_put(struct xe_bo *bo)
 
 extern struct ttm_device_funcs xe_ttm_funcs;
 
+int xe_gem_create_ioctl(struct drm_device *dev, void *data,
+			struct drm_file *file);
+
 #endif /* _XE_BO_H_ */

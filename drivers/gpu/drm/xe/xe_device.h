@@ -10,6 +10,7 @@
 #include <linux/pci.h>
 
 #include <drm/drm_device.h>
+#include <drm/drm_file.h>
 #include <drm/ttm/ttm_device.h>
 
 struct xe_device {
@@ -35,5 +36,10 @@ struct xe_device *xe_device_create(struct pci_dev *pdev,
 				   const struct pci_device_id *ent);
 void xe_device_remove(struct xe_device *xe);
 void xe_device_shutdown(struct xe_device *xe);
+
+static inline struct xe_file *to_xe_file(const struct drm_file *file)
+{
+	return file->driver_priv;
+}
 
 #endif /* _XE_DEVICE_H_ */

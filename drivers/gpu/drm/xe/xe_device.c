@@ -4,8 +4,8 @@
  * Copyright © 2021 Intel Corporation
  */
 
-#include <drm/drm_file.h>
 #include <drm/drm_ioctl.h>
+#include <drm/xe_drm.h>
 
 #include "xe_bo.h"
 #include "xe_device.h"
@@ -31,6 +31,7 @@ static void xe_file_close(struct drm_device *dev, struct drm_file *file)
 }
 
 static const struct drm_ioctl_desc xe_ioctls[] = {
+	DRM_IOCTL_DEF_DRV(XE_GEM_CREATE, xe_gem_create_ioctl, DRM_RENDER_ALLOW),
 };
 
 static const struct file_operations xe_driver_fops = {
