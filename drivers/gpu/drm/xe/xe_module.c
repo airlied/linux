@@ -8,14 +8,16 @@
 #include <linux/module.h>
 
 #include "xe_drv.h"
+#include "xe_pci.h"
 
 static int __init xe_init(void)
 {
-	return 0;
+	return i915_register_pci_driver();
 }
 
 static void __exit xe_exit(void)
 {
+	i915_unregister_pci_driver();
 }
 
 module_init(xe_init);

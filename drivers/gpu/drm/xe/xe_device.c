@@ -51,7 +51,7 @@ static const struct drm_driver driver = {
 	 */
 	.driver_features =
 	    DRIVER_GEM |
-	    DRIVER_RENDER | DRIVER_MODESET | DRIVER_ATOMIC | DRIVER_SYNCOBJ |
+	    DRIVER_RENDER | DRIVER_SYNCOBJ |
 	    DRIVER_SYNCOBJ_TIMELINE,
 	.open = xe_file_open,
 	.postclose = xe_file_close,
@@ -78,19 +78,23 @@ struct xe_device *
 xe_device_create(struct pci_dev *pdev, const struct pci_device_id *ent)
 {
 	struct xe_device *xe;
-	int ret;
+	int err;
 
 	xe = devm_drm_dev_alloc(&pdev->dev, &driver, struct xe_device, drm);
 	if (IS_ERR(xe))
 		return xe;
 
-	ret = ttm_device_init(&xe->ttm, &xe_ttm_funcs, xe->drm.dev,
+	err = ttm_device_init(&xe->ttm, &xe_ttm_funcs, xe->drm.dev,
 			      xe->drm.anon_inode->i_mapping,
 			      xe->drm.vma_offset_manager, false, false);
+	if (WARN_ON(err)) {
+		drm_dev_put(&xe->drm);
+		return ERR_PTR(err);
+	}
 
-	ret = drm_dev_register(&xe->drm, 0);
-	if (ret)
-		return ERR_PTR(ret);
+	err = drm_dev_register(&xe->drm, 0);
+	if (err)
+		return ERR_PTR(err);
 
 	return xe;
 }

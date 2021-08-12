@@ -4,6 +4,9 @@
  * Copyright © 2021 Intel Corporation
  */
 
+#ifndef _XE_BO_H_
+#define _XE_BO_H_
+
 #include <drm/ttm/ttm_bo_api.h>
 #include <drm/ttm/ttm_device.h>
 
@@ -28,3 +31,5 @@ static inline void xe_bo_put(struct xe_bo *bo)
 }
 
 extern struct ttm_device_funcs xe_ttm_funcs;
+
+#endif /* _XE_BO_H_ */

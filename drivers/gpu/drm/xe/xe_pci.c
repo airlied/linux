@@ -14,6 +14,7 @@
 
 #include "xe_drv.h"
 #include "xe_device.h"
+#include "xe_pci.h"
 
 #include "i915_reg.h"
 
