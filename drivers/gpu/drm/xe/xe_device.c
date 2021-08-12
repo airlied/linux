@@ -10,6 +10,7 @@
 #include "xe_bo.h"
 #include "xe_device.h"
 #include "xe_drv.h"
+#include "xe_vm.h"
 
 static int xe_file_open(struct drm_device *dev, struct drm_file *file)
 {
@@ -19,6 +20,9 @@ static int xe_file_open(struct drm_device *dev, struct drm_file *file)
 	if (!xef)
 		return -ENOMEM;
 
+	mutex_init(&xef->vm_lock);
+	xa_init_flags(&xef->vm_xa, XA_FLAGS_ALLOC1);
+
 	file->driver_priv = xef;
 	return 0;
 }
@@ -26,12 +30,20 @@ static int xe_file_open(struct drm_device *dev, struct drm_file *file)
 static void xe_file_close(struct drm_device *dev, struct drm_file *file)
 {
 	struct xe_file *xef = file->driver_priv;
+	struct xe_vm *vm;
+	unsigned long idx;
+
+	xa_for_each(&xef->vm_xa, idx, vm)
+		xe_vm_put(vm);
+	mutex_destroy(&xef->vm_lock);
 
 	kfree(xef);
 }
 
 static const struct drm_ioctl_desc xe_ioctls[] = {
 	DRM_IOCTL_DEF_DRV(XE_GEM_CREATE, xe_gem_create_ioctl, DRM_RENDER_ALLOW),
+	DRM_IOCTL_DEF_DRV(XE_VM_CREATE, xe_vm_create_ioctl, DRM_RENDER_ALLOW),
+	DRM_IOCTL_DEF_DRV(XE_VM_DESTROY, xe_vm_destroy_ioctl, DRM_RENDER_ALLOW),
 };
 
 static const struct file_operations xe_driver_fops = {

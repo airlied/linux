@@ -10,8 +10,12 @@
 #include <drm/ttm/ttm_bo_api.h>
 #include <drm/ttm/ttm_device.h>
 
+#include "xe_vm.h"
+
 struct xe_bo {
 	struct ttm_buffer_object ttm;
+
+	struct xe_vm *vm;
 };
 
 static inline struct xe_bo *ttm_to_xe_bo(const struct ttm_buffer_object *bo)

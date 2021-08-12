@@ -29,9 +29,14 @@ struct ttm_device_funcs xe_ttm_funcs = {
 
 static void xe_ttm_bo_destroy(struct ttm_buffer_object *ttm_bo)
 {
+	struct xe_bo *bo = ttm_to_xe_bo(ttm_bo);
+
+	if (bo->vm)
+		xe_vm_put(bo->vm);
 }
 
-struct xe_bo *xe_bo_create(struct xe_device *xe, size_t size, u32 flags)
+struct xe_bo *xe_bo_create(struct xe_device *xe, size_t size,
+			   struct xe_vm *vm, u32 flags)
 {
 	struct xe_bo *bo;
 	struct ttm_operation_ctx ctx = {
@@ -52,6 +57,9 @@ struct xe_bo *xe_bo_create(struct xe_device *xe, size_t size, u32 flags)
 		return ERR_PTR(err);
 	}
 
+	if (vm)
+		bo->vm = vm;
+
 	return bo;
 }
 
@@ -62,7 +70,9 @@ int xe_gem_create_ioctl(struct drm_device *dev, void *data,
 			struct drm_file *file)
 {
 	struct xe_device *xe = to_xe_device(dev);
+	struct xe_file *xef = to_xe_file(file);
 	struct drm_xe_gem_create *args = data;
+	struct xe_vm *vm = NULL;
 	struct xe_bo *bo;
 	u32 handle;
 	int err;
@@ -79,9 +89,18 @@ int xe_gem_create_ioctl(struct drm_device *dev, void *data,
 	if (sizeof(size_t) < 8 && args->size >= (256 << sizeof(size_t)))
 		return -EINVAL;
 
-	bo = xe_bo_create(xe, args->size, args->flags);
-	if (IS_ERR(bo))
+	if (args->vm_id) {
+		vm = xe_vm_lookup(xef, args->vm_id);
+		if (!vm)
+			return -ENOENT;
+	}
+
+	bo = xe_bo_create(xe, args->size, vm, args->flags);
+	if (IS_ERR(bo)) {
+		if (vm)
+			xe_vm_put(vm);
 		return PTR_ERR(bo);
+	}
 
 	err = drm_gem_handle_create(file, &bo->ttm.base, &handle);
 	/* drop reference from allocate - handle holds it now */

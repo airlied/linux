@@ -35,6 +35,7 @@ subdir-ccflags-y += -I$(srctree)/$(src)
 xe-y += xe_bo.o \
 	xe_device.o \
 	xe_module.o \
-	xe_pci.o
+	xe_pci.o \
+	xe_vm.o
 
 obj-$(CONFIG_DRM_XE) += xe.o
