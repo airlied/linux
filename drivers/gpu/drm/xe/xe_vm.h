@@ -34,10 +34,24 @@ static inline void xe_vm_put(struct xe_vm *vm)
 	kref_put(&vm->refcount, xe_vm_free);
 }
 
+static inline void xe_vm_lock(struct xe_vm *vm, struct ww_acquire_ctx *ctx)
+{
+	dma_resv_lock(&vm->resv, ctx);
+}
+
+static inline void xe_vm_unlock(struct xe_vm *vm)
+{
+	dma_resv_unlock(&vm->resv);
+}
+
+#define xe_vm_assert_held(vm) dma_resv_assert_held(&(vm)->resv)
+
 int xe_vm_create_ioctl(struct drm_device *dev, void *data,
 		       struct drm_file *file);
 int xe_vm_destroy_ioctl(struct drm_device *dev, void *data,
 			struct drm_file *file);
+int xe_vm_bind_ioctl(struct drm_device *dev, void *data,
+		     struct drm_file *file);
 
 extern struct ttm_device_funcs xe_ttm_funcs;
 

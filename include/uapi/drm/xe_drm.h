@@ -224,8 +224,8 @@ struct drm_xe_vm_bind {
 	/** @extensions: Pointer to the first extension struct, if any */
 	__u64 extensions;
 
-	/** @vm: The VM to bind to */
-	__u32 vm;
+	/** @vm_id: The ID of the VM to bind to */
+	__u32 vm_id;
 
 	/** @obj: GEM object to bind */
 	__u32 obj;
