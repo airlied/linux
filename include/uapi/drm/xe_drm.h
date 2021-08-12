@@ -124,12 +124,12 @@ struct xe_user_extension {
 #define DRM_IOCTL_XE_VM_BIND		DRM_IOW( DRM_COMMAND_BASE + DRM_XE_VM_BIND, struct drm_xe_vm_bind)
 #define DRM_IOCTL_XE_ENGINE_CREATE	DRM_IOWR(DRM_COMMAND_BASE + DRM_XE_ENGINE_CREATE, struct drm_xe_engine_create)
 #define DRM_IOCTL_XE_ENGINE_DESTROY	DRM_IOW( DRM_COMMAND_BASE + DRM_XE_ENGINE_DESTROY, struct drm_xe_engine_destroy)
-#define DRM_IOCTL_XE_EXEC		DRM_IOW( DRM_COMMAND_BASE + DRM_XE_EXEC, drm_xe_exec)
+#define DRM_IOCTL_XE_EXEC		DRM_IOW( DRM_COMMAND_BASE + DRM_XE_EXEC, struct drm_xe_exec)
 
 struct drm_xe_engine_class_instance {
 	__u16 engine_class;
 
-#define DRM_XE_ENGINE_CLASS_RENDER
+#define DRM_XE_ENGINE_CLASS_RENDER 0
 
 	__u16 engine_instance;
 };
@@ -224,8 +224,8 @@ struct drm_xe_vm_bind {
 	/** @extensions: Pointer to the first extension struct, if any */
 	__u64 extensions;
 
-	/** @flags: MBZ */
-	__u32 flags;
+	/** @vm: The VM to bind to */
+	__u32 vm;
 
 	/** @obj: GEM object to bind */
 	__u32 obj;
