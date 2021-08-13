@@ -110,7 +110,7 @@ static const struct drm_gem_object_funcs xe_gem_object_funcs = {
 };
 
 struct xe_bo *xe_bo_create(struct xe_device *xe, size_t size,
-			   struct xe_vm *vm, u32 flags)
+			   struct xe_vm *vm, enum ttm_bo_type type, u32 flags)
 {
 	struct xe_bo *bo;
 	struct ttm_operation_ctx ctx = {
@@ -178,7 +178,7 @@ int xe_gem_create_ioctl(struct drm_device *dev, void *data,
 			return -ENOENT;
 	}
 
-	bo = xe_bo_create(xe, args->size, vm, args->flags);
+	bo = xe_bo_create(xe, args->size, vm, ttm_bo_type_device, args->flags);
 	if (IS_ERR(bo)) {
 		if (vm)
 			xe_vm_put(vm);

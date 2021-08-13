@@ -12,8 +12,9 @@
 
 #include "xe_device.h"
 
-struct xe_vm;
 struct xe_bo;
+struct xe_pt;
+struct xe_vm;
 
 struct xe_vma {
 	struct rb_node vm_node;
@@ -36,6 +37,8 @@ struct xe_vm {
 
 	uint64_t size;
 	struct rb_root vmas;
+
+	struct xe_pt *pt_root;
 };
 
 struct xe_vm *xe_vm_create(struct xe_device *xe);

@@ -20,6 +20,9 @@ struct xe_bo {
 	struct list_head vmas;
 };
 
+struct xe_bo *xe_bo_create(struct xe_device *xe, size_t size,
+			   struct xe_vm *vm, enum ttm_bo_type type, u32 flags);
+
 static inline struct xe_bo *ttm_to_xe_bo(const struct ttm_buffer_object *bo)
 {
 	return container_of(bo, struct xe_bo, ttm);
