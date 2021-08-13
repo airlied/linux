@@ -70,6 +70,23 @@ struct ttm_device_funcs xe_ttm_funcs = {
 static void xe_ttm_bo_destroy(struct ttm_buffer_object *ttm_bo)
 {
 	struct xe_bo *bo = ttm_to_xe_bo(ttm_bo);
+	struct xe_vma *vma, *next;
+
+	if (bo->vm) {
+		xe_vm_lock(bo->vm, NULL);
+		list_for_each_entry_safe(vma, next, &bo->vmas, bo_link) {
+			XE_BUG_ON(vma->vm != bo->vm);
+			__xe_vma_unbind(vma);
+		}
+		xe_vm_unlock(bo->vm);
+	} else {
+		list_for_each_entry_safe(vma, next, &bo->vmas, bo_link) {
+			xe_vm_lock(vma->vm, NULL);
+			__xe_vma_unbind(vma);
+			xe_vm_unlock(vma->vm);
+		}
+	}
+
 	kfree(bo);
 }
 
@@ -121,6 +138,8 @@ struct xe_bo *xe_bo_create(struct xe_device *xe, size_t size,
 				   xe_ttm_bo_destroy);
 	if (err)
 		return ERR_PTR(err);
+
+	INIT_LIST_HEAD(&bo->vmas);
 
 	xe_bo_or_vm_unlock(bo);
 

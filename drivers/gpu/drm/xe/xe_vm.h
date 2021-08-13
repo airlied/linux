@@ -12,10 +12,30 @@
 
 #include "xe_device.h"
 
+struct xe_vm;
+struct xe_bo;
+
+struct xe_vma {
+	struct rb_node vm_node;
+	struct xe_vm *vm;
+
+	uint64_t start;
+	uint64_t end;
+
+	struct xe_bo *bo;
+	uint64_t bo_offset;
+	struct list_head bo_link;
+};
+
+void __xe_vma_unbind(struct xe_vma *vma);
+
 struct xe_vm {
 	struct kref refcount;
 
 	struct dma_resv resv;
+
+	uint64_t size;
+	struct rb_root vmas;
 };
 
 struct xe_vm *xe_vm_create(struct xe_device *xe);

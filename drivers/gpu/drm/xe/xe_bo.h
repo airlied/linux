@@ -16,6 +16,8 @@ struct xe_bo {
 	struct ttm_buffer_object ttm;
 
 	struct xe_vm *vm;
+
+	struct list_head vmas;
 };
 
 static inline struct xe_bo *ttm_to_xe_bo(const struct ttm_buffer_object *bo)
