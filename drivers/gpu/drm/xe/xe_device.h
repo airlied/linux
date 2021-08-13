@@ -13,6 +13,10 @@
 #include <drm/drm_file.h>
 #include <drm/ttm/ttm_device.h>
 
+#define XE_EXTRA_DEBUG 1
+#define XE_WARN_ON WARN_ON
+#define XE_BUG_ON BUG_ON
+
 struct xe_device {
 	struct drm_device drm;
 

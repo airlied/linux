@@ -111,7 +111,7 @@ struct xe_bo *xe_bo_create(struct xe_device *xe, size_t size,
 	drm_gem_private_object_init(&xe->drm, &bo->ttm.base, size);
 
 	if (vm) {
-		dma_resv_lock(&vm->resv, NULL);
+		xe_vm_lock(vm, NULL);
 		bo->vm = xe_vm_get(vm);
 	}
 
@@ -122,7 +122,7 @@ struct xe_bo *xe_bo_create(struct xe_device *xe, size_t size,
 	if (err)
 		return ERR_PTR(err);
 
-	dma_resv_unlock(bo->ttm.base.resv);
+	xe_bo_or_vm_unlock(bo);
 
 	return bo;
 }
