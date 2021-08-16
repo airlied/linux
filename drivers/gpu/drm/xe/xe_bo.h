@@ -78,6 +78,8 @@ static inline void xe_bo_or_vm_unlock(struct xe_bo *bo)
 	dma_resv_unlock(bo->ttm.base.resv);
 }
 
+int xe_bo_populate(struct xe_bo *bo);
+
 extern struct ttm_device_funcs xe_ttm_funcs;
 
 int xe_gem_create_ioctl(struct drm_device *dev, void *data,

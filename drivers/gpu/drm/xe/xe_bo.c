@@ -72,6 +72,8 @@ static void xe_ttm_bo_destroy(struct ttm_buffer_object *ttm_bo)
 	struct xe_bo *bo = ttm_to_xe_bo(ttm_bo);
 	struct xe_vma *vma, *next;
 
+	drm_gem_object_release(&bo->ttm.base);
+
 	if (!list_empty(&bo->vmas)) {
 		if (bo->vm) {
 			xe_vm_lock(bo->vm, NULL);
@@ -88,6 +90,9 @@ static void xe_ttm_bo_destroy(struct ttm_buffer_object *ttm_bo)
 			}
 		}
 	}
+
+	if (bo->vm)
+		xe_vm_put(bo->vm);
 
 	kfree(bo);
 }
@@ -149,6 +154,15 @@ struct xe_bo *xe_bo_create(struct xe_device *xe, size_t size,
 	return bo;
 }
 
+int xe_bo_populate(struct xe_bo *bo)
+{
+	struct ttm_operation_ctx ctx = {
+		.interruptible = false,
+		.no_wait_gpu = false
+	};
+	return ttm_tt_populate(bo->ttm.bdev, bo->ttm.ttm, &ctx);
+}
+
 #define ALL_DRM_XE_GEM_CREATE_FLAGS (\
 	DRM_XE_GEM_CREATE_SYSTEM)
 
@@ -179,18 +193,18 @@ int xe_gem_create_ioctl(struct drm_device *dev, void *data,
 		vm = xe_vm_lookup(xef, args->vm_id);
 		if (!vm)
 			return -ENOENT;
+		xe_vm_lock(vm, NULL);
 	}
 
-	if (vm)
-		xe_vm_lock(vm, NULL);
 	bo = xe_bo_create(xe, args->size, vm, ttm_bo_type_device, args->flags);
-	if (vm)
+
+	if (vm) {
 		xe_vm_unlock(vm);
-	if (IS_ERR(bo)) {
-		if (vm)
-			xe_vm_put(vm);
-		return PTR_ERR(bo);
+		xe_vm_put(vm);
 	}
+
+	if (IS_ERR(bo))
+		return PTR_ERR(bo);
 
 	err = drm_gem_handle_create(file, &bo->ttm.base, &handle);
 	drm_gem_object_put(&bo->ttm.base);

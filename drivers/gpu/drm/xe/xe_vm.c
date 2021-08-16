@@ -142,7 +142,7 @@ struct xe_pt *xe_pt_create(struct xe_vm *vm, unsigned int level)
 	if (!pt)
 		return NULL;
 
-	bo = xe_bo_create(vm->xe, SZ_4K, vm, ttm_bo_type_kernel, 0);
+	bo = xe_bo_create(vm->xe, SZ_4K, NULL, ttm_bo_type_kernel, 0);
 	if (IS_ERR(bo)) {
 		err = PTR_ERR(bo);
 		goto err_kfree;
@@ -174,9 +174,13 @@ static void xe_pt_destroy(struct xe_pt *pt)
 	XE_BUG_ON(!list_empty(&pt->bo->vmas));
 	xe_bo_put(pt->bo);
 
-	if (pt->level) {
-		for (i = 0; i < XE_PDES; i++)
-			xe_pt_destroy(as_xe_pt_dir(pt)->entries[i]);
+	if (pt->level > 0) {
+		struct xe_pt_dir *pt_dir = as_xe_pt_dir(pt);
+
+		for (i = 0; i < XE_PDES; i++) {
+			if (pt_dir->entries[i])
+				xe_pt_destroy(pt_dir->entries[i]);
+		}
 	}
 	kfree(pt);
 }
@@ -203,7 +207,8 @@ static unsigned int xe_pt_idx(uint64_t addr, unsigned int level)
 static uint64_t xe_pt_next_start(uint64_t start, unsigned int level)
 {
 	uint64_t pt_range = 1ull << xe_pt_shift(level);
-	return (start + pt_range) & (pt_range - 1);
+
+	return (start + pt_range) & ~(pt_range - 1);
 }
 
 static uint64_t __xe_pt_clear(struct xe_pt *pt, unsigned int level,
@@ -259,25 +264,27 @@ static void xe_pt_clear(struct xe_pt *pt, uint64_t start, uint64_t end,
 	__xe_pt_clear(pt, pt->level, start, end, depopulate);
 }
 
-static int64_t __xe_pt_populate(struct xe_vm *vm, struct xe_pt *pt,
-				unsigned int level,
-				uint64_t start, uint64_t end)
+static int __xe_pt_populate(struct xe_vm *vm, struct xe_pt *pt,
+			    unsigned int level,
+			    uint64_t *start, uint64_t end)
 {
-	uint64_t next_pt_start = xe_pt_next_start(start, level);
+	uint64_t next_pt_start = xe_pt_next_start(*start, level);
 	struct xe_pt_dir *pt_dir;
+	int err;
 
-	XE_BUG_ON(start >= end);
-	XE_BUG_ON(start & GEN8_PTE_MASK);
+	XE_BUG_ON(*start >= end);
+	XE_BUG_ON(*start & GEN8_PTE_MASK);
 	XE_BUG_ON(end >= (1ull << 63));
 
-	if (level == 0)
-		return next_pt_start;
+	if (level == 0) {
+		*start = next_pt_start;
+		return 0;
+	}
 
 	pt_dir = as_xe_pt_dir(pt);
 
-	while (start < end && start < next_pt_start) {
-		unsigned int i = xe_pt_idx(start, level);
-		int64_t ret;
+	while (*start < end && *start < next_pt_start) {
+		unsigned int i = xe_pt_idx(*start, level);
 
 		if (!pt_dir->entries[i]) {
 			struct xe_pt *entry;
@@ -293,27 +300,19 @@ static int64_t __xe_pt_populate(struct xe_vm *vm, struct xe_pt *pt,
 			pt_dir->entries[i] = entry;
 			pt->num_live--;
 		}
-		ret = __xe_pt_populate(vm, pt_dir->entries[i],
+		err = __xe_pt_populate(vm, pt_dir->entries[i],
 				       level - 1, start, end);
-		if (ret < 0)
-			return ret;
-
-		start = ret;
+		if (err < 0)
+			return err;
 	}
 
-	return start;
+	return 0;
 }
 
 static int xe_pt_populate(struct xe_vm *vm, struct xe_pt *pt,
 			  uint64_t start, uint64_t end)
 {
-	int64_t ret = __xe_pt_populate(vm, pt, pt->level, start, end);
-	if (ret < 0) {
-		XE_BUG_ON(ret < INT_MIN);
-		return ret;
-	}
-
-	return 0;
+	return __xe_pt_populate(vm, pt, pt->level, &start, end);
 }
 
 static void xe_pt_set_pte(struct xe_pt *pt, uint64_t addr, uint64_t pte)
@@ -524,7 +523,9 @@ struct xe_vm *xe_vm_create(struct xe_device *xe)
 	}
 	xe_vm_insert_vma(vm, vma);
 
+	xe_vm_lock(vm, NULL);
 	vm->pt_root = xe_pt_create(vm, 3);
+	xe_vm_unlock(vm);
 	if (IS_ERR(vm->pt_root)) {
 		err = PTR_ERR(vm->pt_root);
 		goto err_vma;
@@ -642,6 +643,10 @@ static int __xe_vm_bind(struct xe_vm *vm, struct xe_bo *bo, uint64_t bo_offset,
 
 	xe_vm_assert_held(vm);
 
+	err = xe_bo_populate(bo);
+	if (err)
+		return err;
+
 	err = xe_pt_populate(vm, vm->pt_root, addr, addr + range);
 	if (err)
 		return err;
@@ -682,7 +687,9 @@ static int xe_vm_bind(struct xe_vm *vm, struct xe_bo *bo, uint64_t offset,
 		return -EINVAL;
 
 	xe_vm_lock(vm, NULL);
+	xe_bo_lock_vm_held(bo, NULL);
 	err = __xe_vm_bind(vm, bo, offset, range, addr);
+	xe_bo_unlock_vm_held(bo);
 	xe_vm_unlock(vm);
 
 	return err;
