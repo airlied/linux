@@ -171,7 +171,9 @@ static void xe_pt_destroy(struct xe_pt *pt)
 
 	ttm_bo_kunmap(&pt->map);
 
+	XE_BUG_ON(!list_empty(&pt->bo->vmas));
 	xe_bo_put(pt->bo);
+
 	if (pt->level) {
 		for (i = 0; i < XE_PDES; i++)
 			xe_pt_destroy(as_xe_pt_dir(pt)->entries[i]);

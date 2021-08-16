@@ -72,18 +72,20 @@ static void xe_ttm_bo_destroy(struct ttm_buffer_object *ttm_bo)
 	struct xe_bo *bo = ttm_to_xe_bo(ttm_bo);
 	struct xe_vma *vma, *next;
 
-	if (bo->vm) {
-		xe_vm_lock(bo->vm, NULL);
-		list_for_each_entry_safe(vma, next, &bo->vmas, bo_link) {
-			XE_BUG_ON(vma->vm != bo->vm);
-			__xe_vma_unbind(vma);
-		}
-		xe_vm_unlock(bo->vm);
-	} else {
-		list_for_each_entry_safe(vma, next, &bo->vmas, bo_link) {
-			xe_vm_lock(vma->vm, NULL);
-			__xe_vma_unbind(vma);
-			xe_vm_unlock(vma->vm);
+	if (!list_empty(&bo->vmas)) {
+		if (bo->vm) {
+			xe_vm_lock(bo->vm, NULL);
+			list_for_each_entry_safe(vma, next, &bo->vmas, bo_link) {
+				XE_BUG_ON(vma->vm != bo->vm);
+				__xe_vma_unbind(vma);
+			}
+			xe_vm_unlock(bo->vm);
+		} else {
+			list_for_each_entry_safe(vma, next, &bo->vmas, bo_link) {
+				xe_vm_lock(vma->vm, NULL);
+				__xe_vma_unbind(vma);
+				xe_vm_unlock(vma->vm);
+			}
 		}
 	}
 
