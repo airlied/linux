@@ -17,13 +17,17 @@ struct xe_bo {
 
 	size_t size;
 
+	uint32_t flags;
+
 	struct xe_vm *vm;
 
 	struct list_head vmas;
 };
 
-struct xe_bo *xe_bo_create(struct xe_device *xe, size_t size,
-			   struct xe_vm *vm, enum ttm_bo_type type, u32 flags);
+#define XE_BO_CREATE_USER_BIT BIT(1)
+
+struct xe_bo *xe_bo_create(struct xe_device *xe, struct xe_vm *vm, size_t size,
+			   enum ttm_bo_type type, uint32_t flags);
 
 static inline struct xe_bo *ttm_to_xe_bo(const struct ttm_buffer_object *bo)
 {

@@ -91,7 +91,7 @@ static void xe_ttm_bo_destroy(struct ttm_buffer_object *ttm_bo)
 		}
 	}
 
-	if (bo->vm)
+	if (bo->vm && (bo->flags & XE_BO_CREATE_USER_BIT))
 		xe_vm_put(bo->vm);
 
 	kfree(bo);
@@ -116,8 +116,8 @@ static const struct drm_gem_object_funcs xe_gem_object_funcs = {
 	.mmap = drm_gem_ttm_mmap,
 };
 
-struct xe_bo *xe_bo_create(struct xe_device *xe, size_t size,
-			   struct xe_vm *vm, enum ttm_bo_type type, u32 flags)
+struct xe_bo *xe_bo_create(struct xe_device *xe, struct xe_vm *vm,
+			   size_t size, enum ttm_bo_type type, uint32_t flags)
 {
 	struct xe_bo *bo;
 	struct ttm_operation_ctx ctx = {
@@ -131,14 +131,13 @@ struct xe_bo *xe_bo_create(struct xe_device *xe, size_t size,
 		return ERR_PTR(-ENOMEM);
 
 	bo->size = size;
+	bo->flags = flags;
 	bo->ttm.base.funcs = &xe_gem_object_funcs;
 
 	drm_gem_private_object_init(&xe->drm, &bo->ttm.base, size);
 
-	if (vm) {
+	if (vm)
 		xe_vm_assert_held(vm);
-		bo->vm = xe_vm_get(vm);
-	}
 
 	err = ttm_bo_init_reserved(&xe->ttm, &bo->ttm, size, ttm_bo_type_device,
 				   &sys_placement, SZ_64K >> PAGE_SHIFT,
@@ -147,11 +146,22 @@ struct xe_bo *xe_bo_create(struct xe_device *xe, size_t size,
 	if (err)
 		return ERR_PTR(err);
 
+	if (vm && (flags & XE_BO_CREATE_USER_BIT))
+		xe_vm_get(vm);
+	bo->vm = vm;
+
 	INIT_LIST_HEAD(&bo->vmas);
 
 	xe_bo_unlock_vm_held(bo);
 
 	return bo;
+}
+
+static struct xe_bo *xe_bo_create_user(struct xe_device *xe, struct xe_vm *vm,
+				       size_t size)
+{
+	return xe_bo_create(xe, vm, size, ttm_bo_type_device,
+			    XE_BO_CREATE_USER_BIT);
 }
 
 int xe_bo_populate(struct xe_bo *bo)
@@ -196,7 +206,7 @@ int xe_gem_create_ioctl(struct drm_device *dev, void *data,
 		xe_vm_lock(vm, NULL);
 	}
 
-	bo = xe_bo_create(xe, args->size, vm, ttm_bo_type_device, args->flags);
+	bo = xe_bo_create_user(xe, vm, args->size);
 
 	if (vm) {
 		xe_vm_unlock(vm);
