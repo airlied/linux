@@ -134,11 +134,16 @@ xe_device_create(struct pci_dev *pdev, const struct pci_device_id *ent)
 	if (err)
 		return ERR_PTR(err);
 
+	err = xe_irq_install(xe);
+	if (err)
+		return ERR_PTR(err);
+
 	return xe;
 }
 
 void xe_device_remove(struct xe_device *xe)
 {
+	xe_irq_uninstall(xe);
 	drm_dev_unregister(&xe->drm);
 	ttm_device_fini(&xe->ttm);
 }

@@ -22,6 +22,8 @@ struct xe_device {
 	struct pci_dev *pdev;
 
 	struct ttm_device ttm;
+
+	bool irq_enabled;
 };
 
 struct xe_file {
@@ -51,5 +53,8 @@ static inline struct xe_file *to_xe_file(const struct drm_file *file)
 {
 	return file->driver_priv;
 }
+
+int xe_irq_install(struct xe_device *xe);
+void xe_irq_uninstall(struct xe_device *xe);
 
 #endif /* _XE_DEVICE_H_ */
