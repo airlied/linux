@@ -131,7 +131,7 @@ struct xe_bo *xe_bo_create(struct xe_device *xe, size_t size,
 	drm_gem_private_object_init(&xe->drm, &bo->ttm.base, size);
 
 	if (vm) {
-		xe_vm_lock(vm, NULL);
+		xe_vm_assert_held(vm);
 		bo->vm = xe_vm_get(vm);
 	}
 
@@ -144,7 +144,7 @@ struct xe_bo *xe_bo_create(struct xe_device *xe, size_t size,
 
 	INIT_LIST_HEAD(&bo->vmas);
 
-	xe_bo_or_vm_unlock(bo);
+	xe_bo_unlock_vm_held(bo);
 
 	return bo;
 }
@@ -181,7 +181,11 @@ int xe_gem_create_ioctl(struct drm_device *dev, void *data,
 			return -ENOENT;
 	}
 
+	if (vm)
+		xe_vm_lock(vm, NULL);
 	bo = xe_bo_create(xe, args->size, vm, ttm_bo_type_device, args->flags);
+	if (vm)
+		xe_vm_unlock(vm);
 	if (IS_ERR(bo)) {
 		if (vm)
 			xe_vm_put(vm);
