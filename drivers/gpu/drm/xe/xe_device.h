@@ -19,6 +19,7 @@
 
 struct xe_device {
 	struct drm_device drm;
+	struct pci_dev *pdev;
 
 	struct ttm_device ttm;
 };

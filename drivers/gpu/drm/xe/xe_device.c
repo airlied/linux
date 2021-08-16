@@ -5,6 +5,7 @@
  */
 
 #include <drm/drm_gem_ttm_helper.h>
+#include <drm/drm_aperture.h>
 #include <drm/drm_ioctl.h>
 #include <drm/xe_drm.h>
 
@@ -107,9 +108,19 @@ xe_device_create(struct pci_dev *pdev, const struct pci_device_id *ent)
 	struct xe_device *xe;
 	int err;
 
+	err = drm_aperture_remove_conflicting_pci_framebuffers(pdev, &driver);
+	if (err)
+		return ERR_PTR(err);
+
 	xe = devm_drm_dev_alloc(&pdev->dev, &driver, struct xe_device, drm);
 	if (IS_ERR(xe))
 		return xe;
+
+	xe->pdev = pdev;
+
+	err = pci_enable_device(pdev);
+	if (err)
+		return ERR_PTR(err);
 
 	err = ttm_device_init(&xe->ttm, &xe_ttm_funcs, xe->drm.dev,
 			      xe->drm.anon_inode->i_mapping,
