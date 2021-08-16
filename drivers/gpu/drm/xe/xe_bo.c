@@ -123,6 +123,7 @@ struct xe_bo *xe_bo_create(struct xe_device *xe, size_t size,
 	if (!bo)
 		return ERR_PTR(-ENOMEM);
 
+	bo->size = size;
 	bo->ttm.base.funcs = &xe_gem_object_funcs;
 
 	drm_gem_private_object_init(&xe->drm, &bo->ttm.base, size);

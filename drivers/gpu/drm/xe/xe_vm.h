@@ -31,6 +31,8 @@ struct xe_vma {
 void __xe_vma_unbind(struct xe_vma *vma);
 
 struct xe_vm {
+	struct xe_device *xe;
+
 	struct kref refcount;
 
 	struct dma_resv resv;

@@ -15,6 +15,8 @@
 struct xe_bo {
 	struct ttm_buffer_object ttm;
 
+	size_t size;
+
 	struct xe_vm *vm;
 
 	struct list_head vmas;

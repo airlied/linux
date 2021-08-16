@@ -4,7 +4,9 @@
  * Copyright © 2021 Intel Corporation
  */
 
+#include <drm/ttm/ttm_tt.h>
 #include <drm/xe_drm.h>
+#include <linux/mm.h>
 
 #include "xe_bo.h"
 #include "xe_vm.h"
@@ -73,6 +75,11 @@ static uint64_t gen8_pte_encode(dma_addr_t addr,
 	return pte;
 }
 
+static dma_addr_t addr_for_bo(struct xe_bo *bo, uint64_t offset)
+{
+	return bo->ttm.ttm->dma_address[0];
+}
+
 #define GEN8_PTE_SHIFT 12
 #define GEN8_PAGE_SIZE (1 << GEN8_PTE_SHIFT)
 #define GEN8_PTE_MASK (GEN8_PAGE_SIZE - 1)
@@ -84,6 +91,8 @@ struct xe_pt {
 	struct xe_bo *bo;
 	unsigned int level;
 	unsigned int num_live;
+
+	struct ttm_bo_kmap_obj map;
 };
 
 struct xe_pt_dir {
@@ -121,34 +130,46 @@ static bool xe_pt_0_clear_live(struct xe_pt_0 *pt, unsigned int idx)
 	return pt->live[idx / 32] &= ~(1u << (idx % 32));
 }
 
-struct xe_pt *xe_pt_create(struct xe_device *xe, struct xe_vm *vm,
-			   unsigned int level)
+struct xe_pt *xe_pt_create(struct xe_vm *vm, unsigned int level)
 {
 	struct xe_pt *pt;
 	struct xe_bo *bo;
 	size_t size;
+	int err;
 
 	size = level ? sizeof(struct xe_pt_dir) : sizeof(struct xe_pt_0);
 	pt = kzalloc(size, GFP_KERNEL);
 	if (!pt)
 		return NULL;
 
-	bo = xe_bo_create(xe, SZ_4K, vm, ttm_bo_type_kernel, 0);
+	bo = xe_bo_create(vm->xe, SZ_4K, vm, ttm_bo_type_kernel, 0);
 	if (IS_ERR(bo)) {
-		kfree(pt);
-		return ERR_CAST(bo);
+		err = PTR_ERR(bo);
+		goto err_kfree;
 	}
-
 	pt->bo = bo;
+
+	err = ttm_bo_kmap(&pt->bo->ttm, 0, 1, &pt->map);
+	if (err)
+		goto err_bo;
+
 	pt->level = level;
 	pt->num_live = 0;
 
 	return pt;
+
+err_bo:
+	xe_bo_put(bo);
+err_kfree:
+	kfree(pt);
+	return ERR_PTR(err);
 }
 
 static void xe_pt_destroy(struct xe_pt *pt)
 {
 	int i;
+
+	ttm_bo_kunmap(&pt->map);
 
 	xe_bo_put(pt->bo);
 	if (pt->level) {
@@ -160,6 +181,11 @@ static void xe_pt_destroy(struct xe_pt *pt)
 
 static void xe_pt_write(struct xe_pt *pt, unsigned int idx, uint64_t data)
 {
+	bool is_iomem;
+	uint64_t *map;
+
+	map = ttm_kmap_obj_virtual(&pt->map, &is_iomem);
+	*map = data;
 }
 
 static unsigned int xe_pt_shift(unsigned int level)
@@ -231,8 +257,8 @@ static void xe_pt_clear(struct xe_pt *pt, uint64_t start, uint64_t end,
 	__xe_pt_clear(pt, pt->level, start, end, depopulate);
 }
 
-static int64_t __xe_pt_populate(struct xe_device *xe, struct xe_vm *vm,
-				struct xe_pt *pt, unsigned int level,
+static int64_t __xe_pt_populate(struct xe_vm *vm, struct xe_pt *pt,
+				unsigned int level,
 				uint64_t start, uint64_t end)
 {
 	uint64_t next_pt_start = xe_pt_next_start(start, level);
@@ -252,14 +278,20 @@ static int64_t __xe_pt_populate(struct xe_device *xe, struct xe_vm *vm,
 		int64_t ret;
 
 		if (!pt_dir->entries[i]) {
-			struct xe_pt *entry = xe_pt_create(xe, vm, level - 1);
+			struct xe_pt *entry;
+			uint64_t pde;
+
+			entry = xe_pt_create(vm, level - 1);
 			if (IS_ERR(entry))
 				return PTR_ERR(entry);
 
+			pde = gen8_pde_encode(addr_for_bo(entry->bo, 0),
+					      XE_CACHE_WB);
+			xe_pt_write(pt, i, pde);
 			pt_dir->entries[i] = entry;
 			pt->num_live--;
 		}
-		ret = __xe_pt_populate(xe, vm, pt_dir->entries[i],
+		ret = __xe_pt_populate(vm, pt_dir->entries[i],
 				       level - 1, start, end);
 		if (ret < 0)
 			return ret;
@@ -270,14 +302,52 @@ static int64_t __xe_pt_populate(struct xe_device *xe, struct xe_vm *vm,
 	return start;
 }
 
-static int xe_pt_populate(struct xe_device *xe, struct xe_vm *vm,
-			  struct xe_pt *pt, unsigned int level,
+static int xe_pt_populate(struct xe_vm *vm, struct xe_pt *pt,
 			  uint64_t start, uint64_t end)
 {
-	int64_t ret = __xe_pt_populate(xe, vm, pt, pt->level, start, end);
+	int64_t ret = __xe_pt_populate(vm, pt, pt->level, start, end);
 	if (ret < 0) {
 		XE_BUG_ON(ret < INT_MIN);
 		return ret;
+	}
+
+	return 0;
+}
+
+static void xe_pt_set_pte(struct xe_pt *pt, uint64_t addr, uint64_t pte)
+{
+	unsigned int i = xe_pt_idx(addr, pt->level);
+
+	if (pt->level > 0) {
+		struct xe_pt_dir *pt_dir = as_xe_pt_dir(pt);
+
+		XE_BUG_ON(!pt_dir->entries[i]);
+		xe_pt_set_pte(pt_dir->entries[i], addr, pte);
+	} else {
+		struct xe_pt_0 *pt_0 = as_xe_pt_0(pt);
+
+		xe_pt_write(pt, i, pte);
+		if (!xe_pt_0_is_live(pt_0, i)) {
+			xe_pt_0_set_live(pt_0, i);
+			pt->num_live++;
+		}
+	}
+}
+
+static int xe_pt_fill(struct xe_pt *pt, struct xe_bo *bo, uint64_t bo_offset,
+		      uint64_t start, uint64_t end)
+{
+	uint64_t pte;
+
+	XE_BUG_ON(end - start + bo_offset > bo->size);
+
+	while (start < end) {
+		pte = gen8_pte_encode(addr_for_bo(bo, bo_offset),
+				      XE_CACHE_WB, 0);
+		xe_pt_set_pte(pt, start, pte);
+
+		start += GEN8_PAGE_SIZE;
+		bo_offset += GEN8_PAGE_SIZE;
 	}
 
 	return 0;
@@ -438,6 +508,7 @@ struct xe_vm *xe_vm_create(struct xe_device *xe)
 	if (!vm)
 		return ERR_PTR(-ENOMEM);
 
+	vm->xe = xe;
 	kref_init(&vm->refcount);
 	dma_resv_init(&vm->resv);
 
@@ -451,7 +522,7 @@ struct xe_vm *xe_vm_create(struct xe_device *xe)
 	}
 	xe_vm_insert_vma(vm, vma);
 
-	vm->pt_root = xe_pt_create(xe, vm, 3);
+	vm->pt_root = xe_pt_create(vm, 3);
 	if (IS_ERR(vm->pt_root)) {
 		err = PTR_ERR(vm->pt_root);
 		goto err_vma;
@@ -527,7 +598,7 @@ __xe_vm_trim_later_vmas(struct xe_vm *vm, struct xe_vma *vma,
 	}
 }
 
-static int __xe_vm_bind_vma(struct xe_vm *vm, struct xe_vma *vma)
+static int __xe_vm_insert_vma(struct xe_vm *vm, struct xe_vma *vma)
 {
 	struct xe_vma *prev, *next;
 
@@ -569,10 +640,16 @@ static int __xe_vm_bind(struct xe_vm *vm, struct xe_bo *bo, uint64_t bo_offset,
 
 	xe_vm_assert_held(vm);
 
+	err = xe_pt_populate(vm, vm->pt_root, addr, addr + range);
+	if (err)
+		return err;
+
 	vma = xe_vma_create(vm, bo, bo_offset, addr, addr + range);
-	err = __xe_vm_bind_vma(vm, vma);
+	err = __xe_vm_insert_vma(vm, vma);
 	if (err)
 		xe_vma_destroy(vma);
+
+	xe_pt_fill(vm->pt_root, bo, bo_offset, addr, addr + range);
 
 	return err;
 }
@@ -581,6 +658,7 @@ void __xe_vma_unbind(struct xe_vma *vma)
 {
 	xe_vm_assert_held(vma->vm);
 	xe_vma_make_empty(vma);
+	xe_pt_clear(vma->vm->pt_root, vma->start, vma->end, true);
 }
 
 static int xe_vm_bind(struct xe_vm *vm, struct xe_bo *bo, uint64_t offset,
@@ -595,9 +673,11 @@ static int xe_vm_bind(struct xe_vm *vm, struct xe_bo *bo, uint64_t offset,
 	if (range == 0)
 		return -EINVAL;
 
-	if (addr >= vm->size || range >= vm->size - addr)
+	if (range >= vm->size || addr >= vm->size - range)
 		return -EINVAL;
 
+	if (range > bo->size || offset > bo->size - range)
+		return -EINVAL;
 
 	xe_vm_lock(vm, NULL);
 	err = __xe_vm_bind(vm, bo, offset, range, addr);
