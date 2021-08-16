@@ -27,6 +27,7 @@ config DRM_XE
 	select CEC_CORE if CEC_NOTIFIER
 	select VMAP_PFN
 	select DRM_TTM
+	select DRM_TTM_HELPER
 	help
 	  Experimental driver for Intel Xe series GPUs
 
