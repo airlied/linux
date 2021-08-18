@@ -52,6 +52,6 @@ void xe_irq_uninstall(struct xe_device *xe)
 	xe->irq_enabled = false;
 
 	xe_irq_reset(xe);
-	
+
 	free_irq(irq, xe);
 }

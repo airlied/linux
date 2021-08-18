@@ -4,12 +4,13 @@
  * Copyright © 2021 Intel Corporation
  */
 
+#include "xe_vm.h"
+
 #include <drm/ttm/ttm_tt.h>
 #include <drm/xe_drm.h>
 #include <linux/mm.h>
 
 #include "xe_bo.h"
-#include "xe_vm.h"
 
 enum xe_cache_level {
 	XE_CACHE_NONE,

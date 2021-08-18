@@ -10,9 +10,12 @@
 #include <linux/kref.h>
 #include <linux/dma-resv.h>
 
-#include "xe_device.h"
+#include <drm/drm_device.h>
+#include <drm/drm_file.h>
 
 struct xe_bo;
+struct xe_device;
+struct xe_file;
 struct xe_pt;
 struct xe_vm;
 

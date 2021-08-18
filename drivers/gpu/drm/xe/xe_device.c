@@ -4,13 +4,14 @@
  * Copyright © 2021 Intel Corporation
  */
 
+#include "xe_device.h"
+
 #include <drm/drm_gem_ttm_helper.h>
 #include <drm/drm_aperture.h>
 #include <drm/drm_ioctl.h>
 #include <drm/xe_drm.h>
 
 #include "xe_bo.h"
-#include "xe_device.h"
 #include "xe_drv.h"
 #include "xe_engine.h"
 #include "xe_vm.h"

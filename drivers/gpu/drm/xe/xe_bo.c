@@ -4,13 +4,15 @@
  * Copyright © 2021 Intel Corporation
  */
 
+
+#include "xe_bo.h"
+
 #include <drm/drm_gem_ttm_helper.h>
 #include <drm/ttm/ttm_device.h>
 #include <drm/ttm/ttm_placement.h>
 #include <drm/ttm/ttm_tt.h>
 #include <drm/xe_drm.h>
 
-#include "xe_bo.h"
 #include "xe_device.h"
 
 static const struct ttm_place sys_placement_flags = {

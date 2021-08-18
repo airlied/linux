@@ -4,6 +4,8 @@
  * Copyright © 2021 Intel Corporation
  */
 
+#include "xe_pci.h"
+
 #include <linux/module.h>
 #include <linux/pci.h>
 #include <linux/vga_switcheroo.h>
@@ -14,7 +16,6 @@
 
 #include "xe_drv.h"
 #include "xe_device.h"
-#include "xe_pci.h"
 
 #include "i915_reg.h"
 

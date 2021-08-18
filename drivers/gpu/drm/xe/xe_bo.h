@@ -10,6 +10,7 @@
 #include <drm/ttm/ttm_bo_api.h>
 #include <drm/ttm/ttm_device.h>
 
+#include "xe_device.h"
 #include "xe_vm.h"
 
 struct xe_bo {

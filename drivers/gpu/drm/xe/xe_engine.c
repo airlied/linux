@@ -4,9 +4,12 @@
  * Copyright © 2021 Intel Corporation
  */
 
+#include "xe_engine.h"
+
 #include <drm/xe_drm.h>
 
-#include "xe_engine.h"
+#include "xe_device.h"
+#include "xe_vm.h"
 
 struct xe_engine *xe_engine_create(struct xe_device *xe, struct xe_vm *vm)
 {

@@ -9,8 +9,12 @@
 
 #include <linux/kref.h>
 
-#include "xe_device.h"
-#include "xe_vm.h"
+#include <drm/drm_device.h>
+#include <drm/drm_file.h>
+
+struct xe_device;
+struct xe_file;
+struct xe_vm;
 
 struct xe_engine {
 	struct kref refcount;
