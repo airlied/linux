@@ -19,11 +19,14 @@
 
 struct xe_device {
 	struct drm_device drm;
-	struct pci_dev *pdev;
 
 	struct ttm_device ttm;
 
 	bool irq_enabled;
+
+	struct {
+		void *regs;
+	} mmio;
 };
 
 struct xe_file {
@@ -46,6 +49,7 @@ static inline struct xe_device *pdev_to_xe_device(struct pci_dev *pdev)
 
 struct xe_device *xe_device_create(struct pci_dev *pdev,
 				   const struct pci_device_id *ent);
+int xe_device_probe(struct xe_device *xe);
 void xe_device_remove(struct xe_device *xe);
 void xe_device_shutdown(struct xe_device *xe);
 

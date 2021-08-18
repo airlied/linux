@@ -24,10 +24,12 @@ static irqreturn_t xe_irq_handler(int irq, void *arg)
 
 int xe_irq_install(struct xe_device *xe)
 {
-	int irq = xe->pdev->irq;
+	int irq = to_pci_dev(xe->drm.dev)->irq;
 	int err;
 
 	xe_irq_reset(xe);
+
+	printk(KERN_INFO "pdev->irq = %d", irq);
 
 	xe->irq_enabled = true;
 	err = request_irq(irq, xe_irq_handler,
@@ -44,7 +46,7 @@ int xe_irq_install(struct xe_device *xe)
 
 void xe_irq_uninstall(struct xe_device *xe)
 {
-	int irq = xe->pdev->irq;
+	int irq = to_pci_dev(xe->drm.dev)->irq;
 
 	if (!xe->irq_enabled)
 		return;

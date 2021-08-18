@@ -1333,6 +1333,7 @@ static void xe_pci_remove(struct pci_dev *pdev)
 static int xe_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 {
 	struct xe_device *xe;
+	int err;
 
 	/* Only bind to function 0 of the device. Early generations
 	 * used function 1 as a placeholder for multi-head. This causes
@@ -1353,7 +1354,18 @@ static int xe_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	if (IS_ERR(xe))
 		return PTR_ERR(xe);
 
+	err = pci_enable_device(pdev);
+	if (err) {
+		drm_dev_put(&xe->drm);
+		return err;
+	}
 	pci_set_drvdata(pdev, xe);
+
+	err = xe_device_probe(xe);
+	if (err) {
+		pci_disable_device(pdev);
+		return err;
+	}
 
 	return 0;
 }

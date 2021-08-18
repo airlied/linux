@@ -14,7 +14,10 @@
 #include "xe_bo.h"
 #include "xe_drv.h"
 #include "xe_engine.h"
+#include "xe_mmio.h"
 #include "xe_vm.h"
+
+#include "i915_reg.h"
 
 static int xe_file_open(struct drm_device *dev, struct drm_file *file)
 {
@@ -103,8 +106,8 @@ static const struct drm_driver driver = {
 	.patchlevel = DRIVER_PATCHLEVEL,
 };
 
-struct xe_device *
-xe_device_create(struct pci_dev *pdev, const struct pci_device_id *ent)
+struct xe_device *xe_device_create(struct pci_dev *pdev,
+				   const struct pci_device_id *ent)
 {
 	struct xe_device *xe;
 	int err;
@@ -117,35 +120,107 @@ xe_device_create(struct pci_dev *pdev, const struct pci_device_id *ent)
 	if (IS_ERR(xe))
 		return xe;
 
-	xe->pdev = pdev;
-
-	err = pci_enable_device(pdev);
-	if (err)
-		return ERR_PTR(err);
-
 	err = ttm_device_init(&xe->ttm, &xe_ttm_funcs, xe->drm.dev,
 			      xe->drm.anon_inode->i_mapping,
 			      xe->drm.vma_offset_manager, false, false);
-	if (WARN_ON(err)) {
-		drm_dev_put(&xe->drm);
-		return ERR_PTR(err);
-	}
+	if (WARN_ON(err))
+		goto err_put;
 
-	err = drm_dev_register(&xe->drm, 0);
+	return xe;
+
+err_put:
+	drm_dev_put(&xe->drm);
+	return ERR_PTR(err);
+}
+
+static int xe_set_dma_info(struct xe_device *xe)
+{
+	unsigned int mask_size = 39; /* TODO: Don't hard-code */
+	int err;
+
+	/*
+	 * We don't have a max segment size, so set it to the max so sg's
+	 * debugging layer doesn't complain
+	 */
+	dma_set_max_seg_size(xe->drm.dev, UINT_MAX);
+
+	err = dma_set_mask(xe->drm.dev, DMA_BIT_MASK(mask_size));
 	if (err)
-		return ERR_PTR(err);
+		goto mask_err;
+
+	err = dma_set_coherent_mask(xe->drm.dev, DMA_BIT_MASK(mask_size));
+	if (err)
+		goto mask_err;
+
+	return 0;
+
+mask_err:
+	drm_err(&xe->drm, "Can't set DMA mask/consistent mask (%d)\n", err);
+	return err;
+}
+
+
+#define CHV_PPAT_SNOOP			REG_BIT(6)
+#define GEN8_PPAT_AGE(x)		((x)<<4)
+#define GEN8_PPAT_LLCeLLC		(3<<2)
+#define GEN8_PPAT_LLCELLC		(2<<2)
+#define GEN8_PPAT_LLC			(1<<2)
+#define GEN8_PPAT_WB			(3<<0)
+#define GEN8_PPAT_WT			(2<<0)
+#define GEN8_PPAT_WC			(1<<0)
+#define GEN8_PPAT_UC			(0<<0)
+#define GEN8_PPAT_ELLC_OVERRIDE		(0<<2)
+#define GEN8_PPAT(i, x)			((u64)(x) << ((i) * 8))
+
+static void tgl_setup_private_ppat(struct xe_device *xe)
+{
+	/* TGL doesn't support LLC or AGE settings */
+	xe_mmio_write32(xe, GEN12_PAT_INDEX(0).reg, GEN8_PPAT_WB);
+	xe_mmio_write32(xe, GEN12_PAT_INDEX(1).reg, GEN8_PPAT_WC);
+	xe_mmio_write32(xe, GEN12_PAT_INDEX(2).reg, GEN8_PPAT_WT);
+	xe_mmio_write32(xe, GEN12_PAT_INDEX(3).reg, GEN8_PPAT_UC);
+	xe_mmio_write32(xe, GEN12_PAT_INDEX(4).reg, GEN8_PPAT_WB);
+	xe_mmio_write32(xe, GEN12_PAT_INDEX(5).reg, GEN8_PPAT_WB);
+	xe_mmio_write32(xe, GEN12_PAT_INDEX(6).reg, GEN8_PPAT_WB);
+	xe_mmio_write32(xe, GEN12_PAT_INDEX(7).reg, GEN8_PPAT_WB);
+}
+
+int xe_device_probe(struct xe_device *xe)
+{
+	int err;
+
+	err = xe_mmio_init(xe);
+	if (err)
+		return err;
+
+	err = xe_set_dma_info(xe);
+	if (err)
+		return err;
+
+	tgl_setup_private_ppat(xe);
 
 	err = xe_irq_install(xe);
 	if (err)
-		return ERR_PTR(err);
+		goto err_mmio;
 
-	return xe;
+	err = drm_dev_register(&xe->drm, 0);
+	if (err)
+		goto err_irq;
+
+	return 0;
+
+err_irq:
+	xe_irq_uninstall(xe);
+err_mmio:
+	xe_mmio_finish(xe);
+	return err;
 }
 
 void xe_device_remove(struct xe_device *xe)
 {
-	xe_irq_uninstall(xe);
 	drm_dev_unregister(&xe->drm);
+	xe_irq_uninstall(xe);
+	xe_mmio_finish(xe);
 	ttm_device_fini(&xe->ttm);
 }
 
