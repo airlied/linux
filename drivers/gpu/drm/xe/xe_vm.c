@@ -26,20 +26,30 @@ enum xe_cache_level {
 #define PPAT_CACHED			_PAGE_PAT /* WB LLCeLLC */
 #define PPAT_DISPLAY_ELLC		_PAGE_PCD /* WT eLLC */
 
-#define XE_PTES(pte_len)		((unsigned int)(PAGE_SIZE / (pte_len)))
-#define XE_PTE_MASK(pte_len)		(XE_PTES(pte_len) - 1)
 #define XE_PDES				512
 #define XE_PDE_MASK			(XE_PDES - 1)
 
-#define GEN12_PPGTT_PTE_LM	BIT_ULL(11)
+#define GEN8_PTE_SHIFT 12
+#define GEN8_PAGE_SIZE (1 << GEN8_PTE_SHIFT)
+#define GEN8_PTE_MASK (GEN8_PAGE_SIZE - 1)
+#define GEN8_PDE_SHIFT (GEN8_PTE_SHIFT - 3)
+#define GEN8_PDES (1 << GEN8_PDE_SHIFT)
+#define GEN8_PDE_MASK (GEN8_PDES - 1)
 
 #define GEN8_PDE_EMPTY 0
 #define GEN8_PTE_EMPTY 0
 
-static uint64_t gen8_pde_encode(const dma_addr_t addr,
+#define GEN12_PPGTT_PTE_LM	BIT_ULL(11)
+
+static uint64_t gen8_pde_encode(struct xe_bo *bo, uint64_t bo_offset,
 				const enum xe_cache_level level)
 {
-	uint64_t pde = addr | _PAGE_PRESENT | _PAGE_RW;
+	uint64_t pde = xe_bo_addr(bo, bo_offset, GEN8_PAGE_SIZE);
+
+	pde |= _PAGE_PRESENT | _PAGE_RW;
+
+	if (xe_bo_is_in_lmem(bo))
+		pde |= GEN12_PPGTT_PTE_LM;
 
 	if (level != XE_CACHE_NONE)
 		pde |= PPAT_CACHED_PDE;
@@ -49,16 +59,18 @@ static uint64_t gen8_pde_encode(const dma_addr_t addr,
 	return pde;
 }
 
-static uint64_t gen8_pte_encode(dma_addr_t addr,
+static uint64_t gen8_pte_encode(struct xe_bo *bo, uint64_t bo_offset,
 				enum xe_cache_level level,
 				uint32_t flags)
 {
-	uint64_t pte = addr | _PAGE_PRESENT | _PAGE_RW;
+	uint64_t pte = xe_bo_addr(bo, bo_offset, GEN8_PAGE_SIZE);
+
+	pte |= _PAGE_PRESENT | _PAGE_RW;
 
 	if (unlikely(flags & PTE_READ_ONLY))
 		pte &= ~_PAGE_RW;
 
-	if (flags & PTE_LM)
+	if (xe_bo_is_in_lmem(bo))
 		pte |= GEN12_PPGTT_PTE_LM;
 
 	switch (level) {
@@ -75,18 +87,6 @@ static uint64_t gen8_pte_encode(dma_addr_t addr,
 
 	return pte;
 }
-
-static dma_addr_t addr_for_bo(struct xe_bo *bo, uint64_t offset)
-{
-	return bo->ttm.ttm->dma_address[0];
-}
-
-#define GEN8_PTE_SHIFT 12
-#define GEN8_PAGE_SIZE (1 << GEN8_PTE_SHIFT)
-#define GEN8_PTE_MASK (GEN8_PAGE_SIZE - 1)
-#define GEN8_PDE_SHIFT (GEN8_PTE_SHIFT - 3)
-#define GEN8_PDES (1 << GEN8_PDE_SHIFT)
-#define GEN8_PDE_MASK (GEN8_PDES - 1)
 
 struct xe_pt {
 	struct xe_bo *bo;
@@ -296,8 +296,7 @@ static int __xe_pt_populate(struct xe_vm *vm, struct xe_pt *pt,
 			if (IS_ERR(entry))
 				return PTR_ERR(entry);
 
-			pde = gen8_pde_encode(addr_for_bo(entry->bo, 0),
-					      XE_CACHE_WB);
+			pde = gen8_pde_encode(entry->bo, 0, XE_CACHE_WB);
 			xe_pt_write(pt, i, pde);
 			pt_dir->entries[i] = entry;
 			pt->num_live--;
@@ -344,12 +343,8 @@ static int xe_pt_fill(struct xe_pt *pt, struct xe_bo *bo, uint64_t bo_offset,
 	uint32_t flags = 0;
 	XE_BUG_ON(end - start + bo_offset > bo->size);
 
-	if (bo->ttm.resource->mem_type == TTM_PL_VRAM)
-		flags |= PTE_LM;
-
 	while (start < end) {
-		pte = gen8_pte_encode(addr_for_bo(bo, bo_offset),
-				      XE_CACHE_WB, flags);
+		pte = gen8_pte_encode(bo, bo_offset, XE_CACHE_WB, flags);
 		xe_pt_set_pte(pt, start, pte);
 
 		start += GEN8_PAGE_SIZE;

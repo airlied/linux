@@ -304,6 +304,21 @@ bool xe_bo_is_xe_bo(struct ttm_buffer_object *bo)
 	return false;
 }
 
+dma_addr_t xe_bo_addr(struct xe_bo *bo, uint64_t offset, size_t page_size)
+{
+	uint64_t page;
+
+	xe_bo_assert_held(bo);
+
+	XE_BUG_ON(page_size > PAGE_SIZE);
+	XE_BUG_ON(!bo->ttm.ttm && !bo->ttm.ttm->dma_address);
+
+	page = offset >> PAGE_SHIFT;
+	offset &= (PAGE_SIZE - 1);
+
+	return bo->ttm.ttm->dma_address[page] + offset;
+}
+
 #define ALL_DRM_XE_GEM_CREATE_FLAGS (\
 	DRM_XE_GEM_CREATE_SYSTEM)
 
