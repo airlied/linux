@@ -340,12 +340,15 @@ static int xe_pt_fill(struct xe_pt *pt, struct xe_bo *bo, uint64_t bo_offset,
 		      uint64_t start, uint64_t end)
 {
 	uint64_t pte;
-
+	uint32_t flags = 0;
 	XE_BUG_ON(end - start + bo_offset > bo->size);
+
+	if (bo->ttm.resource->mem_type == TTM_PL_VRAM)
+		flags |= PTE_LM;
 
 	while (start < end) {
 		pte = gen8_pte_encode(addr_for_bo(bo, bo_offset),
-				      XE_CACHE_WB, 0);
+				      XE_CACHE_WB, flags);
 		xe_pt_set_pte(pt, start, pte);
 
 		start += GEN8_PAGE_SIZE;
