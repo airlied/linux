@@ -290,7 +290,18 @@ int xe_bo_populate(struct xe_bo *bo)
 		.interruptible = false,
 		.no_wait_gpu = false
 	};
+
+	xe_bo_assert_held(bo);
+
 	return ttm_tt_populate(bo->ttm.bdev, bo->ttm.ttm, &ctx);
+}
+
+bool xe_bo_is_xe_bo(struct ttm_buffer_object *bo)
+{
+	if (bo->destroy == &xe_ttm_bo_destroy)
+		return true;
+
+	return false;
 }
 
 #define ALL_DRM_XE_GEM_CREATE_FLAGS (\
@@ -367,12 +378,4 @@ int xe_gem_mmap_offset_ioctl(struct drm_device *dev, void *data,
 
 	drm_gem_object_put(gem_obj);
 	return 0;
-}
-
-bool xe_bo_is_xe_bo(struct ttm_buffer_object *bo)
-{
-	if (bo->destroy == &xe_ttm_bo_destroy)
-		return true;
-
-	return false;
 }

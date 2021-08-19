@@ -27,8 +27,8 @@ struct xe_bo {
 
 	struct list_head vmas;
 
-	struct ttm_place		placements[XE_BO_MAX_PLACEMENTS];
-	struct ttm_placement		placement;
+	struct ttm_place placements[XE_BO_MAX_PLACEMENTS];
+	struct ttm_placement placement;
 };
 
 #define XE_BO_CREATE_USER_BIT BIT(1)
