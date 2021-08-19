@@ -193,6 +193,40 @@ static void tgl_setup_private_ppat(struct xe_device *xe)
 	xe_mmio_write32(xe, GEN12_PAT_INDEX(7).reg, GEN8_PPAT_WB);
 }
 
+static int xe_device_ttm_mgr_init(struct xe_device *xe)
+{
+	int err;
+	struct sysinfo si;
+	uint64_t gtt_size;
+
+	err = xe_ttm_vram_mgr_init(xe);
+	if (err)
+		return err;
+
+#ifdef CONFIG_64BIT
+	xe->vram.mapping = ioremap_wc(xe->vram.io_start,
+				      xe->vram.size);
+#endif
+	si_meminfo(&si);
+	gtt_size = min(max((XE_DEFAULT_GTT_SIZE_MB << 20),
+			   xe->vram.size),
+		       ((uint64_t)si.totalram * si.mem_unit * 3/4));
+	err = xe_ttm_gtt_mgr_init(xe, gtt_size);
+	if (err)
+		goto err_vram_mgr;
+
+	return 0;
+err_vram_mgr:
+	xe_ttm_vram_mgr_fini(xe);
+	return err;
+}
+
+static void xe_device_ttm_mgr_fini(struct xe_device *xe)
+{
+	xe_ttm_vram_mgr_fini(xe);
+	xe_ttm_gtt_mgr_fini(xe);
+}
+
 int xe_device_probe(struct xe_device *xe)
 {
 	int err;
@@ -207,18 +241,13 @@ int xe_device_probe(struct xe_device *xe)
 
 	tgl_setup_private_ppat(xe);
 
-	err = xe_ttm_vram_mgr_init(xe);
+	err = xe_device_ttm_mgr_init(xe);
 	if (err)
 		goto err_mmio;
 
-#ifdef CONFIG_64BIT
-	xe->vram.mapping = ioremap_wc(xe->vram.io_start,
-				      xe->vram.size);
-#endif
-
 	err = xe_irq_install(xe);
 	if (err)
-		goto err_vram_mgr;
+		goto err_ttm_mgr;
 
 	err = drm_dev_register(&xe->drm, 0);
 	if (err)
@@ -228,8 +257,8 @@ int xe_device_probe(struct xe_device *xe)
 
 err_irq:
 	xe_irq_uninstall(xe);
-err_vram_mgr:
-	xe_ttm_vram_mgr_fini(xe);
+err_ttm_mgr:
+	xe_device_ttm_mgr_fini(xe);
 err_mmio:
 	xe_mmio_finish(xe);
 
@@ -240,7 +269,7 @@ void xe_device_remove(struct xe_device *xe)
 {
 	if (xe->vram.mapping)
 		iounmap(xe->vram.mapping);
-	xe_ttm_vram_mgr_fini(xe);
+	xe_device_ttm_mgr_fini(xe);
 	drm_dev_unregister(&xe->drm);
 	xe_irq_uninstall(xe);
 	xe_mmio_finish(xe);

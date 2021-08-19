@@ -13,6 +13,8 @@
 #include "xe_device.h"
 #include "xe_vm.h"
 
+#define XE_DEFAULT_GTT_SIZE_MB          3072ULL /* 3GB by default */
+
 struct xe_bo {
 	struct ttm_buffer_object ttm;
 

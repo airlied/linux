@@ -18,6 +18,8 @@
 #define XE_WARN_ON WARN_ON
 #define XE_BUG_ON BUG_ON
 
+#define XE_BO_INVALID_OFFSET	LONG_MAX
+
 struct xe_ttm_vram_mgr {
 	struct ttm_resource_manager manager;
 	struct drm_mm mm;
@@ -25,11 +27,17 @@ struct xe_ttm_vram_mgr {
 	atomic64_t usage;
 };
 
+struct xe_ttm_gtt_mgr {
+	struct ttm_resource_manager manager;
+	atomic64_t used;
+};
+
 struct xe_device {
 	struct drm_device drm;
 
 	struct ttm_device ttm;
 	struct xe_ttm_vram_mgr vram_mgr;
+	struct xe_ttm_gtt_mgr gtt_mgr;
 
 	bool irq_enabled;
 
@@ -84,4 +92,7 @@ void xe_irq_uninstall(struct xe_device *xe);
 /* TTM memory managers */
 int xe_ttm_vram_mgr_init(struct xe_device *xe);
 void xe_ttm_vram_mgr_fini(struct xe_device *xe);
+
+int xe_ttm_gtt_mgr_init(struct xe_device *xe, uint64_t gtt_size);
+void xe_ttm_gtt_mgr_fini(struct xe_device *xe);
 #endif /* _XE_DEVICE_H_ */
