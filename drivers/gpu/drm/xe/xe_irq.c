@@ -94,8 +94,6 @@ int xe_irq_install(struct xe_device *xe)
 
 	xe_irq_reset(xe);
 
-	printk(KERN_INFO "pdev->irq = %d", irq);
-
 	xe->irq_enabled = true;
 	err = request_irq(irq, xe_irq_handler,
 			  IRQF_SHARED, DRIVER_NAME, xe);

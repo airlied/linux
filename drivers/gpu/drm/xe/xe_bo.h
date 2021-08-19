@@ -7,6 +7,7 @@
 #ifndef _XE_BO_H_
 #define _XE_BO_H_
 
+#include <drm/drm_mm.h>
 #include <drm/ttm/ttm_bo_api.h>
 #include <drm/ttm/ttm_device.h>
 #include <drm/ttm/ttm_placement.h>
@@ -29,6 +30,8 @@ struct xe_bo {
 
 	struct ttm_place placements[XE_BO_MAX_PLACEMENTS];
 	struct ttm_placement placement;
+
+	struct drm_mm_node ggtt_node;
 };
 
 #define XE_BO_CREATE_USER_BIT BIT(1)
