@@ -149,10 +149,38 @@ static int xe_ttm_io_mem_reserve(struct ttm_device *bdev,
 	return 0;
 }
 
+static int xe_bo_move(struct ttm_buffer_object *bo, bool evict,
+		      struct ttm_operation_ctx *ctx,
+		      struct ttm_resource *new_mem,
+		      struct ttm_place *hop)
+{
+	struct ttm_resource *old_mem = bo->resource;
+	int r;
+
+	if (old_mem->mem_type == TTM_PL_SYSTEM && bo->ttm == NULL) {
+		ttm_bo_move_null(bo, new_mem);
+		goto out;
+	}
+	if (old_mem->mem_type == TTM_PL_SYSTEM &&
+	    (new_mem->mem_type == TTM_PL_TT)) {
+		ttm_bo_move_null(bo, new_mem);
+		goto out;
+	}
+
+	r = ttm_bo_move_memcpy(bo, ctx, new_mem);
+	if (r)
+		return r;
+
+out:
+	return 0;
+
+}
+
 struct ttm_device_funcs xe_ttm_funcs = {
 	.ttm_tt_create = xe_ttm_tt_create,
 	.ttm_tt_destroy = xe_ttm_tt_destroy,
 	.evict_flags = xe_evict_flags,
+	.move = xe_bo_move,
 	.io_mem_reserve = xe_ttm_io_mem_reserve,
 };
 
