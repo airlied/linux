@@ -35,10 +35,13 @@ subdir-ccflags-y += -I$(srctree)/$(src)
 xe-y += xe_bo.o \
 	xe_device.o \
 	xe_engine.o \
+	xe_execlist.o \
+	xe_hw_engine.o \
 	xe_irq.o \
 	xe_mmio.o \
 	xe_module.o \
 	xe_pci.o \
+	xe_sched_job.o \
 	xe_ttm_gtt_mgr.o \
 	xe_ttm_vram_mgr.o \
 	xe_vm.o

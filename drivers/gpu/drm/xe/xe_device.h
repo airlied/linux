@@ -14,6 +14,8 @@
 #include <drm/drm_mm.h>
 #include <drm/ttm/ttm_device.h>
 
+#include "xe_hw_engine.h"
+
 #define XE_EXTRA_DEBUG 1
 #define XE_WARN_ON WARN_ON
 #define XE_BUG_ON BUG_ON
@@ -50,6 +52,8 @@ struct xe_device {
 		resource_size_t size;
 		void *__iomem mapping;
 	} vram;
+
+	struct xe_hw_engine hw_engines[XE_NUM_HW_ENGINES];
 };
 
 struct xe_file {

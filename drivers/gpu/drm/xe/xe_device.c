@@ -229,7 +229,7 @@ static void xe_device_ttm_mgr_fini(struct xe_device *xe)
 
 int xe_device_probe(struct xe_device *xe)
 {
-	int err;
+	int err, i;
 
 	err = xe_mmio_init(xe);
 	if (err)
@@ -245,9 +245,15 @@ int xe_device_probe(struct xe_device *xe)
 	if (err)
 		goto err_mmio;
 
+	for (i = 0; i < ARRAY_SIZE(xe->hw_engines); i++) {
+		err = xe_hw_engine_init(xe, &xe->hw_engines[i], i);
+		if (err)
+			goto err_hw_engines;
+	}
+
 	err = xe_irq_install(xe);
 	if (err)
-		goto err_ttm_mgr;
+		goto err_hw_engines;
 
 	err = drm_dev_register(&xe->drm, 0);
 	if (err)
@@ -257,7 +263,11 @@ int xe_device_probe(struct xe_device *xe)
 
 err_irq:
 	xe_irq_uninstall(xe);
-err_ttm_mgr:
+err_hw_engines:
+	for (i = 0; i < ARRAY_SIZE(xe->hw_engines); i++) {
+		if (xe->hw_engines[i].name)
+			xe_hw_engine_finish(&xe->hw_engines[i]);
+	}
 	xe_device_ttm_mgr_fini(xe);
 err_mmio:
 	xe_mmio_finish(xe);
@@ -267,11 +277,17 @@ err_mmio:
 
 void xe_device_remove(struct xe_device *xe)
 {
+	int i;
+
 	if (xe->vram.mapping)
 		iounmap(xe->vram.mapping);
-	xe_device_ttm_mgr_fini(xe);
 	drm_dev_unregister(&xe->drm);
 	xe_irq_uninstall(xe);
+	for (i = 0; i < ARRAY_SIZE(xe->hw_engines); i++) {
+		if (xe->hw_engines[i].name)
+			xe_hw_engine_finish(&xe->hw_engines[i]);
+	}
+	xe_device_ttm_mgr_fini(xe);
 	xe_mmio_finish(xe);
 	ttm_device_fini(&xe->ttm);
 }

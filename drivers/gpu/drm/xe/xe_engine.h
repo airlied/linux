@@ -11,8 +11,11 @@
 
 #include <drm/drm_device.h>
 #include <drm/drm_file.h>
+#include <drm/gpu_scheduler.h>
 
 struct xe_device;
+struct xe_hw_engine;
+struct xe_execlist;
 struct xe_file;
 struct xe_vm;
 
@@ -20,9 +23,14 @@ struct xe_engine {
 	struct kref refcount;
 
 	struct xe_vm *vm;
+
+	struct xe_execlist *execlist;
+
+	struct drm_sched_entity *entity;
 };
 
-struct xe_engine *xe_engine_create(struct xe_device *xe, struct xe_vm *vm);
+struct xe_engine *xe_engine_create(struct xe_device *xe, struct xe_vm *vm,
+				   struct xe_hw_engine *hw_engine);
 void xe_engine_free(struct kref *ref);
 
 struct xe_engine *xe_engine_lookup(struct xe_file *xef, u32 id);
