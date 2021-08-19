@@ -77,6 +77,13 @@ static const struct file_operations xe_driver_fops = {
 	.llseek = noop_llseek,
 };
 
+static void xe_driver_release(struct drm_device *dev)
+{
+	struct xe_device *xe = to_xe_device(dev);
+
+	pci_set_drvdata(to_pci_dev(xe->drm.dev), NULL);
+}
+
 static const struct drm_driver driver = {
 	/* Don't use MTRRs here; the Xserver or userspace app should
 	 * deal with them for Intel hardware.
@@ -94,6 +101,7 @@ static const struct drm_driver driver = {
 //
 //	.dumb_create = i915_gem_dumb_create,
 	.dumb_map_offset = drm_gem_ttm_dumb_map_offset,
+	.release = &xe_driver_release,
 
 	.ioctls = xe_ioctls,
 	.num_ioctls = ARRAY_SIZE(xe_ioctls),
