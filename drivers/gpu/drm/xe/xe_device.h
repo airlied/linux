@@ -62,6 +62,11 @@ static inline struct xe_device *pdev_to_xe_device(struct pci_dev *pdev)
 	return pci_get_drvdata(pdev);
 }
 
+static inline struct xe_device *ttm_to_xe_device(struct ttm_device *ttm)
+{
+	return container_of(ttm, struct xe_device, ttm);
+}
+
 struct xe_device *xe_device_create(struct pci_dev *pdev,
 				   const struct pci_device_id *ent);
 int xe_device_probe(struct xe_device *xe);

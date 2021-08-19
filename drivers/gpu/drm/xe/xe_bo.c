@@ -64,9 +64,35 @@ static void xe_ttm_tt_destroy(struct ttm_device *ttm_dev, struct ttm_tt *tt)
 	kfree(tt);
 }
 
+static int xe_ttm_io_mem_reserve(struct ttm_device *bdev,
+				 struct ttm_resource *mem)
+{
+	struct xe_device *xe = ttm_to_xe_device(bdev);
+
+	switch (mem->mem_type) {
+	case TTM_PL_SYSTEM:
+		return 0;
+	case TTM_PL_VRAM:
+		mem->bus.offset = mem->start << PAGE_SHIFT;
+
+		if (xe->vram.mapping &&
+		    mem->placement & TTM_PL_FLAG_CONTIGUOUS)
+			mem->bus.addr = (u8 *)xe->vram.mapping +
+				mem->bus.offset;
+
+		mem->bus.offset += xe->vram.io_start;
+		mem->bus.is_iomem = true;
+		break;
+	default:
+		return -EINVAL;
+	}
+	return 0;
+}
+
 struct ttm_device_funcs xe_ttm_funcs = {
 	.ttm_tt_create = xe_ttm_tt_create,
 	.ttm_tt_destroy = xe_ttm_tt_destroy,
+	.io_mem_reserve = xe_ttm_io_mem_reserve,
 };
 
 static void xe_ttm_bo_destroy(struct ttm_buffer_object *ttm_bo)
