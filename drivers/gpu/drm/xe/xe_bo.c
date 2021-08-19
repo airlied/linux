@@ -29,6 +29,74 @@ static struct ttm_placement sys_placement = {
 	.busy_placement = &sys_placement_flags,
 };
 
+static void xe_bo_placement(struct xe_bo *bo,
+			    bool system, bool tt, bool vram)
+{
+	struct ttm_placement *placement = &bo->placement;
+	struct ttm_place *places = bo->placements;
+	u32 c = 0;
+	if (vram) {
+		places[c].fpfn = 0;
+		places[c].lpfn = 0;
+		places[c].mem_type = TTM_PL_VRAM;
+		places[c].flags = 0;
+
+		/* contigious TODO */
+		c++;
+	}
+
+	if (tt) {
+		places[c].fpfn = 0;
+		places[c].lpfn = 0;
+		places[c].mem_type = TTM_PL_TT;
+		places[c].flags = 0;
+		c++;
+	}
+
+	if (!c || system) {
+		places[c].fpfn = 0;
+		places[c].lpfn = 0;
+		places[c].mem_type = TTM_PL_SYSTEM;
+		places[c].flags = 0;
+		c++;
+	}
+
+	placement->num_placement = c;
+	placement->placement = places;
+
+	placement->num_busy_placement = c;
+	placement->busy_placement = places;
+}
+
+static void xe_evict_flags(struct ttm_buffer_object *tbo,
+			   struct ttm_placement *placement)
+{
+	struct xe_bo *bo;
+
+	/* Don't handle scatter gather BOs */
+	if (tbo->type == ttm_bo_type_sg) {
+		placement->num_placement = 0;
+		placement->num_busy_placement = 0;
+		return;
+	}
+
+	if (!xe_bo_is_xe_bo(tbo)) {
+		*placement = sys_placement;
+		return;
+	}
+
+	bo = ttm_to_xe_bo(tbo);
+	switch (tbo->resource->mem_type) {
+	case TTM_PL_VRAM:
+	case TTM_PL_TT:
+	default:
+		/* for now kick out to system */
+		xe_bo_placement(bo, true, false, false);
+		break;
+	}
+	*placement = bo->placement;
+}
+
 struct xe_ttm_tt {
 	struct ttm_tt ttm;
 };
@@ -92,6 +160,7 @@ static int xe_ttm_io_mem_reserve(struct ttm_device *bdev,
 struct ttm_device_funcs xe_ttm_funcs = {
 	.ttm_tt_create = xe_ttm_tt_create,
 	.ttm_tt_destroy = xe_ttm_tt_destroy,
+	.evict_flags = xe_evict_flags,
 	.io_mem_reserve = xe_ttm_io_mem_reserve,
 };
 
@@ -153,6 +222,7 @@ struct xe_bo *xe_bo_create(struct xe_device *xe, struct xe_vm *vm,
 		.no_wait_gpu = false,
 	};
 	int err;
+	bool system;
 
 	bo = kzalloc(sizeof(*bo), GFP_KERNEL);
 	if (!bo)
@@ -167,8 +237,10 @@ struct xe_bo *xe_bo_create(struct xe_device *xe, struct xe_vm *vm,
 	if (vm)
 		xe_vm_assert_held(vm);
 
-	err = ttm_bo_init_reserved(&xe->ttm, &bo->ttm, size, ttm_bo_type_device,
-				   &sys_placement, SZ_64K >> PAGE_SHIFT,
+	system = flags & XE_BO_CREATE_SYSTEM_BIT;
+	xe_bo_placement(bo, system, system, !system);
+	err = ttm_bo_init_reserved(&xe->ttm, &bo->ttm, size, type,
+				   &bo->placement, SZ_64K >> PAGE_SHIFT,
 				   &ctx, NULL, vm ? &vm->resv : NULL,
 				   xe_ttm_bo_destroy);
 	if (err)
@@ -186,10 +258,10 @@ struct xe_bo *xe_bo_create(struct xe_device *xe, struct xe_vm *vm,
 }
 
 static struct xe_bo *xe_bo_create_user(struct xe_device *xe, struct xe_vm *vm,
-				       size_t size)
+				       size_t size, bool system)
 {
 	return xe_bo_create(xe, vm, size, ttm_bo_type_device,
-			    XE_BO_CREATE_USER_BIT);
+			    XE_BO_CREATE_USER_BIT | (system ? XE_BO_CREATE_SYSTEM_BIT : 0));
 }
 
 int xe_bo_populate(struct xe_bo *bo)
@@ -234,7 +306,8 @@ int xe_gem_create_ioctl(struct drm_device *dev, void *data,
 		xe_vm_lock(vm, NULL);
 	}
 
-	bo = xe_bo_create_user(xe, vm, args->size);
+	bo = xe_bo_create_user(xe, vm, args->size,
+			       args->flags & DRM_XE_GEM_CREATE_SYSTEM);
 
 	if (vm) {
 		xe_vm_unlock(vm);
@@ -274,4 +347,12 @@ int xe_gem_mmap_offset_ioctl(struct drm_device *dev, void *data,
 
 	drm_gem_object_put(gem_obj);
 	return 0;
+}
+
+bool xe_bo_is_xe_bo(struct ttm_buffer_object *bo)
+{
+	if (bo->destroy == &xe_ttm_bo_destroy)
+		return true;
+
+	return false;
 }

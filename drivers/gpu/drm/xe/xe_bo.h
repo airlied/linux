@@ -9,11 +9,12 @@
 
 #include <drm/ttm/ttm_bo_api.h>
 #include <drm/ttm/ttm_device.h>
-
+#include <drm/ttm/ttm_placement.h>
 #include "xe_device.h"
 #include "xe_vm.h"
 
 #define XE_DEFAULT_GTT_SIZE_MB          3072ULL /* 3GB by default */
+#define XE_BO_MAX_PLACEMENTS	3
 
 struct xe_bo {
 	struct ttm_buffer_object ttm;
@@ -25,9 +26,13 @@ struct xe_bo {
 	struct xe_vm *vm;
 
 	struct list_head vmas;
+
+	struct ttm_place		placements[XE_BO_MAX_PLACEMENTS];
+	struct ttm_placement		placement;
 };
 
 #define XE_BO_CREATE_USER_BIT BIT(1)
+#define XE_BO_CREATE_SYSTEM_BIT BIT(2)
 
 struct xe_bo *xe_bo_create(struct xe_device *xe, struct xe_vm *vm, size_t size,
 			   enum ttm_bo_type type, uint32_t flags);
@@ -86,7 +91,7 @@ static inline void xe_bo_or_vm_unlock(struct xe_bo *bo)
 }
 
 int xe_bo_populate(struct xe_bo *bo);
-
+bool xe_bo_is_xe_bo(struct ttm_buffer_object *bo);
 extern struct ttm_device_funcs xe_ttm_funcs;
 
 int xe_gem_create_ioctl(struct drm_device *dev, void *data,
