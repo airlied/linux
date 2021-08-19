@@ -208,6 +208,9 @@ static void xe_ttm_bo_destroy(struct ttm_buffer_object *ttm_bo)
 		}
 	}
 
+	if (bo->ggtt_node.size)
+		xe_ggtt_remove_bo(&xe_bo_device(bo)->ggtt, bo);
+
 	if (bo->vm && (bo->flags & XE_BO_CREATE_USER_BIT))
 		xe_vm_put(bo->vm);
 

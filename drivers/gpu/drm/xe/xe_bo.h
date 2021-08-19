@@ -50,6 +50,11 @@ static inline struct xe_bo *gem_to_xe_bo(const struct drm_gem_object *obj)
 	return container_of(obj, struct xe_bo, ttm.base);
 }
 
+static inline struct xe_device *xe_bo_device(struct xe_bo *bo)
+{
+	return ttm_to_xe_device(bo->ttm.bdev);
+}
+
 static inline struct xe_bo *xe_bo_get(struct xe_bo *bo)
 {
 	ttm_bo_get(&bo->ttm);

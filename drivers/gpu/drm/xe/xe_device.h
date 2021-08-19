@@ -14,6 +14,7 @@
 #include <drm/drm_mm.h>
 #include <drm/ttm/ttm_device.h>
 
+#include "xe_ggtt.h"
 #include "xe_hw_engine.h"
 
 #define XE_EXTRA_DEBUG 1
@@ -52,6 +53,8 @@ struct xe_device {
 		resource_size_t size;
 		void *__iomem mapping;
 	} vram;
+
+	struct xe_ggtt ggtt;
 
 	struct xe_hw_engine hw_engines[XE_NUM_HW_ENGINES];
 };

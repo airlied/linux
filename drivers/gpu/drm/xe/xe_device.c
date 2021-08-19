@@ -245,6 +245,10 @@ int xe_device_probe(struct xe_device *xe)
 	if (err)
 		goto err_mmio;
 
+	err = xe_ggtt_init(xe, &xe->ggtt);
+	if (err)
+		goto err_ttm_mgr;
+
 	for (i = 0; i < ARRAY_SIZE(xe->hw_engines); i++) {
 		err = xe_hw_engine_init(xe, &xe->hw_engines[i], i);
 		if (err)
@@ -268,6 +272,8 @@ err_hw_engines:
 		if (xe->hw_engines[i].name)
 			xe_hw_engine_finish(&xe->hw_engines[i]);
 	}
+	xe_ggtt_finish(&xe->ggtt);
+err_ttm_mgr:
 	xe_device_ttm_mgr_fini(xe);
 err_mmio:
 	xe_mmio_finish(xe);
@@ -287,6 +293,7 @@ void xe_device_remove(struct xe_device *xe)
 		if (xe->hw_engines[i].name)
 			xe_hw_engine_finish(&xe->hw_engines[i]);
 	}
+	xe_ggtt_finish(&xe->ggtt);
 	xe_device_ttm_mgr_fini(xe);
 	xe_mmio_finish(xe);
 	ttm_device_fini(&xe->ttm);
