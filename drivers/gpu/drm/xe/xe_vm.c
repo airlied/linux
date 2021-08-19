@@ -143,7 +143,8 @@ struct xe_pt *xe_pt_create(struct xe_vm *vm, unsigned int level)
 	if (!pt)
 		return NULL;
 
-	bo = xe_bo_create(vm->xe, vm, SZ_4K, ttm_bo_type_kernel, 0);
+	bo = xe_bo_create(vm->xe, vm, SZ_4K, ttm_bo_type_kernel,
+			  XE_BO_CREATE_SYSTEM_BIT /* TODO: Should be LMEM */);
 	if (IS_ERR(bo)) {
 		err = PTR_ERR(bo);
 		goto err_kfree;
