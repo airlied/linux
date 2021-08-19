@@ -181,6 +181,8 @@ int xe_ttm_vram_mgr_init(struct xe_device *xe)
 	struct xe_ttm_vram_mgr *mgr = &xe->vram_mgr;
 	struct ttm_resource_manager *man = &mgr->manager;
 
+	man->func = &xe_ttm_vram_mgr_func;
+
 	ttm_resource_manager_init(man, xe->vram.size >> PAGE_SHIFT);
 
 	drm_mm_init(&mgr->mm, 0, man->size);
