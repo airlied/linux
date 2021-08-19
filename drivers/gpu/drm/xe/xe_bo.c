@@ -32,40 +32,32 @@ static struct ttm_placement sys_placement = {
 static void xe_bo_placement(struct xe_bo *bo,
 			    bool system, bool tt, bool vram)
 {
-	struct ttm_placement *placement = &bo->placement;
 	struct ttm_place *places = bo->placements;
 	u32 c = 0;
 	if (vram) {
-		places[c].fpfn = 0;
-		places[c].lpfn = 0;
-		places[c].mem_type = TTM_PL_VRAM;
-		places[c].flags = 0;
-
-		/* contigious TODO */
-		c++;
+		places[c++] = (struct ttm_place) {
+			.mem_type = TTM_PL_VRAM,
+		};
 	}
 
 	if (tt) {
-		places[c].fpfn = 0;
-		places[c].lpfn = 0;
-		places[c].mem_type = TTM_PL_TT;
-		places[c].flags = 0;
-		c++;
+		places[c++] = (struct ttm_place) {
+			.mem_type = TTM_PL_TT,
+		};
 	}
 
 	if (!c || system) {
-		places[c].fpfn = 0;
-		places[c].lpfn = 0;
-		places[c].mem_type = TTM_PL_SYSTEM;
-		places[c].flags = 0;
-		c++;
+		places[c++] = (struct ttm_place) {
+			.mem_type = TTM_PL_SYSTEM,
+		};
 	}
 
-	placement->num_placement = c;
-	placement->placement = places;
-
-	placement->num_busy_placement = c;
-	placement->busy_placement = places;
+	bo->placement = (struct ttm_placement) {
+		.num_placement = c,
+		.placement = places,
+		.num_busy_placement = c,
+		.busy_placement = places,
+	};
 }
 
 static void xe_evict_flags(struct ttm_buffer_object *tbo,
