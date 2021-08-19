@@ -211,6 +211,11 @@ int xe_device_probe(struct xe_device *xe)
 	if (err)
 		goto err_mmio;
 
+#ifdef CONFIG_64BIT
+	xe->vram.mapping = ioremap_wc(xe->vram.io_start,
+				      xe->vram.size);
+#endif
+
 	err = xe_irq_install(xe);
 	if (err)
 		goto err_vram_mgr;
@@ -233,6 +238,8 @@ err_mmio:
 
 void xe_device_remove(struct xe_device *xe)
 {
+	if (xe->vram.mapping)
+		iounmap(xe->vram.mapping);
 	xe_ttm_vram_mgr_fini(xe);
 	drm_dev_unregister(&xe->drm);
 	xe_irq_uninstall(xe);

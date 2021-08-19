@@ -40,6 +40,7 @@ struct xe_device {
 	struct {
 		resource_size_t io_start;
 		resource_size_t size;
+		void *__iomem mapping;
 	} vram;
 };
 
