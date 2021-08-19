@@ -36,6 +36,17 @@ mask_err:
 	return err;
 }
 
+static void xe_mmio_probe_vram(struct xe_device *xe)
+{
+	if (!IS_DGFX(xe))
+		return;
+	
+	xe->vram.size = xe_mmio_read64(xe, GEN12_GSMBASE.reg);
+	xe->vram.io_start = pci_resource_start(to_pci_dev(xe->drm.dev), 2);
+
+	drm_info(&xe->drm, "VRAM: %pa\n", &xe->vram.size);
+}
+
 int xe_mmio_init(struct xe_device *xe)
 {
 	const int mmio_bar = 0;
@@ -63,6 +74,7 @@ int xe_mmio_init(struct xe_device *xe)
 	if (err)
 		return err;
 
+	xe_mmio_probe_vram(xe);
 	return 0;
 }
 

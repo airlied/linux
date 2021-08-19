@@ -27,6 +27,11 @@ struct xe_device {
 	struct {
 		void *regs;
 	} mmio;
+
+	struct {
+		resource_size_t io_start;
+		resource_size_t size;
+	} vram;
 };
 
 struct xe_file {
