@@ -11,16 +11,25 @@
 
 #include <drm/drm_device.h>
 #include <drm/drm_file.h>
+#include <drm/drm_mm.h>
 #include <drm/ttm/ttm_device.h>
 
 #define XE_EXTRA_DEBUG 1
 #define XE_WARN_ON WARN_ON
 #define XE_BUG_ON BUG_ON
 
+struct xe_ttm_vram_mgr {
+	struct ttm_resource_manager manager;
+	struct drm_mm mm;
+	spinlock_t lock;
+	atomic64_t usage;
+};
+
 struct xe_device {
 	struct drm_device drm;
 
 	struct ttm_device ttm;
+	struct xe_ttm_vram_mgr vram_mgr;
 
 	bool irq_enabled;
 
@@ -66,4 +75,7 @@ static inline struct xe_file *to_xe_file(const struct drm_file *file)
 int xe_irq_install(struct xe_device *xe);
 void xe_irq_uninstall(struct xe_device *xe);
 
+/* TTM memory managers */
+int xe_ttm_vram_mgr_init(struct xe_device *xe);
+void xe_ttm_vram_mgr_fini(struct xe_device *xe);
 #endif /* _XE_DEVICE_H_ */

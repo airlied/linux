@@ -207,9 +207,13 @@ int xe_device_probe(struct xe_device *xe)
 
 	tgl_setup_private_ppat(xe);
 
-	err = xe_irq_install(xe);
+	err = xe_ttm_vram_mgr_init(xe);
 	if (err)
 		goto err_mmio;
+
+	err = xe_irq_install(xe);
+	if (err)
+		goto err_vram_mgr;
 
 	err = drm_dev_register(&xe->drm, 0);
 	if (err)
@@ -219,13 +223,17 @@ int xe_device_probe(struct xe_device *xe)
 
 err_irq:
 	xe_irq_uninstall(xe);
+err_vram_mgr:
+	xe_ttm_vram_mgr_fini(xe);
 err_mmio:
 	xe_mmio_finish(xe);
+
 	return err;
 }
 
 void xe_device_remove(struct xe_device *xe)
 {
+	xe_ttm_vram_mgr_fini(xe);
 	drm_dev_unregister(&xe->drm);
 	xe_irq_uninstall(xe);
 	xe_mmio_finish(xe);

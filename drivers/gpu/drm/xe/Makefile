@@ -39,6 +39,7 @@ xe-y += xe_bo.o \
 	xe_mmio.o \
 	xe_module.o \
 	xe_pci.o \
+	xe_ttm_vram_mgr.o \
 	xe_vm.o
 
 obj-$(CONFIG_DRM_XE) += xe.o
