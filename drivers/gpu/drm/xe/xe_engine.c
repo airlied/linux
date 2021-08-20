@@ -29,6 +29,7 @@ struct xe_engine *xe_engine_create(struct xe_device *xe, struct xe_vm *vm,
 			err = PTR_ERR(e->execlist);
 			goto err_free;
 		}
+		e->entity = &e->execlist->entity;
 	}
 
 	e->context = xe_bo_create(xe, vm, xe_hw_engine_context_size(hwe),
