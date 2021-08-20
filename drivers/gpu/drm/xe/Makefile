@@ -39,6 +39,7 @@ xe-y += xe_bo.o \
 	xe_ggtt.o \
 	xe_hw_engine.o \
 	xe_irq.o \
+	xe_lrc.o \
 	xe_mmio.o \
 	xe_module.o \
 	xe_pci.o \

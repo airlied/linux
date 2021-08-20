@@ -13,11 +13,11 @@
 #include <drm/drm_file.h>
 #include <drm/gpu_scheduler.h>
 
+#include "xe_lrc.h"
+
 struct xe_device;
-struct xe_hw_engine;
 struct xe_execlist;
 struct xe_file;
-struct xe_vm;
 
 struct xe_engine {
 	struct xe_hw_engine *hwe;
@@ -30,7 +30,7 @@ struct xe_engine {
 
 	struct drm_sched_entity *entity;
 
-	struct xe_bo *context;
+	struct xe_lrc lrc;
 };
 
 struct xe_engine *xe_engine_create(struct xe_device *xe, struct xe_vm *vm,

@@ -277,6 +277,14 @@ struct xe_bo *xe_bo_create(struct xe_device *xe, struct xe_vm *vm,
 
 	xe_bo_unlock_vm_held(bo);
 
+	if (flags & XE_BO_CREATE_GGTT_BIT) {
+		err = xe_ggtt_insert_bo(&xe->ggtt, bo);
+		if (err) {
+			xe_bo_put(bo);
+			return ERR_PTR(err);
+		}
+	}
+
 	return bo;
 }
 
