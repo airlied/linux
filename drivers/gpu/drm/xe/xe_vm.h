@@ -74,6 +74,8 @@ static inline void xe_vm_unlock(struct xe_vm *vm)
 
 #define xe_vm_assert_held(vm) dma_resv_assert_held(&(vm)->resv)
 
+dma_addr_t xe_vm_root_addr(struct xe_vm *vm);
+
 int xe_vm_create_ioctl(struct drm_device *dev, void *data,
 		       struct drm_file *file);
 int xe_vm_destroy_ioctl(struct drm_device *dev, void *data,

@@ -193,6 +193,7 @@ static void xe_pt_write(struct xe_pt *pt, unsigned int idx, uint64_t data)
 	uint64_t *map;
 
 	map = ttm_kmap_obj_virtual(&pt->map, &is_iomem);
+	WARN_ON_ONCE(is_iomem);
 	*map = data;
 }
 
@@ -571,6 +572,11 @@ struct xe_vm *xe_vm_lookup(struct xe_file *xef, u32 id)
 		xe_vm_get(vm);
 
 	return vm;
+}
+
+dma_addr_t xe_vm_root_addr(struct xe_vm *vm)
+{
+	return xe_bo_addr(vm->pt_root->bo, 0, GEN8_PAGE_SIZE);
 }
 
 static void
