@@ -564,7 +564,7 @@ static void set_context_control(uint32_t * regs, struct xe_hw_engine *hwe,
 	regs[CTX_CONTEXT_CONTROL] = ctl;
 }
 
-static void set_ppgtt(uint32_t * regs, struct xe_vm *vm)
+static void set_ppgtt(uint32_t *regs, struct xe_vm *vm)
 {
 	dma_addr_t addr = xe_vm_root_addr(vm);
 
@@ -572,29 +572,74 @@ static void set_ppgtt(uint32_t * regs, struct xe_vm *vm)
 	regs[CTX_PDP0_LDW] = lower_32_bits(addr);
 }
 
-int xe_lrc_init(struct xe_lrc *lrc, struct xe_hw_engine *hwe, struct xe_vm *vm)
+static uint32_t *__xe_lrc_get_map(struct xe_lrc *lrc)
+{
+	bool is_iomem;
+	void *map;
+
+	XE_BUG_ON(!lrc->kmap.virtual);
+	map = ttm_kmap_obj_virtual(&lrc->kmap, &is_iomem);
+	WARN_ON_ONCE(is_iomem);
+
+	return map;
+}
+
+static void *xe_lrc_ring(struct xe_lrc *lrc)
+{
+	return __xe_lrc_get_map(lrc);
+}
+
+static uint32_t xe_lrc_ring_ggtt_addr(struct xe_lrc *lrc)
+{
+	return xe_bo_ggtt_addr(lrc->bo);
+}
+
+uint32_t xe_lrc_ggtt_addr(struct xe_lrc *lrc)
+{
+	/* The context comes after the ring */
+	return xe_bo_ggtt_addr(lrc->bo) + lrc->ring_size;
+}
+
+#define LRC_PPHWSP_SIZE SZ_4K
+
+void *xe_lrc_pphwsp(struct xe_lrc *lrc)
+{
+	return __xe_lrc_get_map(lrc) + lrc->ring_size;
+}
+
+static uint32_t *xe_lrc_regs(struct xe_lrc *lrc)
+{
+	return xe_lrc_pphwsp(lrc) + LRC_PPHWSP_SIZE;
+}
+
+int xe_lrc_init(struct xe_lrc *lrc, struct xe_hw_engine *hwe,
+		struct xe_vm *vm, uint32_t ring_size)
 {
 	struct xe_device *xe = hwe->xe;
-	struct ttm_bo_kmap_obj kmap;
-	void *map;
 	uint32_t *regs;
 	int err;
 
-	lrc->bo = xe_bo_create(xe, vm, hwe->context_size, ttm_bo_type_kernel,
+	lrc->bo = xe_bo_create(xe, vm, ring_size + hwe->context_size,
+			       ttm_bo_type_kernel,
 			       XE_BO_CREATE_SYSTEM_BIT | XE_BO_CREATE_GGTT_BIT);
 	if (IS_ERR(lrc->bo))
 		return PTR_ERR(lrc->bo);
 
-	map = xe_bo_kmap(lrc->bo, 0, lrc->bo->size, &kmap);
-	if (IS_ERR(map)) {
+	XE_BUG_ON(lrc->bo->size % PAGE_SIZE);
+	err = ttm_bo_kmap(&lrc->bo->ttm, 0, lrc->bo->size / PAGE_SIZE,
+			  &lrc->kmap);
+	if (err) {
 		xe_bo_put(lrc->bo);
-		return PTR_ERR(map);
+		return err;
 	}
 
-	/* Per-Process of HW status Page */
-	memset(map, 0, SZ_4K);
+	lrc->ring_size = ring_size;
+	lrc->ring_tail = 0;
 
-	regs = map + SZ_4K;
+	/* Per-Process of HW status Page */
+	memset(xe_lrc_pphwsp(lrc), 0, LRC_PPHWSP_SIZE);
+
+	regs = xe_lrc_regs(lrc);
 	memset(regs, 0, SZ_4K);
 	set_offsets(regs, reg_offsets(hwe->xe, hwe->class), hwe, true);
 	set_context_control(regs, hwe, true);
@@ -603,13 +648,10 @@ int xe_lrc_init(struct xe_lrc *lrc, struct xe_hw_engine *hwe, struct xe_vm *vm)
 	/* TODO: init_wa_bb_regs */
 	/* TODO: reset_stop_ring */
 
-	xe_bo_kunmap(&kmap);
-
-	err = xe_lrc_map(lrc);
-	if (err) {
-		xe_bo_put(lrc->bo);
-		return err;
-	}
+	regs[CTX_RING_START] = xe_lrc_ring_ggtt_addr(lrc);
+	regs[CTX_RING_HEAD] = 0;
+	regs[CTX_RING_TAIL] = lrc->ring_tail;
+	regs[CTX_RING_CTL] = RING_CTL_SIZE(lrc->ring_size) | RING_VALID;
 
 	return 0;
 }
@@ -621,19 +663,45 @@ void xe_lrc_finish(struct xe_lrc *lrc)
 
 int xe_lrc_map(struct xe_lrc *lrc)
 {
-	int err;
-
 	XE_BUG_ON(lrc->kmap.virtual);
 	BUILD_BUG_ON(PAGE_SIZE > SZ_8K);
 
-	err = ttm_bo_kmap(&lrc->bo->ttm, 0, SZ_8K / PAGE_SIZE, &lrc->kmap);
-	if (err)
-		lrc->kmap.virtual = NULL;
-
-	return err;
+	return ttm_bo_kmap(&lrc->bo->ttm, 0,
+			   (lrc->ring_size + SZ_8K) / PAGE_SIZE,
+			   &lrc->kmap);
 }
 
 void xe_lrc_unmap(struct xe_lrc *lrc)
 {
 	ttm_bo_kunmap(&lrc->kmap);
+}
+
+static uint32_t xe_lrc_ring_head(struct xe_lrc *lrc)
+{
+	return xe_lrc_regs(lrc)[CTX_RING_HEAD];
+}
+
+uint32_t xe_lrc_ring_space(struct xe_lrc *lrc)
+{
+	return (lrc->ring_tail - xe_lrc_ring_head(lrc)) & (lrc->ring_size - 1);
+}
+
+void xe_lrc_write_ring(struct xe_lrc *lrc, const void *data, size_t size)
+{
+	void *ring;
+	size_t cpy_size;
+
+	XE_BUG_ON(size > lrc->ring_size);
+	XE_WARN_ON(size > xe_lrc_ring_space(lrc));
+
+	ring = xe_lrc_ring(lrc);
+
+	XE_BUG_ON(lrc->ring_tail >= lrc->ring_size);
+	cpy_size = min_t(size_t, size, lrc->ring_size - lrc->ring_tail);
+	memcpy(ring + lrc->ring_tail, data, cpy_size);
+	if (cpy_size < size)
+		memcpy(ring, data + cpy_size, size - cpy_size);
+
+	lrc->ring_tail = (lrc->ring_tail + size) & (lrc->ring_size - 1);
+	xe_lrc_regs(lrc)[CTX_RING_TAIL] = lrc->ring_tail;
 }

@@ -24,23 +24,12 @@ struct xe_execlist_port *xe_execlist_port_create(struct xe_device *xe,
 						 struct xe_hw_engine *hwe);
 void xe_execlist_port_destroy(struct xe_execlist_port *port);
 
-struct xe_ring {
-	struct xe_lrc *lrc;
-
-	uint32_t size;
-	uint32_t tail;
-	struct xe_bo *bo;
-	struct ttm_bo_kmap_obj kmap;
-};
-
 struct xe_execlist {
 	struct xe_engine *engine;
 
 	struct drm_gpu_scheduler sched;
 
 	struct drm_sched_entity entity;
-
-	struct xe_ring ring;
 
 	struct xe_execlist_port *port;
 

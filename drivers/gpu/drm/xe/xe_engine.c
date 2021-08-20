@@ -34,7 +34,7 @@ struct xe_engine *xe_engine_create(struct xe_device *xe, struct xe_vm *vm,
 		e->entity = &e->execlist->entity;
 	}
 
-	err = xe_lrc_init(&e->lrc, hwe, vm);
+	err = xe_lrc_init(&e->lrc, hwe, vm, SZ_16K);
 	if (err)
 		goto err_execlist;
 
