@@ -6,7 +6,7 @@
 
 #include "xe_mmio.h"
 
-#include "i915_reg.h"
+#include "../i915/i915_reg.h"
 
 #define IS_DGFX(x) true
 

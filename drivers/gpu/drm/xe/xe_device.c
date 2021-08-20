@@ -17,7 +17,7 @@
 #include "xe_mmio.h"
 #include "xe_vm.h"
 
-#include "i915_reg.h"
+#include "../i915/i915_reg.h"
 
 static int xe_file_open(struct drm_device *dev, struct drm_file *file)
 {

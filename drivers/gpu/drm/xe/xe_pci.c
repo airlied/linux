@@ -17,7 +17,7 @@
 #include "xe_drv.h"
 #include "xe_device.h"
 
-#include "i915_reg.h"
+#include "../i915/i915_reg.h"
 
 /* Keep in gen based order, and chronological order within a gen */
 enum intel_platform {

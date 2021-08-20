@@ -8,7 +8,7 @@
 #include "xe_device.h"
 #include "xe_mmio.h"
 
-#include "i915_reg.h"
+#include "../i915/i915_reg.h"
 
 static inline uint32_t dg1_intr_disable(struct xe_device *xe)
 {

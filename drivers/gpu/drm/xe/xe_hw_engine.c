@@ -9,7 +9,7 @@
 #include "xe_device.h"
 #include "xe_execlist.h"
 
-#include "i915_reg.h"
+#include "../i915/i915_reg.h"
 
 #define MAX_MMIO_BASES 3
 struct engine_info {
