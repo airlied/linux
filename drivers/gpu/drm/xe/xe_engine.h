@@ -27,6 +27,8 @@ struct xe_engine {
 	struct xe_execlist *execlist;
 
 	struct drm_sched_entity *entity;
+
+	struct xe_bo *context;
 };
 
 struct xe_engine *xe_engine_create(struct xe_device *xe, struct xe_vm *vm,

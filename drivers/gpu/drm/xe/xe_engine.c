@@ -8,12 +8,13 @@
 
 #include <drm/xe_drm.h>
 
+#include "xe_bo.h"
 #include "xe_device.h"
 #include "xe_execlist.h"
 #include "xe_vm.h"
 
 struct xe_engine *xe_engine_create(struct xe_device *xe, struct xe_vm *vm,
-				   struct xe_hw_engine *hw_engine)
+				   struct xe_hw_engine *hwe)
 {
 	struct xe_engine *e;
 	int err;
@@ -22,12 +23,19 @@ struct xe_engine *xe_engine_create(struct xe_device *xe, struct xe_vm *vm,
 	if (!e)
 		return ERR_PTR(-ENOMEM);
 
-	if (hw_engine->exl_port) {
-		e->execlist = xe_execlist_create(xe, hw_engine);
+	if (hwe->exl_port) {
+		e->execlist = xe_execlist_create(xe, hwe);
 		if (IS_ERR(e->execlist)) {
 			err = PTR_ERR(e->execlist);
 			goto err_free;
 		}
+	}
+
+	e->context = xe_bo_create(xe, vm, xe_hw_engine_context_size(hwe),
+				  ttm_bo_type_kernel, XE_BO_CREATE_SYSTEM_BIT);
+	if (IS_ERR(e->context)) {
+		err = PTR_ERR(e->context);
+		goto err_execlist;
 	}
 
 	kref_init(&e->refcount);
@@ -35,6 +43,9 @@ struct xe_engine *xe_engine_create(struct xe_device *xe, struct xe_vm *vm,
 
 	return e;
 
+err_execlist:
+	if (e->execlist)
+		xe_execlist_destroy(e->execlist);
 err_free:
 	kfree(e);
 	return ERR_PTR(err);
@@ -44,10 +55,10 @@ void xe_engine_free(struct kref *ref)
 {
 	struct xe_engine *e = container_of(ref, struct xe_engine, refcount);
 
+	xe_vm_put(e->vm);
+	xe_bo_put(e->context);
 	if (e->execlist)
 		xe_execlist_destroy(e->execlist);
-
-	xe_vm_put(e->vm);
 
 	kfree(e);
 }

@@ -23,6 +23,8 @@
 
 #define XE_BO_INVALID_OFFSET	LONG_MAX
 
+#define GRAPHICS_VER(xe) 12
+
 struct xe_ttm_vram_mgr {
 	struct ttm_resource_manager manager;
 	struct drm_mm mm;
