@@ -24,6 +24,8 @@ struct xe_execlist_port *xe_execlist_port_create(struct xe_device *xe,
 void xe_execlist_port_destroy(struct xe_execlist_port *port);
 
 struct xe_execlist {
+	struct xe_engine *engine;
+
 	struct drm_gpu_scheduler sched;
 
 	struct drm_sched_entity entity;
@@ -34,8 +36,7 @@ struct xe_execlist {
 	struct list_head active_link;
 };
 
-struct xe_execlist *xe_execlist_create(struct xe_device *xe,
-				       struct xe_hw_engine *hwe);
+struct xe_execlist *xe_execlist_create(struct xe_engine *e);
 void xe_execlist_destroy(struct xe_execlist *exl);
 
 #endif /* _XE_EXECLIST_H_ */

@@ -20,6 +20,8 @@ struct xe_file;
 struct xe_vm;
 
 struct xe_engine {
+	struct xe_hw_engine *hwe;
+
 	struct kref refcount;
 
 	struct xe_vm *vm;

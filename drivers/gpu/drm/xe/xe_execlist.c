@@ -82,8 +82,7 @@ static const struct drm_sched_backend_ops drm_sched_ops = {
 	.free_job = xe_drm_sched_job_free,
 };
 
-struct xe_execlist *xe_execlist_create(struct xe_device *xe,
-				       struct xe_hw_engine *hwe)
+struct xe_execlist *xe_execlist_create(struct xe_engine *e)
 {
 	struct drm_gpu_scheduler *sched;
 	struct xe_execlist *exl;
@@ -93,9 +92,11 @@ struct xe_execlist *xe_execlist_create(struct xe_device *xe,
 	if (!exl)
 		return ERR_PTR(-ENOMEM);
 
+	exl->engine = e;
+
 	err = drm_sched_init(&exl->sched, &drm_sched_ops, U32_MAX,
 			     XE_SCHED_HANG_LIMIT, XE_SCHED_JOB_TIMEOUT,
-			     NULL, NULL, hwe->name);
+			     NULL, NULL, e->hwe->name);
 	if (err)
 		goto err_free;
 
@@ -105,7 +106,7 @@ struct xe_execlist *xe_execlist_create(struct xe_device *xe,
 	if (err)
 		goto err_sched;
 
-	exl->port = hwe->exl_port;
+	exl->port = e->hwe->exl_port;
 	exl->active_priority = DRM_SCHED_PRIORITY_UNSET;
 
 	return exl;

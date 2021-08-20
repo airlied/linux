@@ -620,8 +620,10 @@ struct xe_engine *xe_engine_create(struct xe_device *xe, struct xe_vm *vm,
 	if (!e)
 		return ERR_PTR(-ENOMEM);
 
+	e->hwe = hwe;
+
 	if (hwe->exl_port) {
-		e->execlist = xe_execlist_create(xe, hwe);
+		e->execlist = xe_execlist_create(e);
 		if (IS_ERR(e->execlist)) {
 			err = PTR_ERR(e->execlist);
 			goto err_free;
