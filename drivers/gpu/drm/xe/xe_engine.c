@@ -25,28 +25,27 @@ struct xe_engine *xe_engine_create(struct xe_device *xe, struct xe_vm *vm,
 
 	e->hwe = hwe;
 
+	err = xe_lrc_init(&e->lrc, hwe, vm, SZ_16K);
+	if (err)
+		goto err_kfree;
+
 	if (hwe->exl_port) {
 		e->execlist = xe_execlist_create(e);
 		if (IS_ERR(e->execlist)) {
 			err = PTR_ERR(e->execlist);
-			goto err_free;
+			goto err_lrc;
 		}
 		e->entity = &e->execlist->entity;
 	}
-
-	err = xe_lrc_init(&e->lrc, hwe, vm, SZ_16K);
-	if (err)
-		goto err_execlist;
 
 	kref_init(&e->refcount);
 	e->vm = vm;
 
 	return e;
 
-err_execlist:
-	if (e->execlist)
-		xe_execlist_destroy(e->execlist);
-err_free:
+err_lrc:
+	xe_lrc_finish(&e->lrc);
+err_kfree:
 	kfree(e);
 	return ERR_PTR(err);
 }
