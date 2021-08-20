@@ -109,6 +109,14 @@ xe_bo_is_in_lmem(struct xe_bo *bo)
 	return bo->ttm.resource->mem_type == TTM_PL_VRAM;
 }
 
+static inline uint32_t
+xe_bo_ggtt_addr(struct xe_bo *bo)
+{
+	XE_BUG_ON(bo->ggtt_node.size != bo->size);
+	XE_BUG_ON(bo->ggtt_node.start + bo->ggtt_node.size > (1ull << 32));
+	return bo->ggtt_node.start;
+}
+
 extern struct ttm_device_funcs xe_ttm_funcs;
 
 int xe_gem_create_ioctl(struct drm_device *dev, void *data,
