@@ -583,17 +583,12 @@ static int init_context(struct xe_hw_engine *hwe, struct xe_bo *context_bo,
 			struct xe_vm *vm)
 {
 	struct ttm_bo_kmap_obj kmap;
-	bool is_iomem;
 	void *map;
 	uint32_t *regs;
-	int err;
 
-	err = ttm_bo_kmap(&context_bo->ttm, 0, 1, &kmap);
-	if (err)
-		return err;
-
-	map = ttm_kmap_obj_virtual(&kmap, &is_iomem);
-	WARN_ON_ONCE(is_iomem);
+	map = xe_bo_kmap(context_bo, 0, context_bo->size, &kmap);
+	if (IS_ERR(map))
+		return PTR_ERR(map);
 
 	/* Per-Process of HW status Page */
 	memset(map, 0, SZ_4K);
@@ -606,6 +601,8 @@ static int init_context(struct xe_hw_engine *hwe, struct xe_bo *context_bo,
 
 	/* TODO: init_wa_bb_regs */
 	/* TODO: reset_stop_ring */
+
+	xe_bo_kunmap(&kmap);
 
 	return 0;
 }

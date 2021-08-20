@@ -102,6 +102,13 @@ int xe_bo_populate(struct xe_bo *bo);
 bool xe_bo_is_xe_bo(struct ttm_buffer_object *bo);
 dma_addr_t xe_bo_addr(struct xe_bo *bo, uint64_t offset, size_t page_size);
 
+void *xe_bo_kmap(struct xe_bo *bo, unsigned long offset, unsigned long range,
+		 struct ttm_bo_kmap_obj *map);
+static inline void xe_bo_kunmap(struct ttm_bo_kmap_obj *map)
+{
+	ttm_bo_kunmap(map);
+}
+
 static inline bool
 xe_bo_is_in_lmem(struct xe_bo *bo)
 {
