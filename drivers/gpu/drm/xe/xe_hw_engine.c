@@ -9,43 +9,157 @@
 #include "xe_device.h"
 #include "xe_execlist.h"
 
-static const char * const xe_hw_engine_id_to_name[XE_NUM_HW_ENGINES] = {
-	[XE_HW_ENGINE_RCS0] = "rcs0",
+#include "i915_reg.h"
+
+#define MAX_MMIO_BASES 3
+struct engine_info {
+	const char *name;
+	unsigned int class : 8;
+	unsigned int instance : 8;
+	/* mmio bases table *must* be sorted in reverse graphics_ver order */
+	struct engine_mmio_base {
+		unsigned int graphics_ver : 8;
+		unsigned int base : 24;
+	} mmio_bases[MAX_MMIO_BASES];
 };
 
-static const enum xe_engine_class xe_hw_engine_id_to_class[XE_NUM_HW_ENGINES] = {
-	[XE_HW_ENGINE_RCS0] = XE_ENGINE_CLASS_RENDER,
+static const struct engine_info engine_infos[] = {
+	[XE_HW_ENGINE_RCS0] = {
+		.name = "rcs0",
+		.class = XE_ENGINE_CLASS_RENDER,
+		.instance = 0,
+		.mmio_bases = {
+			{ .graphics_ver = 1, .base = RENDER_RING_BASE }
+		},
+	},
+	[XE_HW_ENGINE_BCS0] = {
+		.name = "bcs0",
+		.class = XE_ENGINE_CLASS_COPY,
+		.instance = 0,
+		.mmio_bases = {
+			{ .graphics_ver = 6, .base = BLT_RING_BASE }
+		},
+	},
+	[XE_HW_ENGINE_VCS0] = {
+		.name = "vcs0",
+		.class = XE_ENGINE_CLASS_VIDEO_DECODE,
+		.instance = 0,
+		.mmio_bases = {
+			{ .graphics_ver = 11, .base = GEN11_BSD_RING_BASE },
+			{ .graphics_ver = 6, .base = GEN6_BSD_RING_BASE },
+			{ .graphics_ver = 4, .base = BSD_RING_BASE }
+		},
+	},
+	[XE_HW_ENGINE_VCS1] = {
+		.name = "vcs1",
+		.class = XE_ENGINE_CLASS_VIDEO_DECODE,
+		.instance = 1,
+		.mmio_bases = {
+			{ .graphics_ver = 11, .base = GEN11_BSD2_RING_BASE },
+			{ .graphics_ver = 8, .base = GEN8_BSD2_RING_BASE }
+		},
+	},
+	[XE_HW_ENGINE_VCS2] = {
+		.name = "vcs2",
+		.class = XE_ENGINE_CLASS_VIDEO_DECODE,
+		.instance = 2,
+		.mmio_bases = {
+			{ .graphics_ver = 11, .base = GEN11_BSD3_RING_BASE }
+		},
+	},
+	[XE_HW_ENGINE_VCS3] = {
+		.name = "vcs3",
+		.class = XE_ENGINE_CLASS_VIDEO_DECODE,
+		.instance = 3,
+		.mmio_bases = {
+			{ .graphics_ver = 11, .base = GEN11_BSD4_RING_BASE }
+		},
+	},
+	[XE_HW_ENGINE_VCS4] = {
+		.name = "vcs4",
+		.class = XE_ENGINE_CLASS_VIDEO_DECODE,
+		.instance = 4,
+		.mmio_bases = {
+			{ .graphics_ver = 12, .base = XEHP_BSD5_RING_BASE }
+		},
+	},
+	[XE_HW_ENGINE_VCS5] = {
+		.name = "vcs5",
+		.class = XE_ENGINE_CLASS_VIDEO_DECODE,
+		.instance = 5,
+		.mmio_bases = {
+			{ .graphics_ver = 12, .base = XEHP_BSD6_RING_BASE }
+		},
+	},
+	[XE_HW_ENGINE_VCS6] = {
+		.name = "vcs6",
+		.class = XE_ENGINE_CLASS_VIDEO_DECODE,
+		.instance = 6,
+		.mmio_bases = {
+			{ .graphics_ver = 12, .base = XEHP_BSD7_RING_BASE }
+		},
+	},
+	[XE_HW_ENGINE_VCS7] = {
+		.name = "vcs7",
+		.class = XE_ENGINE_CLASS_VIDEO_DECODE,
+		.instance = 7,
+		.mmio_bases = {
+			{ .graphics_ver = 12, .base = XEHP_BSD8_RING_BASE }
+		},
+	},
+	[XE_HW_ENGINE_VECS0] = {
+		.name = "vecs0",
+		.class = XE_ENGINE_CLASS_VIDEO_ENHANCE,
+		.instance = 0,
+		.mmio_bases = {
+			{ .graphics_ver = 11, .base = GEN11_VEBOX_RING_BASE },
+			{ .graphics_ver = 7, .base = VEBOX_RING_BASE }
+		},
+	},
+	[XE_HW_ENGINE_VECS1] = {
+		.name = "vecs1",
+		.class = XE_ENGINE_CLASS_VIDEO_ENHANCE,
+		.instance = 1,
+		.mmio_bases = {
+			{ .graphics_ver = 11, .base = GEN11_VEBOX2_RING_BASE }
+		},
+	},
+	[XE_HW_ENGINE_VECS2] = {
+		.name = "vecs2",
+		.class = XE_ENGINE_CLASS_VIDEO_ENHANCE,
+		.instance = 2,
+		.mmio_bases = {
+			{ .graphics_ver = 12, .base = XEHP_VEBOX3_RING_BASE }
+		},
+	},
+	[XE_HW_ENGINE_VECS3] = {
+		.name = "vecs3",
+		.class = XE_ENGINE_CLASS_VIDEO_ENHANCE,
+		.instance = 3,
+		.mmio_bases = {
+			{ .graphics_ver = 12, .base = XEHP_VEBOX4_RING_BASE }
+		},
+	},
 };
 
-int xe_hw_engine_init(struct xe_device *xe, struct xe_hw_engine *hwe,
-		      enum xe_hw_engine_id id)
+static uint16_t engine_info_mmio_base(const struct engine_info *info,
+				      unsigned int graphics_ver)
 {
-	hwe->name = NULL;
-	hwe->class = xe_hw_engine_id_to_class[id];
+	int i;
 
-	hwe->exl_port = xe_execlist_port_create(xe, hwe);
-	if (IS_ERR(hwe->exl_port))
-		return PTR_ERR(hwe->exl_port);
+	for (i = 0; i < MAX_MMIO_BASES; i++)
+		if (graphics_ver >= info->mmio_bases[i].graphics_ver)
+			break;
 
-	/* Set this last because we use it's used to detect fully set up
-	 * xe_hw_engines in tear-down code.
-	 */
-	XE_BUG_ON(!xe_hw_engine_id_to_name[id]);
-	hwe->name = xe_hw_engine_id_to_name[id];
+	XE_BUG_ON(i == MAX_MMIO_BASES);
+	XE_BUG_ON(!info->mmio_bases[i].base);
 
-	return 0;
+	return info->mmio_bases[i].base;
 }
 
-void xe_hw_engine_finish(struct xe_hw_engine *hwe)
+uint32_t engine_context_size(struct xe_device *xe, enum xe_engine_class class)
 {
-	xe_execlist_port_destroy(hwe->exl_port);
-	hwe->name = NULL;
-}
-
-uint32_t
-xe_hw_engine_context_size(struct xe_hw_engine *hwe)
-{
-	switch (hwe->class) {
+	switch (class) {
 	case XE_ENGINE_CLASS_RENDER:
 		switch (GRAPHICS_VER(xe)) {
 		case 12:
@@ -60,11 +174,42 @@ xe_hw_engine_context_size(struct xe_hw_engine *hwe)
 			return 22 * SZ_4K;
 		}
 	default:
-		WARN(1, "Unknown engine class: %d", hwe->class);
+		WARN(1, "Unknown engine class: %d", class);
 		fallthrough;
 	case XE_ENGINE_CLASS_COPY:
 	case XE_ENGINE_CLASS_VIDEO_DECODE:
 	case XE_ENGINE_CLASS_VIDEO_ENHANCE:
 		return 2 * SZ_4K;
 	}
+}
+
+int xe_hw_engine_init(struct xe_device *xe, struct xe_hw_engine *hwe,
+		      enum xe_hw_engine_id id)
+{
+	const struct engine_info *info = &engine_infos[id];
+
+	if (WARN_ON(id >= ARRAY_SIZE(engine_infos) || info->name == NULL))
+		return -EINVAL;
+
+	XE_BUG_ON(hwe->xe);
+
+	hwe->name = info->name;
+	hwe->class = info->class;
+	hwe->instance = info->instance;
+	hwe->mmio_base = engine_info_mmio_base(info, GRAPHICS_VER(xe));
+	hwe->context_size = engine_context_size(xe, info->class);
+
+	hwe->exl_port = xe_execlist_port_create(xe, hwe);
+	if (IS_ERR(hwe->exl_port))
+		return PTR_ERR(hwe->exl_port);
+
+	hwe->xe = xe;
+
+	return 0;
+}
+
+void xe_hw_engine_finish(struct xe_hw_engine *hwe)
+{
+	xe_execlist_port_destroy(hwe->exl_port);
+	hwe->xe = NULL;
 }

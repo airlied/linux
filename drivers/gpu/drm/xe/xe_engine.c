@@ -32,7 +32,7 @@ struct xe_engine *xe_engine_create(struct xe_device *xe, struct xe_vm *vm,
 		e->entity = &e->execlist->entity;
 	}
 
-	e->context = xe_bo_create(xe, vm, xe_hw_engine_context_size(hwe),
+	e->context = xe_bo_create(xe, vm, hwe->context_size,
 				  ttm_bo_type_kernel, XE_BO_CREATE_SYSTEM_BIT);
 	if (IS_ERR(e->context)) {
 		err = PTR_ERR(e->context);

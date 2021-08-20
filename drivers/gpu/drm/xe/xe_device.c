@@ -269,7 +269,7 @@ err_irq:
 	xe_irq_uninstall(xe);
 err_hw_engines:
 	for (i = 0; i < ARRAY_SIZE(xe->hw_engines); i++) {
-		if (xe->hw_engines[i].name)
+		if (xe->hw_engines[i].xe)
 			xe_hw_engine_finish(&xe->hw_engines[i]);
 	}
 	xe_ggtt_finish(&xe->ggtt);
@@ -290,7 +290,7 @@ void xe_device_remove(struct xe_device *xe)
 	drm_dev_unregister(&xe->drm);
 	xe_irq_uninstall(xe);
 	for (i = 0; i < ARRAY_SIZE(xe->hw_engines); i++) {
-		if (xe->hw_engines[i].name)
+		if (xe->hw_engines[i].xe)
 			xe_hw_engine_finish(&xe->hw_engines[i]);
 	}
 	xe_ggtt_finish(&xe->ggtt);
