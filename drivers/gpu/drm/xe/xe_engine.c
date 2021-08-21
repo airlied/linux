@@ -26,7 +26,7 @@ static struct xe_engine *__xe_engine_create(struct xe_device *xe,
 
 	e->hwe = hwe;
 	kref_init(&e->refcount);
-	e->vm = vm;
+	e->vm = xe_vm_get(vm);
 
 	err = xe_lrc_init(&e->lrc, hwe, vm, SZ_16K);
 	if (err)
@@ -107,10 +107,6 @@ int xe_engine_create_ioctl(struct drm_device *dev, void *data,
 	if (args->flags)
 		return -EINVAL;
 
-	vm = xe_vm_lookup(xef, args->vm_id);
-	if (!vm)
-		return -ENOENT;
-
 	if (args->instance.engine_class != DRM_XE_ENGINE_CLASS_RENDER)
 		return -EINVAL;
 
@@ -119,11 +115,14 @@ int xe_engine_create_ioctl(struct drm_device *dev, void *data,
 
 	hwe = &xe->hw_engines[XE_HW_ENGINE_RCS0];
 
+	vm = xe_vm_lookup(xef, args->vm_id);
+	if (!vm)
+		return -ENOENT;
+
 	e = xe_engine_create(xe, vm, hwe);
-	if (IS_ERR(e)) {
-		xe_vm_put(vm);
+	xe_vm_put(vm);
+	if (IS_ERR(e))
 		return PTR_ERR(e);
-	}
 
 	mutex_lock(&xef->engine_lock);
 	err = xa_alloc(&xef->engine_xa, &id, e, xa_limit_32b, GFP_KERNEL);
