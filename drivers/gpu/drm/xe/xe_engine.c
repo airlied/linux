@@ -91,6 +91,7 @@ struct xe_engine *xe_engine_lookup(struct xe_file *xef, u32 id)
 
 static const enum xe_engine_class user_to_xe_engine_class[] = {
 	[DRM_XE_ENGINE_CLASS_RENDER] = XE_ENGINE_CLASS_RENDER,
+	[DRM_XE_ENGINE_CLASS_COPY] = XE_ENGINE_CLASS_COPY,
 };
 
 static struct xe_hw_engine *

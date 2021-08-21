@@ -130,6 +130,7 @@ struct drm_xe_engine_class_instance {
 	__u16 engine_class;
 
 #define DRM_XE_ENGINE_CLASS_RENDER 0
+#define DRM_XE_ENGINE_CLASS_COPY 1
 
 	__u16 engine_instance;
 };
