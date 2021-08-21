@@ -89,6 +89,34 @@ struct xe_engine *xe_engine_lookup(struct xe_file *xef, u32 id)
 	return e;
 }
 
+static const enum xe_engine_class user_to_xe_engine_class[] = {
+	[DRM_XE_ENGINE_CLASS_RENDER] = XE_ENGINE_CLASS_RENDER,
+};
+
+static struct xe_hw_engine *
+find_hw_engine(struct xe_device *xe,
+	       struct drm_xe_engine_class_instance eci)
+{
+	enum xe_engine_class class;
+	unsigned int instance;
+	int i;
+
+	if (eci.engine_class > ARRAY_SIZE(user_to_xe_engine_class))
+		return NULL;
+
+	class = user_to_xe_engine_class[eci.engine_class];
+	instance = eci.engine_instance;
+
+	for (i = 0; i < ARRAY_SIZE(xe->hw_engines); i++) {
+		if (xe->hw_engines[i].xe &&
+		    xe->hw_engines[i].class == class &&
+		    xe->hw_engines[i].instance == instance)
+			return &xe->hw_engines[i];
+	}
+
+	return NULL;
+}
+
 int xe_engine_create_ioctl(struct drm_device *dev, void *data,
 			   struct drm_file *file)
 {
@@ -107,13 +135,9 @@ int xe_engine_create_ioctl(struct drm_device *dev, void *data,
 	if (XE_IOCTL_ERR(xe, args->flags))
 		return -EINVAL;
 
-	if (XE_IOCTL_ERR(xe, args->instance.engine_class != DRM_XE_ENGINE_CLASS_RENDER))
+	hwe = find_hw_engine(xe, args->instance);
+	if (XE_IOCTL_ERR(xe, !hwe))
 		return -EINVAL;
-
-	if (XE_IOCTL_ERR(xe, args->instance.engine_instance != 0))
-		return -EINVAL;
-
-	hwe = &xe->hw_engines[XE_HW_ENGINE_RCS0];
 
 	vm = xe_vm_lookup(xef, args->vm_id);
 	if (XE_IOCTL_ERR(xe, !vm))
