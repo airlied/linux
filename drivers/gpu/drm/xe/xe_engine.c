@@ -13,8 +13,9 @@
 #include "xe_execlist.h"
 #include "xe_vm.h"
 
-struct xe_engine *xe_engine_create(struct xe_device *xe, struct xe_vm *vm,
-				   struct xe_hw_engine *hwe)
+static struct xe_engine *__xe_engine_create(struct xe_device *xe,
+					    struct xe_vm *vm,
+					    struct xe_hw_engine *hwe)
 {
 	struct xe_engine *e;
 	int err;
@@ -48,6 +49,18 @@ err_lrc:
 err_kfree:
 	kfree(e);
 	return ERR_PTR(err);
+}
+
+struct xe_engine *xe_engine_create(struct xe_device *xe, struct xe_vm *vm,
+				   struct xe_hw_engine *hwe)
+{
+	struct xe_engine *e;
+
+	xe_vm_lock(vm, NULL);
+	e = __xe_engine_create(xe, vm, hwe);
+	xe_vm_unlock(vm);
+
+	return e;
 }
 
 void xe_engine_free(struct kref *ref)
