@@ -683,7 +683,21 @@ static uint32_t xe_lrc_ring_head(struct xe_lrc *lrc)
 
 uint32_t xe_lrc_ring_space(struct xe_lrc *lrc)
 {
-	return (lrc->ring_tail - xe_lrc_ring_head(lrc)) & (lrc->ring_size - 1);
+	const uint32_t head = xe_lrc_ring_head(lrc);
+	const uint32_t tail = lrc->ring_tail;
+	const uint32_t size = lrc->ring_size;
+
+	return ((tail - head - 1) & (size - 1)) + 1;
+}
+
+static void xe_lrc_assert_ring_space(struct xe_lrc *lrc, size_t size)
+{
+#if XE_EXTRA_DEBUG
+	uint32_t space = xe_lrc_ring_space(lrc);
+
+	BUG_ON(size > lrc->ring_size);
+	WARN(size > space, "Insufficient ring space: %lu > %u", size, space);
+#endif
 }
 
 void xe_lrc_write_ring(struct xe_lrc *lrc, const void *data, size_t size)
@@ -691,8 +705,7 @@ void xe_lrc_write_ring(struct xe_lrc *lrc, const void *data, size_t size)
 	void *ring;
 	size_t cpy_size;
 
-	XE_BUG_ON(size > lrc->ring_size);
-	XE_WARN_ON(size > xe_lrc_ring_space(lrc));
+	xe_lrc_assert_ring_space(lrc, size);
 
 	ring = xe_lrc_ring(lrc);
 
