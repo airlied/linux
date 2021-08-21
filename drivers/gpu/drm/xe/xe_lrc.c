@@ -572,6 +572,31 @@ static void set_ppgtt(uint32_t *regs, struct xe_vm *vm)
 	regs[CTX_PDP0_LDW] = lower_32_bits(addr);
 }
 
+static int lrc_ring_mi_mode(struct xe_hw_engine *hwe)
+{
+	if (GRAPHICS_VERx10(hwe->xe) >= 125)
+		return 0x70;
+	else if (GRAPHICS_VER(hwe->xe) >= 12)
+		return 0x60;
+	else if (GRAPHICS_VER(hwe->xe) >= 9)
+		return 0x54;
+	else if (hwe->class == XE_ENGINE_CLASS_RENDER)
+		return 0x58;
+	else
+		return -1;
+}
+
+static void reset_stop_ring(uint32_t *regs, struct xe_hw_engine *hwe)
+{
+	int x;
+
+	x = lrc_ring_mi_mode(hwe);
+	if (x != -1) {
+		regs[x + 1] &= ~STOP_RING;
+		regs[x + 1] |= STOP_RING << 16;
+	}
+}
+
 static uint32_t *__xe_lrc_get_map(struct xe_lrc *lrc)
 {
 	bool is_iomem;
@@ -646,7 +671,8 @@ int xe_lrc_init(struct xe_lrc *lrc, struct xe_hw_engine *hwe,
 	set_ppgtt(regs, vm);
 
 	/* TODO: init_wa_bb_regs */
-	/* TODO: reset_stop_ring */
+
+	reset_stop_ring(regs, hwe);
 
 	regs[CTX_RING_START] = xe_lrc_ring_ggtt_addr(lrc);
 	regs[CTX_RING_HEAD] = 0;
