@@ -157,32 +157,6 @@ static uint16_t engine_info_mmio_base(const struct engine_info *info,
 	return info->mmio_bases[i].base;
 }
 
-uint32_t engine_context_size(struct xe_device *xe, enum xe_engine_class class)
-{
-	switch (class) {
-	case XE_ENGINE_CLASS_RENDER:
-		switch (GRAPHICS_VER(xe)) {
-		case 12:
-		case 11:
-			return 14 * SZ_4K;
-		case 9:
-			return 22 * SZ_4K;
-		case 8:
-			return 20 * SZ_4K;
-		default:
-			WARN(1, "Unknown GFX version: %d", GRAPHICS_VER(xe));
-			return 22 * SZ_4K;
-		}
-	default:
-		WARN(1, "Unknown engine class: %d", class);
-		fallthrough;
-	case XE_ENGINE_CLASS_COPY:
-	case XE_ENGINE_CLASS_VIDEO_DECODE:
-	case XE_ENGINE_CLASS_VIDEO_ENHANCE:
-		return 2 * SZ_4K;
-	}
-}
-
 int xe_hw_engine_init(struct xe_device *xe, struct xe_hw_engine *hwe,
 		      enum xe_hw_engine_id id)
 {
@@ -197,7 +171,6 @@ int xe_hw_engine_init(struct xe_device *xe, struct xe_hw_engine *hwe,
 	hwe->class = info->class;
 	hwe->instance = info->instance;
 	hwe->mmio_base = engine_info_mmio_base(info, GRAPHICS_VER(xe));
-	hwe->context_size = engine_context_size(xe, info->class);
 
 	hwe->exl_port = xe_execlist_port_create(xe, hwe);
 	if (IS_ERR(hwe->exl_port))

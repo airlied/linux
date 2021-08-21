@@ -10,6 +10,32 @@
 #include "../i915/gt/intel_gpu_commands.h"
 #include "../i915/gt/intel_lrc_reg.h"
 
+uint32_t lrc_size(struct xe_device *xe, enum xe_engine_class class)
+{
+	switch (class) {
+	case XE_ENGINE_CLASS_RENDER:
+		switch (GRAPHICS_VER(xe)) {
+		case 12:
+		case 11:
+			return 14 * SZ_4K;
+		case 9:
+			return 22 * SZ_4K;
+		case 8:
+			return 20 * SZ_4K;
+		default:
+			WARN(1, "Unknown GFX version: %d", GRAPHICS_VER(xe));
+			return 22 * SZ_4K;
+		}
+	default:
+		WARN(1, "Unknown engine class: %d", class);
+		fallthrough;
+	case XE_ENGINE_CLASS_COPY:
+	case XE_ENGINE_CLASS_VIDEO_DECODE:
+	case XE_ENGINE_CLASS_VIDEO_ENHANCE:
+		return 2 * SZ_4K;
+	}
+}
+
 /* TODO: Shameless copy+paste from i915 */
 static void set_offsets(u32 *regs,
 			const u8 *data,
@@ -644,7 +670,7 @@ int xe_lrc_init(struct xe_lrc *lrc, struct xe_hw_engine *hwe,
 	uint32_t *regs;
 	int err;
 
-	lrc->bo = xe_bo_create(xe, vm, ring_size + hwe->context_size,
+	lrc->bo = xe_bo_create(xe, vm, ring_size + lrc_size(xe, hwe->class),
 			       ttm_bo_type_kernel,
 			       XE_BO_CREATE_SYSTEM_BIT | XE_BO_CREATE_GGTT_BIT);
 	if (IS_ERR(lrc->bo))
