@@ -365,21 +365,21 @@ int xe_gem_create_ioctl(struct drm_device *dev, void *data,
 	u32 handle;
 	int err;
 
-	if (args->extensions)
+	if (XE_IOCTL_ERR(xe, args->extensions))
 		return -EINVAL;
 
-	if (args->flags & ~ALL_DRM_XE_GEM_CREATE_FLAGS)
+	if (XE_IOCTL_ERR(xe, args->flags & ~ALL_DRM_XE_GEM_CREATE_FLAGS))
 		return -EINVAL;
 
-	if (args->handle)
+	if (XE_IOCTL_ERR(xe, args->handle))
 		return -EINVAL;
 
-	if (sizeof(size_t) < 8 && args->size >= (256 << sizeof(size_t)))
+	if (XE_IOCTL_ERR(xe, args->size > SIZE_MAX))
 		return -EINVAL;
 
 	if (args->vm_id) {
 		vm = xe_vm_lookup(xef, args->vm_id);
-		if (!vm)
+		if (XE_IOCTL_ERR(xe, !vm))
 			return -ENOENT;
 		xe_vm_lock(vm, NULL);
 	}
@@ -407,17 +407,18 @@ int xe_gem_create_ioctl(struct drm_device *dev, void *data,
 int xe_gem_mmap_offset_ioctl(struct drm_device *dev, void *data,
 			     struct drm_file *file)
 {
+	struct xe_device *xe = to_xe_device(dev);
 	struct drm_xe_gem_mmap_offset *args = data;
 	struct drm_gem_object *gem_obj;
 
-	if (args->extensions)
+	if (XE_IOCTL_ERR(xe, args->extensions))
 		return -EINVAL;
 
-	if (args->flags)
+	if (XE_IOCTL_ERR(xe, args->flags))
 		return -EINVAL;
 
 	gem_obj = drm_gem_object_lookup(file, args->handle);
-	if (!gem_obj)
+	if (XE_IOCTL_ERR(xe, !gem_obj))
 		return -ENOENT;
 
 	/* The mmap offset was set up at BO allocation time. */

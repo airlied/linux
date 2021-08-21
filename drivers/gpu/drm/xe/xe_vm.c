@@ -711,10 +711,10 @@ int xe_vm_create_ioctl(struct drm_device *dev, void *data,
 	u32 id;
 	int err;
 
-	if (args->extensions)
+	if (XE_IOCTL_ERR(xe, args->extensions))
 		return -EINVAL;
 
-	if (args->flags)
+	if (XE_IOCTL_ERR(xe, args->flags))
 		return -EINVAL;
 
 	vm = xe_vm_create(xe);
@@ -737,17 +737,18 @@ int xe_vm_create_ioctl(struct drm_device *dev, void *data,
 int xe_vm_destroy_ioctl(struct drm_device *dev, void *data,
 			struct drm_file *file)
 {
+	struct xe_device *xe = to_xe_device(dev);
 	struct xe_file *xef = to_xe_file(file);
 	struct drm_xe_vm_destroy *args = data;
 	struct xe_vm *vm;
 
-	if (args->pad)
+	if (XE_IOCTL_ERR(xe, args->pad))
 		return -EINVAL;
 
 	mutex_lock(&xef->vm_lock);
 	vm = xa_erase(&xef->vm_xa, args->vm_id);
 	mutex_unlock(&xef->vm_lock);
-	if (!vm)
+	if (XE_IOCTL_ERR(xe, !vm))
 		return -ENOENT;
 
 	xe_vm_put(vm);
@@ -758,21 +759,22 @@ int xe_vm_destroy_ioctl(struct drm_device *dev, void *data,
 int xe_vm_bind_ioctl(struct drm_device *dev, void *data,
 		     struct drm_file *file)
 {
+	struct xe_device *xe = to_xe_device(dev);
 	struct xe_file *xef = to_xe_file(file);
 	struct drm_xe_vm_bind *args = data;
 	struct drm_gem_object *gem_obj;
 	struct xe_vm *vm;
 	int err = 0;
 
-	if (args->extensions)
+	if (XE_IOCTL_ERR(xe, args->extensions))
 		return -EINVAL;
 
 	vm = xe_vm_lookup(xef, args->vm_id);
-	if (!vm)
+	if (XE_IOCTL_ERR(xe, !vm))
 		return -ENOENT;
 
 	gem_obj = drm_gem_object_lookup(file, args->obj);
-	if (!gem_obj) {
+	if (XE_IOCTL_ERR(xe, !gem_obj)) {
 		err = -ENOENT;
 		goto put_vm;
 	}

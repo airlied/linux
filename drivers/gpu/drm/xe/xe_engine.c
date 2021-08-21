@@ -101,22 +101,22 @@ int xe_engine_create_ioctl(struct drm_device *dev, void *data,
 	u32 id;
 	int err;
 
-	if (args->extensions)
+	if (XE_IOCTL_ERR(xe, args->extensions))
 		return -EINVAL;
 
-	if (args->flags)
+	if (XE_IOCTL_ERR(xe, args->flags))
 		return -EINVAL;
 
-	if (args->instance.engine_class != DRM_XE_ENGINE_CLASS_RENDER)
+	if (XE_IOCTL_ERR(xe, args->instance.engine_class != DRM_XE_ENGINE_CLASS_RENDER))
 		return -EINVAL;
 
-	if (args->instance.engine_instance != 0)
+	if (XE_IOCTL_ERR(xe, args->instance.engine_instance != 0))
 		return -EINVAL;
 
 	hwe = &xe->hw_engines[XE_HW_ENGINE_RCS0];
 
 	vm = xe_vm_lookup(xef, args->vm_id);
-	if (!vm)
+	if (XE_IOCTL_ERR(xe, !vm))
 		return -ENOENT;
 
 	e = xe_engine_create(xe, vm, hwe);
@@ -140,17 +140,18 @@ int xe_engine_create_ioctl(struct drm_device *dev, void *data,
 int xe_engine_destroy_ioctl(struct drm_device *dev, void *data,
 			    struct drm_file *file)
 {
+	struct xe_device *xe = to_xe_device(dev);
 	struct xe_file *xef = to_xe_file(file);
 	struct drm_xe_engine_destroy *args = data;
 	struct xe_engine *e;
 
-	if (args->pad)
+	if (XE_IOCTL_ERR(xe, args->pad))
 		return -EINVAL;
 
 	mutex_lock(&xef->engine_lock);
 	e = xa_erase(&xef->engine_xa, args->engine_id);
 	mutex_unlock(&xef->engine_lock);
-	if (!e)
+	if (XE_IOCTL_ERR(xe, !e))
 		return -ENOENT;
 
 	xe_engine_put(e);
