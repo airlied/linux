@@ -121,10 +121,32 @@ void xe_ggtt_finish(struct xe_ggtt *ggtt)
 	iounmap(ggtt->gsm);
 }
 
+void xe_ggtt_printk(struct xe_ggtt *ggtt, const char *prefix)
+{
+	uint64_t addr, scratch_pte;
+
+	scratch_pte = gen8_pte_encode(ggtt->scratch, 0);
+
+	printk("%sGlobal GTT:", prefix);
+	for (addr = 0; addr < ggtt->size; addr += GEN8_PAGE_SIZE) {
+		unsigned int i = addr / GEN8_PAGE_SIZE;
+
+		XE_BUG_ON(addr > U32_MAX);
+		if (ggtt->gsm[i] == scratch_pte)
+			continue;
+
+		printk("%s    ggtt[0x%08x] = 0x%016llx",
+		       prefix, (uint32_t)addr, ggtt->gsm[i]);
+	}
+}
+
 int xe_ggtt_insert_bo(struct xe_ggtt *ggtt, struct xe_bo *bo)
 {
 	uint64_t offset, pte;
 	int err;
+
+	printk(KERN_INFO "xe_ggtt_insert_bo(bo = 0x%p, size = 0x%lx)",
+			 bo, bo->size);
 
 	if (XE_WARN_ON(bo->ggtt_node.size)) {
 		/* Someone's already inserted this BO in the GGTT */
@@ -157,6 +179,8 @@ void xe_ggtt_remove_bo(struct xe_ggtt *ggtt, struct xe_bo *bo)
 {
 	if (XE_WARN_ON(!bo->ggtt_node.size))
 		return;
+
+	printk(KERN_INFO "xe_ggtt_remove_bo(bo = 0x%p)", bo);
 
 	/* This BO is not currently in the GGTT */
 	XE_BUG_ON(bo->ggtt_node.size != bo->size);

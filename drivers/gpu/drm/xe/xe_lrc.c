@@ -698,7 +698,7 @@ uint32_t xe_lrc_seqno_ggtt_addr(struct xe_lrc *lrc)
 	return __xe_lrc_seqno_ggtt_addr(lrc);
 }
 
-static uint32_t *xe_lrc_regs(struct xe_lrc *lrc)
+uint32_t *xe_lrc_regs(struct xe_lrc *lrc)
 {
 	return __xe_lrc_regs_map(lrc);
 }
@@ -708,7 +708,7 @@ int xe_lrc_init(struct xe_lrc *lrc, struct xe_hw_engine *hwe,
 {
 	struct xe_device *xe = hwe->xe;
 	uint32_t *regs;
-	int err;
+	int err, i;
 
 	lrc->bo = xe_bo_create(xe, vm, ring_size + lrc_size(xe, hwe->class),
 			       ttm_bo_type_kernel,
@@ -745,6 +745,26 @@ int xe_lrc_init(struct xe_lrc *lrc, struct xe_hw_engine *hwe,
 	regs[CTX_RING_TAIL] = lrc->ring_tail;
 	regs[CTX_RING_CTL] = RING_CTL_SIZE(lrc->ring_size) | RING_VALID;
 
+	printk(KERN_INFO "First 32 LRC regs:");
+	for (i = 0; i < 32; i++)
+		printk(KERN_INFO "    regs[%d] = 0x%08x", i, regs[i]);
+
+	lrc->desc = GEN8_CTX_VALID;
+	lrc->desc |= INTEL_LEGACY_64B_CONTEXT << GEN8_CTX_ADDRESSING_MODE_SHIFT;
+	/* TODO: Priority */
+
+	/* While this appears to have something about privileged batches or
+	 * some such, it really just means PPGTT mode.
+	 */
+	lrc->desc |= GEN8_CTX_PRIVILEGE;
+	if (GRAPHICS_VER(xe) == 8)
+		lrc->desc |= GEN8_CTX_L3LLC_COHERENT;
+
+	if (GRAPHICS_VER(xe) >= 11) {
+		lrc->desc |= (uint64_t)hwe->instance << GEN11_ENGINE_INSTANCE_SHIFT;
+		lrc->desc |= (uint64_t)hwe->class << GEN11_ENGINE_CLASS_SHIFT;
+	}
+
 	return 0;
 }
 
@@ -768,7 +788,7 @@ void xe_lrc_unmap(struct xe_lrc *lrc)
 	ttm_bo_kunmap(&lrc->kmap);
 }
 
-static uint32_t xe_lrc_ring_head(struct xe_lrc *lrc)
+uint32_t xe_lrc_ring_head(struct xe_lrc *lrc)
 {
 	return xe_lrc_regs(lrc)[CTX_RING_HEAD];
 }
@@ -828,4 +848,9 @@ void xe_lrc_write_ring(struct xe_lrc *lrc, const void *data, size_t size)
 	}
 
 	xe_lrc_regs(lrc)[CTX_RING_TAIL] = lrc->ring_tail;
+}
+
+uint64_t xe_lrc_descriptor(struct xe_lrc *lrc)
+{
+	return lrc->desc | xe_lrc_ggtt_addr(lrc);
 }

@@ -16,6 +16,8 @@
 #include "xe_hw_engine.h"
 
 struct xe_execlist_port {
+	struct xe_hw_engine *hwe;
+
 	spinlock_t active_lock;
 	struct list_head active[DRM_SCHED_PRIORITY_COUNT];
 };

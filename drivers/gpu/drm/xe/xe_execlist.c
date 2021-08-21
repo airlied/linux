@@ -9,6 +9,7 @@
 #include "xe_bo.h"
 #include "xe_device.h"
 #include "xe_engine.h"
+#include "xe_mmio.h"
 #include "xe_sched_job.h"
 
 #include "../i915/i915_reg.h"
@@ -16,6 +17,37 @@
 #include "../i915/gt/intel_lrc_reg.h"
 
 #define XE_EXECLIST_HANG_LIMIT 1
+
+static void xe_execlist_run(struct xe_execlist *exl)
+{
+	struct xe_hw_engine *hwe = exl->engine->hwe;
+	struct xe_lrc *lrc = &exl->engine->lrc;
+	struct xe_device *xe = hwe->xe;
+	uint64_t lrc_desc;
+
+	lrc_desc = xe_lrc_descriptor(lrc) | 0x62;
+
+	xe_lrc_regs(lrc)[CTX_RING_TAIL] = lrc->ring_tail;
+
+	xe_mmio_write32(xe, RING_HWS_PGA(hwe->mmio_base).reg,
+			xe_bo_ggtt_addr(hwe->hwsp));
+	xe_mmio_read32(xe, RING_HWS_PGA(hwe->mmio_base).reg);
+	xe_mmio_write32(xe, RING_MODE_GEN7(hwe->mmio_base).reg,
+			_MASKED_BIT_ENABLE(GEN11_GFX_DISABLE_LEGACY_MODE));
+	xe_mmio_write32(xe, RING_EXECLIST_SQ_CONTENTS(hwe->mmio_base).reg + 0,
+			lower_32_bits(lrc_desc));
+	xe_mmio_write32(xe, RING_EXECLIST_SQ_CONTENTS(hwe->mmio_base).reg + 4,
+			upper_32_bits(lrc_desc));
+	xe_mmio_write32(xe, RING_EXECLIST_CONTROL(hwe->mmio_base).reg,
+			EL_CTRL_LOAD);
+}
+
+static void xe_execlist_port_irq_handler(struct xe_hw_engine *hwe,
+					 uint16_t intr_vec)
+{
+	printk(KERN_INFO "xe_execlist: %s interrupt received: 0x%04x",
+	       hwe->name, (unsigned int)intr_vec);
+}
 
 struct xe_execlist_port *xe_execlist_port_create(struct xe_device *xe,
 						 struct xe_hw_engine *hwe)
@@ -27,15 +59,24 @@ struct xe_execlist_port *xe_execlist_port_create(struct xe_device *xe,
 	if (!port)
 		return ERR_PTR(-ENOMEM);
 
+	port->hwe = hwe;
+
 	spin_lock_init(&port->active_lock);
 	for (i = 0; i < ARRAY_SIZE(port->active); i++)
 		INIT_LIST_HEAD(&port->active[i]);
+
+	hwe->irq_handler = xe_execlist_port_irq_handler;
 
 	return port;
 }
 
 void xe_execlist_port_destroy(struct xe_execlist_port *port)
 {
+	/* Prevent an interrupt while we're destroying */
+	spin_lock_irq(&port->hwe->xe->gt_irq_lock);
+	port->hwe->irq_handler = NULL;
+	spin_unlock_irq(&port->hwe->xe->gt_irq_lock);
+
 	kfree(port);
 }
 
@@ -72,20 +113,38 @@ static void xe_execlist_make_active(struct xe_execlist *exl)
 
 	spin_unlock(&port->active_lock);
 }
+#endif
 
 static struct dma_fence *
 xe_execlist_run_job(struct drm_sched_job *drm_job)
 {
 	struct xe_sched_job *job = to_xe_sched_job(drm_job);
 	struct xe_execlist *exl = job->engine->execlist;
+	struct xe_lrc *lrc = &job->engine->lrc;
+	uint32_t dw[10], i = 0;
+
+	dw[i++] = MI_ARB_ON_OFF | MI_ARB_ENABLE;
+
+	dw[i++] = MI_BATCH_BUFFER_START_GEN8 | BIT(8);
+	dw[i++] = lower_32_bits(job->user_batch_addr);
+	dw[i++] = upper_32_bits(job->user_batch_addr);
+
+	dw[i++] = MI_ARB_ON_OFF | MI_ARB_DISABLE;
+
+	dw[i++] = MI_STORE_DATA_IMM | BIT(22) /* GGTT */ | 2;
+	dw[i++] = xe_lrc_seqno_ggtt_addr(lrc);
+	dw[i++] = 0;
+	dw[i++] = job->fence.seqno;
+	dw[i++] = MI_USER_INTERRUPT;
+
+	XE_BUG_ON(i > ARRAY_SIZE(dw));
+
+	xe_lrc_write_ring(lrc, dw, i * sizeof(*dw));
+//	xe_execlist_make_active(exl);
+	xe_execlist_run(exl);
+
+	return dma_fence_get(&job->fence);
 }
-#else
-static struct dma_fence *
-xe_execlist_run_job(struct drm_sched_job *drm_job)
-{
-	return NULL;
-}
-#endif
 
 static const struct drm_sched_backend_ops drm_sched_ops = {
 	.dependency = xe_drm_sched_job_dependency,
