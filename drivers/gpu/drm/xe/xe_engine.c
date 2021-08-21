@@ -25,6 +25,8 @@ static struct xe_engine *__xe_engine_create(struct xe_device *xe,
 		return ERR_PTR(-ENOMEM);
 
 	e->hwe = hwe;
+	kref_init(&e->refcount);
+	e->vm = vm;
 
 	err = xe_lrc_init(&e->lrc, hwe, vm, SZ_16K);
 	if (err)
@@ -38,9 +40,6 @@ static struct xe_engine *__xe_engine_create(struct xe_device *xe,
 		}
 		e->entity = &e->execlist->entity;
 	}
-
-	kref_init(&e->refcount);
-	e->vm = vm;
 
 	return e;
 
@@ -67,10 +66,11 @@ void xe_engine_free(struct kref *ref)
 {
 	struct xe_engine *e = container_of(ref, struct xe_engine, refcount);
 
-	xe_vm_put(e->vm);
-	xe_lrc_finish(&e->lrc);
 	if (e->execlist)
 		xe_execlist_destroy(e->execlist);
+
+	xe_lrc_finish(&e->lrc);
+	xe_vm_put(e->vm);
 
 	kfree(e);
 }
