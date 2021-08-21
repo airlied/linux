@@ -103,7 +103,7 @@ int xe_ggtt_insert_bo(struct xe_ggtt *ggtt, struct xe_bo *bo)
 	uint64_t offset, pte;
 	int err;
 
-	if (XE_WARN_ON(bo->ggtt_node.size > 0)) {
+	if (XE_WARN_ON(bo->ggtt_node.size)) {
 		/* Someone's already inserted this BO in the GGTT */
 		XE_BUG_ON(bo->ggtt_node.size != bo->size);
 		return 0;
@@ -132,11 +132,11 @@ int xe_ggtt_insert_bo(struct xe_ggtt *ggtt, struct xe_bo *bo)
 
 void xe_ggtt_remove_bo(struct xe_ggtt *ggtt, struct xe_bo *bo)
 {
-	if (XE_WARN_ON(bo->ggtt_node.size)) {
-		/* This BO is not currently in the GGTT */
-		XE_BUG_ON(bo->ggtt_node.size != bo->size);
+	if (XE_WARN_ON(!bo->ggtt_node.size))
 		return;
-	}
+
+	/* This BO is not currently in the GGTT */
+	XE_BUG_ON(bo->ggtt_node.size != bo->size);
 
 	mutex_lock(&ggtt->lock);
 
