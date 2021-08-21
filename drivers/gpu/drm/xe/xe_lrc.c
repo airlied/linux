@@ -623,7 +623,7 @@ static void reset_stop_ring(uint32_t *regs, struct xe_hw_engine *hwe)
 	}
 }
 
-static uint32_t *__xe_lrc_get_map(struct xe_lrc *lrc)
+static void *__xe_lrc_get_map(struct xe_lrc *lrc)
 {
 	bool is_iomem;
 	void *map;
@@ -660,7 +660,7 @@ void *xe_lrc_pphwsp(struct xe_lrc *lrc)
 
 static uint32_t *xe_lrc_regs(struct xe_lrc *lrc)
 {
-	return xe_lrc_pphwsp(lrc) + LRC_PPHWSP_SIZE;
+	return __xe_lrc_get_map(lrc) + lrc->ring_size + LRC_PPHWSP_SIZE;
 }
 
 int xe_lrc_init(struct xe_lrc *lrc, struct xe_hw_engine *hwe,
