@@ -161,6 +161,7 @@ int xe_hw_engine_init(struct xe_device *xe, struct xe_hw_engine *hwe,
 		      enum xe_hw_engine_id id)
 {
 	const struct engine_info *info = &engine_infos[id];
+	int err;
 
 	if (WARN_ON(id >= ARRAY_SIZE(engine_infos) || info->name == NULL))
 		return -EINVAL;
@@ -172,17 +173,30 @@ int xe_hw_engine_init(struct xe_device *xe, struct xe_hw_engine *hwe,
 	hwe->instance = info->instance;
 	hwe->mmio_base = engine_info_mmio_base(info, GRAPHICS_VER(xe));
 
+	hwe->hwsp = xe_bo_create(xe, NULL, SZ_4K, ttm_bo_type_kernel,
+			         XE_BO_CREATE_SYSTEM_BIT |
+				 XE_BO_CREATE_GGTT_BIT);
+	if (IS_ERR(hwe->hwsp))
+		return PTR_ERR(hwe->hwsp);
+
 	hwe->exl_port = xe_execlist_port_create(xe, hwe);
-	if (IS_ERR(hwe->exl_port))
-		return PTR_ERR(hwe->exl_port);
+	if (IS_ERR(hwe->exl_port)) {
+		err = PTR_ERR(hwe->exl_port);
+		goto err_hwsp;
+	}
 
 	hwe->xe = xe;
 
 	return 0;
+
+err_hwsp:
+	xe_bo_put(hwe->hwsp);
+	return err;
 }
 
 void xe_hw_engine_finish(struct xe_hw_engine *hwe)
 {
 	xe_execlist_port_destroy(hwe->exl_port);
+	xe_bo_put(hwe->hwsp);
 	hwe->xe = NULL;
 }

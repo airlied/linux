@@ -45,6 +45,8 @@ struct xe_hw_engine {
 	uint16_t instance;
 	uint16_t mmio_base;
 
+	struct xe_bo *hwsp;
+
 	struct xe_execlist_port *exl_port;
 };
 
