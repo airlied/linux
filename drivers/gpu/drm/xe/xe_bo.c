@@ -275,8 +275,6 @@ struct xe_bo *xe_bo_create(struct xe_device *xe, struct xe_vm *vm,
 
 	INIT_LIST_HEAD(&bo->vmas);
 
-	xe_bo_unlock_vm_held(bo);
-
 	if (flags & XE_BO_CREATE_GGTT_BIT) {
 		err = xe_ggtt_insert_bo(&xe->ggtt, bo);
 		if (err) {
@@ -284,6 +282,8 @@ struct xe_bo *xe_bo_create(struct xe_device *xe, struct xe_vm *vm,
 			return ERR_PTR(err);
 		}
 	}
+
+	xe_bo_unlock_vm_held(bo);
 
 	return bo;
 }
