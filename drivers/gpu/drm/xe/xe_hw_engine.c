@@ -142,7 +142,7 @@ static const struct engine_info engine_infos[] = {
 	},
 };
 
-static uint16_t engine_info_mmio_base(const struct engine_info *info,
+static uint32_t engine_info_mmio_base(const struct engine_info *info,
 				      unsigned int graphics_ver)
 {
 	int i;

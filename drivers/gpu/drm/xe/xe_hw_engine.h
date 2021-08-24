@@ -43,7 +43,7 @@ struct xe_hw_engine {
 	const char *name;
 	enum xe_engine_class class;
 	uint16_t instance;
-	uint16_t mmio_base;
+	uint32_t mmio_base;
 
 	struct xe_bo *hwsp;
 
