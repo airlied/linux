@@ -114,6 +114,7 @@ struct xe_user_extension {
 #define DRM_XE_ENGINE_CREATE	0x06
 #define DRM_XE_ENGINE_DESTROY	0x07
 #define DRM_XE_EXEC		0x08
+#define DRM_XE_MMIO		0x09
 
 /* Must be kept compact -- no holes */
 #define DRM_IOCTL_XE_DEVICE_QUERY	DRM_IOWR(DRM_COMMAND_BASE + DRM_XE_GEM_CREATE, struct drm_xe_device_query)
@@ -125,6 +126,7 @@ struct xe_user_extension {
 #define DRM_IOCTL_XE_ENGINE_CREATE	DRM_IOWR(DRM_COMMAND_BASE + DRM_XE_ENGINE_CREATE, struct drm_xe_engine_create)
 #define DRM_IOCTL_XE_ENGINE_DESTROY	DRM_IOW( DRM_COMMAND_BASE + DRM_XE_ENGINE_DESTROY, struct drm_xe_engine_destroy)
 #define DRM_IOCTL_XE_EXEC		DRM_IOW( DRM_COMMAND_BASE + DRM_XE_EXEC, struct drm_xe_exec)
+#define DRM_IOCTL_XE_MMIO		DRM_IOWR(DRM_COMMAND_BASE + DRM_XE_MMIO, struct drm_xe_mmio)
 
 struct drm_xe_engine_class_instance {
 	__u16 engine_class;
@@ -294,6 +296,25 @@ struct drm_xe_exec {
 	__u64 syncs;
 
 	__u64 address;
+};
+
+struct drm_xe_mmio {
+	/** @extensions: Pointer to the first extension struct, if any */
+	__u64 extensions;
+
+	__u32 addr;
+
+	__u32 flags;
+
+#define DRM_XE_MMIO_8BIT	0x0
+#define DRM_XE_MMIO_16BIT	0x1
+#define DRM_XE_MMIO_32BIT	0x2
+#define DRM_XE_MMIO_64BIT	0x3
+#define DRM_XE_MMIO_BITS_MASK	0x3
+#define DRM_XE_MMIO_READ	0x4
+#define DRM_XE_MMIO_WRITE	0x8
+
+	__u64 value;
 };
 
 #if defined(__cplusplus)

@@ -54,6 +54,7 @@ struct xe_device {
 	bool irq_enabled;
 
 	struct {
+		size_t size;
 		void *regs;
 	} mmio;
 

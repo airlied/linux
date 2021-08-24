@@ -28,5 +28,7 @@ static inline uint64_t xe_mmio_read64(struct xe_device *xe, uint32_t reg)
 	return readq(xe->mmio.regs + reg);
 }
 
+int xe_mmio_ioctl(struct drm_device *dev, void *data,
+		  struct drm_file *file);
 
 #endif /* _XE_MMIO_H_ */
