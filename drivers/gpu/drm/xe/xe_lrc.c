@@ -754,21 +754,40 @@ static void xe_lrc_assert_ring_space(struct xe_lrc *lrc, size_t size)
 #endif
 }
 
+static void __xe_lrc_write_ring(struct xe_lrc *lrc, void *ring,
+				const void *data, size_t size)
+{
+	memcpy(ring + lrc->ring_tail, data, size);
+	lrc->ring_tail = (lrc->ring_tail + size) & (lrc->ring_size - 1);
+}
+
 void xe_lrc_write_ring(struct xe_lrc *lrc, const void *data, size_t size)
 {
 	void *ring;
-	size_t cpy_size;
+	uint32_t rhs;
+	size_t aligned_size;
 
-	xe_lrc_assert_ring_space(lrc, size);
+	XE_BUG_ON(!IS_ALIGNED(size, 4));
+	aligned_size = ALIGN(size, 8);
+
+	xe_lrc_assert_ring_space(lrc, aligned_size);
 
 	ring = xe_lrc_ring(lrc);
 
 	XE_BUG_ON(lrc->ring_tail >= lrc->ring_size);
-	cpy_size = min_t(size_t, size, lrc->ring_size - lrc->ring_tail);
-	memcpy(ring + lrc->ring_tail, data, cpy_size);
-	if (cpy_size < size)
-		memcpy(ring, data + cpy_size, size - cpy_size);
+	rhs = lrc->ring_size - lrc->ring_tail;
+	if (size > rhs) {
+		__xe_lrc_write_ring(lrc, ring, data, rhs);
+		__xe_lrc_write_ring(lrc, ring, data + rhs, size - rhs);
+	} else {
+		__xe_lrc_write_ring(lrc, ring, data, size);
+	}
 
-	lrc->ring_tail = (lrc->ring_tail + size) & (lrc->ring_size - 1);
+	if (aligned_size > size) {
+		uint32_t noop = MI_NOOP;
+
+		__xe_lrc_write_ring(lrc, ring, &noop, sizeof(noop));
+	}
+
 	xe_lrc_regs(lrc)[CTX_RING_TAIL] = lrc->ring_tail;
 }
