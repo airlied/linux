@@ -15,6 +15,8 @@ struct xe_device;
 struct xe_ggtt {
 	uint64_t size;
 
+	struct xe_bo *scratch;
+
 	struct mutex lock;
 
 	uint64_t __iomem *gsm;

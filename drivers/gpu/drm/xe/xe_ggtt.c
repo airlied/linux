@@ -52,11 +52,14 @@ static void xe_ggtt_set_pte(struct xe_ggtt *ggtt, uint64_t addr, uint64_t pte)
 static void xe_ggtt_clear(struct xe_ggtt *ggtt, uint64_t start, uint64_t size)
 {
 	uint64_t end = start + size - 1;
+	uint64_t scratch_pte;
 
 	XE_BUG_ON(start >= end);
 
+	scratch_pte = gen8_pte_encode(ggtt->scratch, 0);
+
 	while (start < end) {
-		xe_ggtt_set_pte(ggtt, start, 0);
+		xe_ggtt_set_pte(ggtt, start, scratch_pte);
 		start += GEN8_PAGE_SIZE;
 	}
 }
@@ -66,6 +69,7 @@ int xe_ggtt_init(struct xe_device *xe, struct xe_ggtt *ggtt)
 	struct pci_dev *pdev = to_pci_dev(xe->drm.dev);
 	unsigned int gsm_size;
 	phys_addr_t phys_addr;
+	int err;
 
 	gsm_size = probe_gsm_size(pdev);
 	if (gsm_size == 0) {
@@ -81,6 +85,18 @@ int xe_ggtt_init(struct xe_device *xe, struct xe_ggtt *ggtt)
 		return -ENOMEM;
 	}
 
+	ggtt->scratch = xe_bo_create(xe, NULL, GEN8_PAGE_SIZE,
+				     ttm_bo_type_kernel,
+				     XE_BO_CREATE_SYSTEM_BIT);
+	if (IS_ERR(ggtt->scratch)) {
+		err = PTR_ERR(ggtt->scratch);
+		goto err_iomap;
+	}
+
+	err = xe_bo_populate(ggtt->scratch);
+	if (err)
+		goto err_scratch;
+
 	ggtt->size = (gsm_size / 8) * (uint64_t)GEN8_PAGE_SIZE;
 	xe_ggtt_clear(ggtt, 0, ggtt->size - 1);
 
@@ -89,12 +105,19 @@ int xe_ggtt_init(struct xe_device *xe, struct xe_ggtt *ggtt)
 	mutex_init(&ggtt->lock);
 
 	return 0;
+
+err_scratch:
+	xe_bo_put(ggtt->scratch);
+err_iomap:
+	iounmap(ggtt->gsm);
+	return err;
 }
 
 void xe_ggtt_finish(struct xe_ggtt *ggtt)
 {
 	mutex_destroy(&ggtt->lock);
 	drm_mm_takedown(&ggtt->mm);
+	xe_bo_put(ggtt->scratch);
 	iounmap(ggtt->gsm);
 }
 
