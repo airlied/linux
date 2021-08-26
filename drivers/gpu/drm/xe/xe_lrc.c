@@ -578,9 +578,9 @@ static const u8 *reg_offsets(struct xe_device *xe, enum xe_engine_class class)
 static void set_context_control(uint32_t * regs, struct xe_hw_engine *hwe,
 				bool inhibit)
 {
-	u32 ctl;
+	u32 ctl = 0;
 
-	ctl = _MASKED_BIT_ENABLE(CTX_CTRL_INHIBIT_SYN_CTX_SWITCH);
+	ctl |= _MASKED_BIT_ENABLE(CTX_CTRL_INHIBIT_SYN_CTX_SWITCH);
 	ctl |= _MASKED_BIT_DISABLE(CTX_CTRL_ENGINE_CTX_RESTORE_INHIBIT);
 	if (inhibit)
 		ctl |= CTX_CTRL_ENGINE_CTX_RESTORE_INHIBIT;
@@ -588,6 +588,8 @@ static void set_context_control(uint32_t * regs, struct xe_hw_engine *hwe,
 		ctl |= _MASKED_BIT_DISABLE(CTX_CTRL_ENGINE_CTX_SAVE_INHIBIT |
 					   CTX_CTRL_RS_CTX_ENABLE);
 	regs[CTX_CONTEXT_CONTROL] = ctl;
+
+	/* TODO: Timestamp */
 }
 
 static void set_ppgtt(uint32_t *regs, struct xe_vm *vm)
