@@ -51,6 +51,8 @@ struct xe_hw_engine {
 	struct xe_bo *hwsp;
 
 	struct xe_execlist_port *exl_port;
+
+	void (*irq_handler)(struct xe_hw_engine *, uint16_t);
 };
 
 int xe_hw_engine_init(struct xe_device *xe, struct xe_hw_engine *hwe,

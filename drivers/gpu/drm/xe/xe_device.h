@@ -58,6 +58,7 @@ struct xe_device {
 	struct xe_ttm_gtt_mgr gtt_mgr;
 
 	bool irq_enabled;
+	spinlock_t gt_irq_lock;
 
 	struct {
 		size_t size;
