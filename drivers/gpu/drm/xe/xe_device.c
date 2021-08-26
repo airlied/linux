@@ -200,31 +200,37 @@ static int xe_device_ttm_mgr_init(struct xe_device *xe)
 	struct sysinfo si;
 	uint64_t gtt_size;
 
-	err = xe_ttm_vram_mgr_init(xe);
-	if (err)
-		return err;
-
-#ifdef CONFIG_64BIT
-	xe->vram.mapping = ioremap_wc(xe->vram.io_start,
-				      xe->vram.size);
-#endif
 	si_meminfo(&si);
-	gtt_size = min(max((XE_DEFAULT_GTT_SIZE_MB << 20),
-			   xe->vram.size),
-		       ((uint64_t)si.totalram * si.mem_unit * 3/4));
+	gtt_size = (uint64_t)si.totalram * si.mem_unit * 3/4;
+
+	if (xe->vram.size) {
+		err = xe_ttm_vram_mgr_init(xe);
+		if (err)
+			return err;
+#ifdef CONFIG_64BIT
+		xe->vram.mapping = ioremap_wc(xe->vram.io_start,
+					      xe->vram.size);
+#endif
+		gtt_size = min(max((XE_DEFAULT_GTT_SIZE_MB << 20),
+				   xe->vram.size),
+			       gtt_size);
+	}
+
 	err = xe_ttm_gtt_mgr_init(xe, gtt_size);
 	if (err)
 		goto err_vram_mgr;
 
 	return 0;
 err_vram_mgr:
-	xe_ttm_vram_mgr_fini(xe);
+	if (xe->vram.size)
+		xe_ttm_vram_mgr_fini(xe);
 	return err;
 }
 
 static void xe_device_ttm_mgr_fini(struct xe_device *xe)
 {
-	xe_ttm_vram_mgr_fini(xe);
+	if (xe->vram.size)
+		xe_ttm_vram_mgr_fini(xe);
 	xe_ttm_gtt_mgr_fini(xe);
 }
 

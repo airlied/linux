@@ -38,8 +38,10 @@ mask_err:
 
 static void xe_mmio_probe_vram(struct xe_device *xe)
 {
-	if (!IS_DGFX(xe))
+	if (!IS_DGFX(xe)) {
+		xe->vram.size = xe->vram.io_start = 0;
 		return;
+	}
 
 	xe->vram.size = xe_mmio_read64(xe, GEN12_GSMBASE.reg);
 	xe->vram.io_start = pci_resource_start(to_pci_dev(xe->drm.dev), 2);
@@ -66,7 +68,7 @@ int xe_mmio_init(struct xe_device *xe)
 	 * keep the GT powered down; we won't be able to communicate with it
 	 * and we should not continue with driver initialization.
 	 */
-	if (IS_DGFX(i915) && !(xe_mmio_read32(xe, GU_CNTL.reg) & LMEM_INIT)) {
+	if (IS_DGFX(xe) && !(xe_mmio_read32(xe, GU_CNTL.reg) & LMEM_INIT)) {
 		drm_err(&xe->drm, "LMEM not initialized by firmware\n");
 		return -ENODEV;
 	}
