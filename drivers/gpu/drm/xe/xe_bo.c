@@ -266,7 +266,7 @@ struct xe_bo *xe_bo_create(struct xe_device *xe, struct xe_vm *vm,
 				   &bo->placement, SZ_64K >> PAGE_SHIFT,
 				   &ctx, NULL, vm ? &vm->resv : NULL,
 				   xe_ttm_bo_destroy);
-	if (err)
+	if (WARN_ON(err))
 		return ERR_PTR(err);
 
 	if (vm && (flags & XE_BO_CREATE_USER_BIT))

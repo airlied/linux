@@ -679,7 +679,7 @@ int xe_lrc_init(struct xe_lrc *lrc, struct xe_hw_engine *hwe,
 	XE_BUG_ON(lrc->bo->size % PAGE_SIZE);
 	err = ttm_bo_kmap(&lrc->bo->ttm, 0, lrc->bo->size / PAGE_SIZE,
 			  &lrc->kmap);
-	if (err) {
+	if (WARN_ON(err)) {
 		xe_bo_put(lrc->bo);
 		return err;
 	}
