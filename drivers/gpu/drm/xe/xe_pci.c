@@ -1313,6 +1313,7 @@ static const struct intel_device_info dg2_info = {
  * PCI ID matches, otherwise we'll use the wrong info struct above.
  */
 static const struct pci_device_id pciidlist[] = {
+	INTEL_TGL_12_GT2_IDS(&tgl_info),
 	INTEL_DG1_IDS(&dg1_info),
 	{0, 0, 0}
 };
