@@ -29,8 +29,9 @@
 
 #define XE_BO_INVALID_OFFSET	LONG_MAX
 
-#define GRAPHICS_VER(xe) 12
-#define GRAPHICS_VERx10(xe) 120
+#define GRAPHICS_VER(xe) ((xe)->info.graphics_verx10 / 10)
+#define GRAPHICS_VERx10(xe) ((xe)->info.graphics_verx10)
+#define IS_DGFX(xe) ((xe)->info.is_dgfx)
 
 struct xe_ttm_vram_mgr {
 	struct ttm_resource_manager manager;
@@ -46,6 +47,11 @@ struct xe_ttm_gtt_mgr {
 
 struct xe_device {
 	struct drm_device drm;
+
+	struct {
+		uint8_t graphics_verx10;
+		bool is_dgfx;
+	} info;
 
 	struct ttm_device ttm;
 	struct xe_ttm_vram_mgr vram_mgr;

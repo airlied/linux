@@ -1332,6 +1332,7 @@ static void xe_pci_remove(struct pci_dev *pdev)
 
 static int xe_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 {
+	const struct intel_device_info *devinfo = (void *)ent->driver_data;
 	struct xe_device *xe;
 	int err;
 
@@ -1353,6 +1354,14 @@ static int xe_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	xe = xe_device_create(pdev, ent);
 	if (IS_ERR(xe))
 		return PTR_ERR(xe);
+
+	/* TODO: Once we sort out includes, embed the intel_device_info
+	 * directly in xe_device
+	 */
+	XE_BUG_ON(devinfo->graphics_rel % 10);
+	xe->info.graphics_verx10 = devinfo->graphics_ver * 10 +
+				   devinfo->graphics_rel / 10;
+	xe->info.is_dgfx = devinfo->is_dgfx;
 
 	pci_set_drvdata(pdev, xe);
 	err = pci_enable_device(pdev);

@@ -10,8 +10,6 @@
 
 #include "../i915/i915_reg.h"
 
-#define IS_DGFX(x) true
-
 static int xe_set_dma_info(struct xe_device *xe)
 {
 	unsigned int mask_size = 39; /* TODO */
