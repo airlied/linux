@@ -98,24 +98,11 @@ static struct xe_hw_engine *
 find_hw_engine(struct xe_device *xe,
 	       struct drm_xe_engine_class_instance eci)
 {
-	enum xe_engine_class class;
-	unsigned int instance;
-	int i;
-
 	if (eci.engine_class > ARRAY_SIZE(user_to_xe_engine_class))
 		return NULL;
 
-	class = user_to_xe_engine_class[eci.engine_class];
-	instance = eci.engine_instance;
-
-	for (i = 0; i < ARRAY_SIZE(xe->hw_engines); i++) {
-		if (xe->hw_engines[i].xe &&
-		    xe->hw_engines[i].class == class &&
-		    xe->hw_engines[i].instance == instance)
-			return &xe->hw_engines[i];
-	}
-
-	return NULL;
+	return xe_device_hw_engine(xe,
+		user_to_xe_engine_class[eci.engine_class], eci.engine_instance);
 }
 
 int xe_engine_create_ioctl(struct drm_device *dev, void *data,

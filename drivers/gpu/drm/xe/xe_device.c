@@ -309,3 +309,19 @@ void xe_device_remove(struct xe_device *xe)
 void xe_device_shutdown(struct xe_device *xe)
 {
 }
+
+struct xe_hw_engine *xe_device_hw_engine(struct xe_device *xe,
+					 enum xe_engine_class class,
+					 uint16_t instance)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(xe->hw_engines); i++) {
+		if (xe->hw_engines[i].xe &&
+		    xe->hw_engines[i].class == class &&
+		    xe->hw_engines[i].instance == instance)
+			return &xe->hw_engines[i];
+	}
+
+	return NULL;
+}

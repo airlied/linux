@@ -9,11 +9,14 @@
 
 #include <linux/types.h>
 
+/* See "Engine ID Definition" struct in the Icelake PRM */
 enum xe_engine_class {
-	XE_ENGINE_CLASS_RENDER,
-	XE_ENGINE_CLASS_COPY,
-	XE_ENGINE_CLASS_VIDEO_DECODE,
-	XE_ENGINE_CLASS_VIDEO_ENHANCE,
+	XE_ENGINE_CLASS_RENDER = 0,
+	XE_ENGINE_CLASS_VIDEO_DECODE = 1,
+	XE_ENGINE_CLASS_VIDEO_ENHANCE = 2,
+	XE_ENGINE_CLASS_COPY = 3,
+	XE_ENGINE_CLASS_OTHER = 4,
+	XE_ENGINE_CLASS_COMPUTE = 5,
 };
 
 enum xe_hw_engine_id {
