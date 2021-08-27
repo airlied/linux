@@ -637,32 +637,52 @@ static void *__xe_lrc_get_map(struct xe_lrc *lrc)
 	return map;
 }
 
-static void *xe_lrc_ring(struct xe_lrc *lrc)
+static inline uint32_t __xe_lrc_ring_offset(struct xe_lrc *lrc)
 {
-	return __xe_lrc_get_map(lrc);
+	return 0;
 }
 
-static uint32_t xe_lrc_ring_ggtt_addr(struct xe_lrc *lrc)
+static inline uint32_t __xe_lrc_pphwsp_offset(struct xe_lrc *lrc)
 {
-	return xe_bo_ggtt_addr(lrc->bo);
-}
-
-uint32_t xe_lrc_ggtt_addr(struct xe_lrc *lrc)
-{
-	/* The context comes after the ring */
-	return xe_bo_ggtt_addr(lrc->bo) + lrc->ring_size;
+	return lrc->ring_size;
 }
 
 #define LRC_PPHWSP_SIZE SZ_4K
 
+static inline uint32_t __xe_lrc_regs_offset(struct xe_lrc *lrc)
+{
+	return __xe_lrc_pphwsp_offset(lrc) + LRC_PPHWSP_SIZE;
+}
+
+#define DECL_MAP_ADDR_HELPERS(elem) \
+static inline void *__xe_lrc_##elem##_map(struct xe_lrc *lrc) \
+{ \
+	return __xe_lrc_get_map(lrc) + __xe_lrc_##elem##_offset(lrc); \
+} \
+static inline uint32_t __xe_lrc_##elem##_ggtt_addr(struct xe_lrc *lrc) \
+{ \
+	return xe_bo_ggtt_addr(lrc->bo) + __xe_lrc_##elem##_offset(lrc); \
+} \
+
+DECL_MAP_ADDR_HELPERS(ring)
+DECL_MAP_ADDR_HELPERS(pphwsp)
+DECL_MAP_ADDR_HELPERS(regs)
+
+#undef DECL_MAP_ADDR_HELPERS
+
 void *xe_lrc_pphwsp(struct xe_lrc *lrc)
 {
-	return __xe_lrc_get_map(lrc) + lrc->ring_size;
+	return __xe_lrc_pphwsp_map(lrc);
+}
+
+uint32_t xe_lrc_ggtt_addr(struct xe_lrc *lrc)
+{
+	return __xe_lrc_pphwsp_ggtt_addr(lrc);
 }
 
 static uint32_t *xe_lrc_regs(struct xe_lrc *lrc)
 {
-	return __xe_lrc_get_map(lrc) + lrc->ring_size + LRC_PPHWSP_SIZE;
+	return __xe_lrc_regs_map(lrc);
 }
 
 int xe_lrc_init(struct xe_lrc *lrc, struct xe_hw_engine *hwe,
@@ -702,7 +722,7 @@ int xe_lrc_init(struct xe_lrc *lrc, struct xe_hw_engine *hwe,
 
 	reset_stop_ring(regs, hwe);
 
-	regs[CTX_RING_START] = xe_lrc_ring_ggtt_addr(lrc);
+	regs[CTX_RING_START] = __xe_lrc_ring_ggtt_addr(lrc);
 	regs[CTX_RING_HEAD] = 0;
 	regs[CTX_RING_TAIL] = lrc->ring_tail;
 	regs[CTX_RING_CTL] = RING_CTL_SIZE(lrc->ring_size) | RING_VALID;
@@ -772,7 +792,7 @@ void xe_lrc_write_ring(struct xe_lrc *lrc, const void *data, size_t size)
 
 	xe_lrc_assert_ring_space(lrc, aligned_size);
 
-	ring = xe_lrc_ring(lrc);
+	ring = __xe_lrc_ring_map(lrc);
 
 	XE_BUG_ON(lrc->ring_tail >= lrc->ring_size);
 	rhs = lrc->ring_size - lrc->ring_tail;
