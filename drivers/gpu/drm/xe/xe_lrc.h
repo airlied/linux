@@ -32,6 +32,9 @@ void xe_lrc_unmap(struct xe_lrc *lrc);
 uint32_t xe_lrc_ring_space(struct xe_lrc *lrc);
 void xe_lrc_write_ring(struct xe_lrc *lrc, const void *data, size_t size);
 
+uint32_t xe_lrc_last_seqno(struct xe_lrc *lrc);
+uint32_t xe_lrc_seqno_ggtt_addr(struct xe_lrc *lrc);
+
 uint32_t xe_lrc_ggtt_addr(struct xe_lrc *lrc);
 void *xe_lrc_pphwsp(struct xe_lrc *lrc);
 

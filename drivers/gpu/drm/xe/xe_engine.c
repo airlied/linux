@@ -41,6 +41,9 @@ static struct xe_engine *__xe_engine_create(struct xe_device *xe,
 		e->entity = &e->execlist->entity;
 	}
 
+	e->fence_ctx = dma_fence_context_alloc(1);
+	e->next_seqno = 1;
+
 	return e;
 
 err_lrc:

@@ -31,6 +31,9 @@ struct xe_engine {
 	struct drm_sched_entity *entity;
 
 	struct xe_lrc lrc;
+
+	uint64_t fence_ctx;
+	uint32_t next_seqno;
 };
 
 struct xe_engine *xe_engine_create(struct xe_device *xe, struct xe_vm *vm,
@@ -49,6 +52,8 @@ static inline void xe_engine_put(struct xe_engine *engine)
 {
 	kref_put(&engine->refcount, xe_engine_free);
 }
+
+#define xe_engine_assert_held(e) xe_vm_assert_held((e)->vm)
 
 int xe_engine_create_ioctl(struct drm_device *dev, void *data,
 			   struct drm_file *file);

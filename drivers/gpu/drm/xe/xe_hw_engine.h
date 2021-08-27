@@ -7,7 +7,8 @@
 #ifndef _XE_HW_ENGINE_H_
 #define _XE_HW_ENGINE_H_
 
-#include <linux/types.h>
+#include <linux/list.h>
+#include <linux/spinlock.h>
 
 /* See "Engine ID Definition" struct in the Icelake PRM */
 enum xe_engine_class {
@@ -52,11 +53,16 @@ struct xe_hw_engine {
 
 	struct xe_execlist_port *exl_port;
 
+	spinlock_t fence_lock;
+	struct list_head signal_jobs;
+
 	void (*irq_handler)(struct xe_hw_engine *, uint16_t);
 };
 
 int xe_hw_engine_init(struct xe_device *xe, struct xe_hw_engine *hwe,
 		      enum xe_hw_engine_id id);
 void xe_hw_engine_finish(struct xe_hw_engine *hwe);
+
+void xe_hw_engine_handle_irq(struct xe_hw_engine *hwe, uint16_t intr_vec);
 
 #endif /* _XE_ENGINE_H_ */

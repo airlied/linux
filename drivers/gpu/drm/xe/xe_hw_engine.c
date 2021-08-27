@@ -8,6 +8,7 @@
 
 #include "xe_device.h"
 #include "xe_execlist.h"
+#include "xe_sched_job.h"
 
 #include "../i915/i915_reg.h"
 
@@ -185,6 +186,9 @@ int xe_hw_engine_init(struct xe_device *xe, struct xe_hw_engine *hwe,
 		goto err_hwsp;
 	}
 
+	spin_lock_init(&hwe->fence_lock);
+	INIT_LIST_HEAD(&hwe->signal_jobs);
+
 	hwe->xe = xe;
 
 	return 0;
@@ -199,4 +203,29 @@ void xe_hw_engine_finish(struct xe_hw_engine *hwe)
 	xe_execlist_port_destroy(hwe->exl_port);
 	xe_bo_put(hwe->hwsp);
 	hwe->xe = NULL;
+}
+
+static void xe_hw_engine_signal_complete_jobs(struct xe_hw_engine *hwe)
+{
+	unsigned long flags;
+	struct xe_sched_job *job, *next;
+
+	spin_lock_irqsave(&hwe->fence_lock, flags);
+	list_for_each_entry_safe(job, next, &hwe->signal_jobs, signal_link) {
+		if (!xe_sched_job_complete(job))
+			continue;
+
+		dma_fence_signal_locked(&job->fence);
+		list_del(&job->signal_link);
+	}
+	spin_unlock_irqrestore(&hwe->fence_lock, flags);
+}
+
+void xe_hw_engine_handle_irq(struct xe_hw_engine *hwe, uint16_t intr_vec)
+{
+	if (intr_vec & 1) /* TODO #define */
+		xe_hw_engine_signal_complete_jobs(hwe);
+
+	if (hwe->irq_handler)
+		hwe->irq_handler(hwe, intr_vec);
 }

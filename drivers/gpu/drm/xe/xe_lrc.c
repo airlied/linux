@@ -647,7 +647,14 @@ static inline uint32_t __xe_lrc_pphwsp_offset(struct xe_lrc *lrc)
 	return lrc->ring_size;
 }
 
+#define LRC_SEQNO_PPHWSP_OFFSET 512
 #define LRC_PPHWSP_SIZE SZ_4K
+
+static inline uint32_t __xe_lrc_seqno_offset(struct xe_lrc *lrc)
+{
+	/* The seqno is stored in the driver-defined portion of PPHWSP */
+	return __xe_lrc_pphwsp_offset(lrc) + LRC_SEQNO_PPHWSP_OFFSET;
+}
 
 static inline uint32_t __xe_lrc_regs_offset(struct xe_lrc *lrc)
 {
@@ -666,6 +673,7 @@ static inline uint32_t __xe_lrc_##elem##_ggtt_addr(struct xe_lrc *lrc) \
 
 DECL_MAP_ADDR_HELPERS(ring)
 DECL_MAP_ADDR_HELPERS(pphwsp)
+DECL_MAP_ADDR_HELPERS(seqno)
 DECL_MAP_ADDR_HELPERS(regs)
 
 #undef DECL_MAP_ADDR_HELPERS
@@ -678,6 +686,16 @@ void *xe_lrc_pphwsp(struct xe_lrc *lrc)
 uint32_t xe_lrc_ggtt_addr(struct xe_lrc *lrc)
 {
 	return __xe_lrc_pphwsp_ggtt_addr(lrc);
+}
+
+uint32_t xe_lrc_last_seqno(struct xe_lrc *lrc)
+{
+	return *(uint32_t *)__xe_lrc_seqno_map(lrc);
+}
+
+uint32_t xe_lrc_seqno_ggtt_addr(struct xe_lrc *lrc)
+{
+	return __xe_lrc_seqno_ggtt_addr(lrc);
 }
 
 static uint32_t *xe_lrc_regs(struct xe_lrc *lrc)
