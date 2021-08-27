@@ -77,6 +77,8 @@ struct xe_device {
 };
 
 struct xe_file {
+	struct drm_file *drm;
+
 	struct xarray vm_xa;
 	struct mutex vm_lock;
 

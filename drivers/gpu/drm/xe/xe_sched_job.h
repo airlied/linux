@@ -31,6 +31,8 @@ struct xe_sched_job {
 
 	spinlock_t lock;
 	struct dma_fence fence;
+
+	uint64_t user_batch_addr;
 };
 
 static inline struct xe_sched_job *
@@ -41,7 +43,8 @@ to_xe_sched_job(struct drm_sched_job *drm)
 
 struct xe_sched_job *dma_fence_to_xe_sched_job(struct dma_fence *fence);
 
-struct xe_sched_job *xe_sched_job_create(struct xe_engine *e);
+struct xe_sched_job *xe_sched_job_create(struct xe_engine *e,
+					 uint64_t user_batch_addr);
 
 static inline struct xe_sched_job *xe_sched_job_get(struct xe_sched_job *job)
 {
@@ -55,6 +58,9 @@ static inline void xe_sched_job_put(struct xe_sched_job *job)
 }
 
 bool xe_sched_job_complete(struct xe_sched_job *job);
+
+int xe_sched_job_add_dependency(struct xe_sched_job *job,
+				struct dma_fence *fence);
 
 struct dma_fence *xe_drm_sched_job_dependency(struct drm_sched_job *drm_job,
 					      struct drm_sched_entity *entity);
