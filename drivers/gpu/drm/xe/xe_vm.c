@@ -194,7 +194,7 @@ static void xe_pt_write(struct xe_pt *pt, unsigned int idx, uint64_t data)
 
 	map = ttm_kmap_obj_virtual(&pt->map, &is_iomem);
 	WARN_ON_ONCE(is_iomem);
-	*map = data;
+	map[idx] = data;
 }
 
 static unsigned int xe_pt_shift(unsigned int level)
