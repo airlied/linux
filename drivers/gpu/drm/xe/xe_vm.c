@@ -36,9 +36,6 @@ enum xe_cache_level {
 #define GEN8_PDES (1 << GEN8_PDE_SHIFT)
 #define GEN8_PDE_MASK (GEN8_PDES - 1)
 
-#define GEN8_PDE_EMPTY 0
-#define GEN8_PTE_EMPTY 0
-
 #define GEN12_PPGTT_PTE_LM	BIT_ULL(11)
 
 static uint64_t gen8_pde_encode(struct xe_bo *bo, uint64_t bo_offset,
@@ -131,12 +128,35 @@ static bool xe_pt_0_clear_live(struct xe_pt_0 *pt, unsigned int idx)
 	return pt->live[idx / 32] &= ~(1u << (idx % 32));
 }
 
+static uint64_t __xe_vm_empty_pte(struct xe_vm *vm, unsigned int level)
+{
+	if (!vm->scratch_bo)
+		return 0;
+
+	if (level == 0)
+		return gen8_pte_encode(vm->scratch_bo, 0, XE_CACHE_WB, 0);
+	else
+		return gen8_pde_encode(vm->scratch_pt[level - 1]->bo, 0,
+				       XE_CACHE_WB);
+}
+
+static void xe_pt_write(struct xe_pt *pt, unsigned int idx, uint64_t data)
+{
+	bool is_iomem;
+	uint64_t *map;
+
+	map = ttm_kmap_obj_virtual(&pt->map, &is_iomem);
+	WARN_ON_ONCE(is_iomem);
+	map[idx] = data;
+}
+
 struct xe_pt *xe_pt_create(struct xe_vm *vm, unsigned int level)
 {
 	struct xe_pt *pt;
 	struct xe_bo *bo;
 	size_t size;
-	int err;
+	uint64_t empty;
+	int err, i;
 
 	size = level ? sizeof(struct xe_pt_dir) : sizeof(struct xe_pt_0);
 	pt = kzalloc(size, GFP_KERNEL);
@@ -157,6 +177,10 @@ struct xe_pt *xe_pt_create(struct xe_vm *vm, unsigned int level)
 
 	pt->level = level;
 	pt->num_live = 0;
+
+	empty = __xe_vm_empty_pte(vm, level);
+	for (i = 0; i < GEN8_PDES; i++)
+		xe_pt_write(pt, i, empty);
 
 	return pt;
 
@@ -187,16 +211,6 @@ static void xe_pt_destroy(struct xe_pt *pt)
 	kfree(pt);
 }
 
-static void xe_pt_write(struct xe_pt *pt, unsigned int idx, uint64_t data)
-{
-	bool is_iomem;
-	uint64_t *map;
-
-	map = ttm_kmap_obj_virtual(&pt->map, &is_iomem);
-	WARN_ON_ONCE(is_iomem);
-	map[idx] = data;
-}
-
 static unsigned int xe_pt_shift(unsigned int level)
 {
 	return GEN8_PTE_SHIFT + GEN8_PDE_SHIFT * level;
@@ -214,11 +228,12 @@ static uint64_t xe_pt_next_start(uint64_t start, unsigned int level)
 	return (start + pt_range) & ~(pt_range - 1);
 }
 
-static uint64_t __xe_pt_clear(struct xe_pt *pt, unsigned int level,
-			      uint64_t start, uint64_t end,
+static uint64_t __xe_pt_clear(struct xe_vm *vm, struct xe_pt *pt,
+			      unsigned int level, uint64_t start, uint64_t end,
 			      bool depopulate)
 {
 	uint64_t next_pt_start = xe_pt_next_start(start, level);
+	uint64_t empty;
 
 	XE_BUG_ON(start >= end);
 	XE_BUG_ON(start & GEN8_PTE_MASK);
@@ -226,6 +241,7 @@ static uint64_t __xe_pt_clear(struct xe_pt *pt, unsigned int level,
 	if (!pt)
 		return next_pt_start;
 
+	empty = __xe_vm_empty_pte(vm, level);
 	if (level == 0) {
 		struct xe_pt_0 *pt_0 = as_xe_pt_0(pt);
 
@@ -236,7 +252,7 @@ static uint64_t __xe_pt_clear(struct xe_pt *pt, unsigned int level,
 			if (!xe_pt_0_is_live(pt_0, i))
 				continue;
 
-			xe_pt_write(pt, i, GEN8_PTE_EMPTY);
+			xe_pt_write(pt, i, empty);
 			xe_pt_0_clear_live(pt_0, i);
 			pt->num_live--;
 		}
@@ -247,10 +263,10 @@ static uint64_t __xe_pt_clear(struct xe_pt *pt, unsigned int level,
 			unsigned int i = xe_pt_idx(start, level);
 			struct xe_pt *entry = pt_dir->entries[i];
 
-			start = __xe_pt_clear(entry, level - 1, start, end,
+			start = __xe_pt_clear(vm, entry, level - 1, start, end,
 					      depopulate);
 			if (entry && !entry->num_live && depopulate) {
-				xe_pt_write(pt, i, GEN8_PDE_EMPTY);
+				xe_pt_write(pt, i, empty);
 				xe_pt_destroy(entry);
 				pt_dir->entries[i] = NULL;
 				pt->num_live--;
@@ -261,10 +277,11 @@ static uint64_t __xe_pt_clear(struct xe_pt *pt, unsigned int level,
 	return start;
 }
 
-static void xe_pt_clear(struct xe_pt *pt, uint64_t start, uint64_t end,
+static void xe_pt_clear(struct xe_vm *vm, struct xe_pt *pt,
+			uint64_t start, uint64_t end,
 			bool depopulate)
 {
-	__xe_pt_clear(pt, pt->level, start, end, depopulate);
+	__xe_pt_clear(vm, pt, pt->level, start, end, depopulate);
 }
 
 static int __xe_pt_populate(struct xe_vm *vm, struct xe_pt *pt,
@@ -504,7 +521,7 @@ struct xe_vm *xe_vm_create(struct xe_device *xe)
 {
 	struct xe_vm *vm;
 	struct xe_vma *vma;
-	int err;
+	int err, i;
 
 	vm = kzalloc(sizeof(*vm), GFP_KERNEL);
 	if (!vm)
@@ -525,16 +542,40 @@ struct xe_vm *xe_vm_create(struct xe_device *xe)
 	xe_vm_insert_vma(vm, vma);
 
 	xe_vm_lock(vm, NULL);
+
+	vm->scratch_bo = xe_bo_create(vm->xe, vm, SZ_4K, ttm_bo_type_kernel,
+				      XE_BO_CREATE_SYSTEM_BIT);
+	if (IS_ERR(vm->scratch_bo)) {
+		err = PTR_ERR(vm->scratch_bo);
+		goto err_unlock;
+	}
+
+	if (vm->scratch_bo) {
+		for (i = 0; i < 3; i++) {
+			vm->scratch_pt[i] = xe_pt_create(vm, i);
+			if (IS_ERR(vm->scratch_pt[i])) {
+				err = PTR_ERR(vm->scratch_pt[i]);
+				goto err_scratch_pt;
+			}
+		}
+	}
+
 	vm->pt_root = xe_pt_create(vm, 3);
-	xe_vm_unlock(vm);
 	if (IS_ERR(vm->pt_root)) {
 		err = PTR_ERR(vm->pt_root);
-		goto err_vma;
+		goto err_scratch_pt;
 	}
+
+	xe_vm_unlock(vm);
 
 	return vm;
 
-err_vma:
+err_scratch_pt:
+	while (i)
+		xe_pt_destroy(vm->scratch_pt[--i]);
+	xe_bo_put(vm->scratch_bo);
+err_unlock:
+	xe_vm_unlock(vm);
 	kfree(vma);
 err_resv:
 	dma_resv_fini(&vm->resv);
@@ -671,7 +712,7 @@ void __xe_vma_unbind(struct xe_vma *vma)
 {
 	xe_vm_assert_held(vma->vm);
 	xe_vma_make_empty(vma);
-	xe_pt_clear(vma->vm->pt_root, vma->start, vma->end, true);
+	xe_pt_clear(vma->vm, vma->vm->pt_root, vma->start, vma->end, true);
 }
 
 static int xe_vm_bind(struct xe_vm *vm, struct xe_bo *bo, uint64_t offset,

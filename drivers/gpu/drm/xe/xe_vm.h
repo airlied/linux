@@ -44,6 +44,9 @@ struct xe_vm {
 	struct rb_root vmas;
 
 	struct xe_pt *pt_root;
+
+	struct xe_bo *scratch_bo;
+	struct xe_pt *scratch_pt[3];
 };
 
 struct xe_vm *xe_vm_create(struct xe_device *xe);
