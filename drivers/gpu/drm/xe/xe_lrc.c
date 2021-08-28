@@ -594,10 +594,10 @@ static void set_context_control(uint32_t * regs, struct xe_hw_engine *hwe,
 
 static void set_ppgtt(uint32_t *regs, struct xe_vm *vm)
 {
-	dma_addr_t addr = xe_vm_root_addr(vm);
+	uint64_t desc = xe_vm_pdp4_descriptor(vm);
 
-	regs[CTX_PDP0_UDW] = upper_32_bits(addr);
-	regs[CTX_PDP0_LDW] = lower_32_bits(addr);
+	regs[CTX_PDP0_UDW] = upper_32_bits(desc);
+	regs[CTX_PDP0_LDW] = lower_32_bits(desc);
 }
 
 static int lrc_ring_mi_mode(struct xe_hw_engine *hwe)

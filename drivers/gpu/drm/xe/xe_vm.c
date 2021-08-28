@@ -574,9 +574,9 @@ struct xe_vm *xe_vm_lookup(struct xe_file *xef, u32 id)
 	return vm;
 }
 
-dma_addr_t xe_vm_root_addr(struct xe_vm *vm)
+uint64_t xe_vm_pdp4_descriptor(struct xe_vm *vm)
 {
-	return xe_bo_addr(vm->pt_root->bo, 0, GEN8_PAGE_SIZE);
+	return gen8_pde_encode(vm->pt_root->bo, 0, XE_CACHE_WB);
 }
 
 static void
