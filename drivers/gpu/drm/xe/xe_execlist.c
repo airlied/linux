@@ -152,6 +152,70 @@ static const struct drm_sched_backend_ops drm_sched_ops = {
 	.free_job = xe_drm_sched_job_free,
 };
 
+static inline void test(struct xe_execlist *exl)
+{
+	struct xe_hw_engine *hwe = exl->engine->hwe;
+	struct xe_lrc *lrc = &exl->engine->lrc;
+	struct xe_device *xe = hwe->xe;
+	uint32_t lrc_addr = xe_lrc_ggtt_addr(lrc);
+	uint32_t data_addr = lrc_addr + 1024;
+	uint32_t *data_p = xe_lrc_pphwsp(lrc) + 1024, data;
+	uint64_t desc;
+	uint32_t dw[8], i = 0;
+
+	dw[i++] = MI_STORE_DATA_IMM | BIT(22) /* GGTT */ | 2;
+	dw[i++] = lower_32_bits(data_addr);
+	dw[i++] = upper_32_bits(data_addr);
+	dw[i++] = 0xdeadbeef;
+	dw[i++] = MI_USER_INTERRUPT;
+
+	xe_lrc_write_ring(lrc, dw, i * sizeof(*dw));
+
+	desc = GEN8_CTX_VALID;
+	desc |= INTEL_LEGACY_64B_CONTEXT << GEN8_CTX_ADDRESSING_MODE_SHIFT;
+	/* TODO: Priority */
+	/* TODO: Privilege */
+	if (GRAPHICS_VER(hwe->xe) == 8)
+		desc |= GEN8_CTX_L3LLC_COHERENT;
+
+	desc |= (7ull << 37); /* TODO: Context ID */
+
+	desc |= lrc_addr;
+
+	xe_mmio_write32(xe, RING_HWS_PGA(hwe->mmio_base).reg,
+			xe_bo_ggtt_addr(hwe->hwsp));
+	xe_mmio_read32(xe, RING_HWS_PGA(hwe->mmio_base).reg);
+	xe_mmio_write32(xe, RING_MODE_GEN7(hwe->mmio_base).reg,
+			_MASKED_BIT_ENABLE(GEN11_GFX_DISABLE_LEGACY_MODE));
+	xe_mmio_write32(xe, RING_EXECLIST_SQ_CONTENTS(hwe->mmio_base).reg + 0,
+			lower_32_bits(desc));
+	xe_mmio_write32(xe, RING_EXECLIST_SQ_CONTENTS(hwe->mmio_base).reg + 4,
+			upper_32_bits(desc));
+	xe_mmio_write32(xe, RING_EXECLIST_CONTROL(hwe->mmio_base).reg,
+			EL_CTRL_LOAD);
+
+	while (!(data = READ_ONCE(*data_p)) && i++ < (1u << 31))
+		continue;
+
+	xe_ggtt_printk(&xe->ggtt, KERN_INFO);
+
+	printk(KERN_INFO "Attempted to execute on %s, mmio_base = 0x%05x",
+	       hwe->name, hwe->mmio_base);
+	printk(KERN_INFO "Execlist descriptor: 0x%08x %08x",
+	       upper_32_bits(desc), lower_32_bits(desc));
+	printk(KERN_INFO "Data read: 0x%08x", data);
+	printk(KERN_INFO "Ring: (head, tail) = (0x%x, 0x%x)",
+			 xe_lrc_ring_head(lrc), lrc->ring_tail);
+	printk(KERN_INFO "EXECLIST_STATUS = 0x%08x %08x",
+	       xe_mmio_read32(xe, RING_EXECLIST_STATUS_HI(hwe->mmio_base).reg),
+	       xe_mmio_read32(xe, RING_EXECLIST_STATUS_LO(hwe->mmio_base).reg));
+	printk(KERN_INFO "ACTHD = 0x%08x %08x",
+	       xe_mmio_read32(xe, RING_ACTHD_UDW(hwe->mmio_base).reg),
+	       xe_mmio_read32(xe, RING_ACTHD(hwe->mmio_base).reg));
+	printk(KERN_INFO "RING_START = 0x%08x",
+	       xe_mmio_read32(xe, RING_START(hwe->mmio_base).reg));
+}
+
 struct xe_execlist *xe_execlist_create(struct xe_engine *e)
 {
 	struct drm_gpu_scheduler *sched;
