@@ -230,9 +230,10 @@ static void xe_hw_engine_signal_complete_jobs(struct xe_hw_engine *hwe)
 
 void xe_hw_engine_handle_irq(struct xe_hw_engine *hwe, uint16_t intr_vec)
 {
-	if (intr_vec & GT_RENDER_USER_INTERRUPT)
-		xe_hw_engine_signal_complete_jobs(hwe);
 
 	if (hwe->irq_handler)
 		hwe->irq_handler(hwe, intr_vec);
+
+	if (intr_vec & GT_RENDER_USER_INTERRUPT)
+		xe_hw_engine_signal_complete_jobs(hwe);
 }

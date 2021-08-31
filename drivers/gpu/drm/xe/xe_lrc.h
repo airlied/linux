@@ -18,6 +18,7 @@ struct xe_lrc {
 
 	uint32_t ring_size;
 	uint32_t ring_tail;
+	uint32_t ring_old_tail; /* Shadow of RING_TAIL */
 
 	uint64_t desc;
 };

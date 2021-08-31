@@ -717,7 +717,7 @@ int xe_lrc_init(struct xe_lrc *lrc, struct xe_hw_engine *hwe,
 {
 	struct xe_device *xe = hwe->xe;
 	uint32_t *regs, arb_enable;
-	int err, i;
+	int err;
 
 	lrc->bo = xe_bo_create(xe, vm, ring_size + lrc_size(xe, hwe->class),
 			       ttm_bo_type_kernel,
@@ -754,10 +754,6 @@ int xe_lrc_init(struct xe_lrc *lrc, struct xe_hw_engine *hwe,
 	regs[CTX_RING_HEAD] = 0;
 	regs[CTX_RING_TAIL] = lrc->ring_tail;
 	regs[CTX_RING_CTL] = RING_CTL_SIZE(lrc->ring_size) | RING_VALID;
-
-	printk(KERN_INFO "First 32 LRC regs:");
-	for (i = 0; i < 32; i++)
-		printk(KERN_INFO "    regs[%d] = 0x%08x", i, regs[i]);
 
 	lrc->desc = GEN8_CTX_VALID;
 	lrc->desc |= INTEL_LEGACY_64B_CONTEXT << GEN8_CTX_ADDRESSING_MODE_SHIFT;

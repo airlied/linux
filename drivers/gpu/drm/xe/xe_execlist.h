@@ -15,11 +15,20 @@
 #include "xe_bo.h"
 #include "xe_hw_engine.h"
 
+struct xe_execlist;
+
+#define xe_execlist_port_assert_held(port) lockdep_assert_held(&(port)->lock);
+
 struct xe_execlist_port {
 	struct xe_hw_engine *hwe;
 
-	spinlock_t active_lock;
+	spinlock_t lock;
+
 	struct list_head active[DRM_SCHED_PRIORITY_COUNT];
+
+	uint32_t last_ctx_id;
+
+	struct xe_execlist *running_exl;
 };
 
 struct xe_execlist_port *xe_execlist_port_create(struct xe_device *xe,
@@ -34,6 +43,8 @@ struct xe_execlist {
 	struct drm_sched_entity entity;
 
 	struct xe_execlist_port *port;
+
+	bool has_run;
 
 	enum drm_sched_priority active_priority;
 	struct list_head active_link;
