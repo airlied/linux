@@ -276,7 +276,6 @@ xe_execlist_run_job(struct drm_sched_job *drm_job)
 }
 
 static const struct drm_sched_backend_ops drm_sched_ops = {
-	.dependency = xe_drm_sched_job_dependency,
 	.run_job = xe_execlist_run_job,
 	.free_job = xe_drm_sched_job_free,
 };

@@ -251,8 +251,14 @@ static int parse_sync(struct xe_device *xe, struct xe_file *xef,
 
 static int add_sync_deps(struct sync *sync, struct xe_sched_job *job)
 {
-	if (sync->fence)
-		xe_sched_job_add_dependency(job, sync->fence);
+	int err;
+
+	if (sync->fence) {
+		err = drm_sched_job_add_dependency(&job->drm, sync->fence);
+		sync->fence = NULL;
+		if (err)
+			return err;
+	}
 
 	return 0;
 }
@@ -332,10 +338,12 @@ int xe_exec_ioctl(struct drm_device *dev, void *data, struct drm_file *file)
 			goto err_put_job;
 	}
 
-	drm_sched_entity_push_job(&job->drm);
+	drm_sched_job_arm(&job->drm);
 
 	for (i = 0; i < num_syncs; i++)
 		signal_sync(&syncs[i], &job->fence);
+
+	drm_sched_entity_push_job(&job->drm);
 
 err_put_job:
 	if (err)

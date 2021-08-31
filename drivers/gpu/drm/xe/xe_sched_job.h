@@ -23,9 +23,6 @@ struct xe_sched_job {
 
 	struct xe_engine *engine;
 
-	struct xarray deps;
-	unsigned long first_dep;
-
 	/* Link in xe_hw_engine.signal_jobs */
 	struct list_head signal_link;
 
@@ -59,11 +56,6 @@ static inline void xe_sched_job_put(struct xe_sched_job *job)
 
 bool xe_sched_job_complete(struct xe_sched_job *job);
 
-int xe_sched_job_add_dependency(struct xe_sched_job *job,
-				struct dma_fence *fence);
-
-struct dma_fence *xe_drm_sched_job_dependency(struct drm_sched_job *drm_job,
-					      struct drm_sched_entity *entity);
 void xe_drm_sched_job_free(struct drm_sched_job *drm_job);
 
 #endif /* _XE_SCHED_JOB_H_ */

@@ -101,9 +101,7 @@ struct xe_sched_job *xe_sched_job_create(struct xe_engine *e,
 	if (err)
 		goto err_free;
 
-	xa_init_flags(&job->deps, XA_FLAGS_ALLOC);
 	job->engine = e;
-	job->first_dep = 0;
 
 	dma_fence_init(&job->fence, &sched_job_fence_ops, &e->hwe->fence_lock,
 		       e->fence_ctx, e->next_seqno++);
@@ -119,14 +117,7 @@ err_free:
 
 static void xe_sched_job_destroy(struct xe_sched_job *job)
 {
-	struct dma_fence *f;
-	unsigned long i;
-
 	xe_sched_fence_cleanup(&job->fence);
-
-	xa_for_each_start(&job->deps, i, f, job->first_dep)
-		dma_fence_put(f);
-	xa_destroy(&job->deps);
 
 	drm_sched_job_cleanup(&job->drm);
 
@@ -139,33 +130,6 @@ bool xe_sched_job_complete(struct xe_sched_job *job)
 	uint32_t last_lrc_seqno = xe_lrc_last_seqno(&job->engine->lrc);
 
 	return (int32_t)(job->fence.seqno - last_lrc_seqno) <= 0;
-}
-
-int xe_sched_job_add_dependency(struct xe_sched_job *job,
-				struct dma_fence *fence)
-{
-	uint32_t id;
-	int err;
-
-	XE_BUG_ON(job->first_dep);
-
-	err = xa_alloc(&job->deps, &id, dma_fence_get(fence),
-		       xa_limit_32b, GFP_KERNEL);
-	if (err)
-		dma_fence_put(fence);
-
-	return err;
-}
-
-struct dma_fence *xe_drm_sched_job_dependency(struct drm_sched_job *drm_job,
-					      struct drm_sched_entity *entity)
-{
-	struct xe_sched_job *job = to_xe_sched_job(drm_job);
-
-	if (!xa_empty(&job->deps))
-		return xa_erase(&job->deps, job->first_dep++);
-
-	return NULL;
 }
 
 void xe_drm_sched_job_free(struct drm_sched_job *drm_job)
