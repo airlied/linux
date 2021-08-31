@@ -709,7 +709,7 @@ int xe_lrc_init(struct xe_lrc *lrc, struct xe_hw_engine *hwe,
 		struct xe_vm *vm, uint32_t ring_size)
 {
 	struct xe_device *xe = hwe->xe;
-	uint32_t *regs;
+	uint32_t *regs, arb_enable;
 	int err, i;
 
 	lrc->bo = xe_bo_create(xe, vm, ring_size + lrc_size(xe, hwe->class),
@@ -768,6 +768,9 @@ int xe_lrc_init(struct xe_lrc *lrc, struct xe_hw_engine *hwe,
 		lrc->desc |= (uint64_t)hwe->instance << GEN11_ENGINE_INSTANCE_SHIFT;
 		lrc->desc |= (uint64_t)hwe->class << GEN11_ENGINE_CLASS_SHIFT;
 	}
+
+	arb_enable = MI_ARB_ON_OFF | MI_ARB_ENABLE;
+	xe_lrc_write_ring(lrc, &arb_enable, sizeof(arb_enable));
 
 	return 0;
 }
