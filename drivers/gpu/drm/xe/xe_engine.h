@@ -14,6 +14,7 @@
 #include <drm/gpu_scheduler.h>
 
 #include "xe_lrc.h"
+#include "xe_vm.h"
 
 struct xe_device;
 struct xe_execlist;

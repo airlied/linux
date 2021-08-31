@@ -180,10 +180,14 @@ int xe_hw_engine_init(struct xe_device *xe, struct xe_hw_engine *hwe,
 	if (IS_ERR(hwe->hwsp))
 		return PTR_ERR(hwe->hwsp);
 
+	err = xe_lrc_init(&hwe->kernel_lrc, hwe, NULL, SZ_16K);
+	if (err)
+		goto err_hwsp;
+
 	hwe->exl_port = xe_execlist_port_create(xe, hwe);
 	if (IS_ERR(hwe->exl_port)) {
 		err = PTR_ERR(hwe->exl_port);
-		goto err_hwsp;
+		goto err_kernel_lrc;
 	}
 
 	spin_lock_init(&hwe->fence_lock);
@@ -193,6 +197,8 @@ int xe_hw_engine_init(struct xe_device *xe, struct xe_hw_engine *hwe,
 
 	return 0;
 
+err_kernel_lrc:
+	xe_lrc_finish(&hwe->kernel_lrc);
 err_hwsp:
 	xe_bo_put(hwe->hwsp);
 	return err;
@@ -201,6 +207,7 @@ err_hwsp:
 void xe_hw_engine_finish(struct xe_hw_engine *hwe)
 {
 	xe_execlist_port_destroy(hwe->exl_port);
+	xe_lrc_finish(&hwe->kernel_lrc);
 	xe_bo_put(hwe->hwsp);
 	hwe->xe = NULL;
 }

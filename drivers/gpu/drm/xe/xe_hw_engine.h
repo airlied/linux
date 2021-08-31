@@ -10,6 +10,8 @@
 #include <linux/list.h>
 #include <linux/spinlock.h>
 
+#include "xe_lrc.h"
+
 /* See "Engine ID Definition" struct in the Icelake PRM */
 enum xe_engine_class {
 	XE_ENGINE_CLASS_RENDER = 0,
@@ -50,6 +52,8 @@ struct xe_hw_engine {
 	uint32_t mmio_base;
 
 	struct xe_bo *hwsp;
+
+	struct xe_lrc kernel_lrc;
 
 	struct xe_execlist_port *exl_port;
 

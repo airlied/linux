@@ -8,7 +8,9 @@
 
 #include <linux/slab.h>
 
+#include "xe_device.h"
 #include "xe_engine.h"
+#include "xe_hw_engine.h"
 
 static struct xe_sched_job *__dma_fence_to_xe_sched_job(struct dma_fence *fence)
 {

@@ -6,9 +6,9 @@
 #ifndef _XE_LRC_H_
 #define _XE_LRC_H_
 
-#include "xe_bo.h"
-#include "xe_device.h"
+#include <drm/ttm/ttm_bo_api.h>
 
+struct xe_bo;
 struct xe_hw_engine;
 struct xe_vm;
 

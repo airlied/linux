@@ -6,6 +6,8 @@
 
 #include "xe_lrc.h"
 
+#include "xe_bo.h"
+
 #include "../i915/i915_reg.h"
 #include "../i915/gt/intel_gpu_commands.h"
 #include "../i915/gt/intel_lrc_reg.h"
@@ -734,7 +736,8 @@ int xe_lrc_init(struct xe_lrc *lrc, struct xe_hw_engine *hwe,
 	memset(regs, 0, SZ_4K);
 	set_offsets(regs, reg_offsets(hwe->xe, hwe->class), hwe, true);
 	set_context_control(regs, hwe, true);
-	set_ppgtt(regs, vm);
+	if (vm)
+		set_ppgtt(regs, vm);
 
 	/* TODO: init_wa_bb_regs */
 
@@ -756,7 +759,8 @@ int xe_lrc_init(struct xe_lrc *lrc, struct xe_hw_engine *hwe,
 	/* While this appears to have something about privileged batches or
 	 * some such, it really just means PPGTT mode.
 	 */
-	lrc->desc |= GEN8_CTX_PRIVILEGE;
+	if (vm)
+		lrc->desc |= GEN8_CTX_PRIVILEGE;
 	if (GRAPHICS_VER(xe) == 8)
 		lrc->desc |= GEN8_CTX_L3LLC_COHERENT;
 
