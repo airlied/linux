@@ -36,7 +36,8 @@ struct xe_bo {
 
 #define XE_BO_CREATE_USER_BIT BIT(1)
 #define XE_BO_CREATE_SYSTEM_BIT BIT(2)
-#define XE_BO_CREATE_GGTT_BIT BIT(3)
+#define XE_BO_CREATE_LOCAL_BIT BIT(3)
+#define XE_BO_CREATE_GGTT_BIT BIT(4)
 
 struct xe_bo *xe_bo_create(struct xe_device *xe, struct xe_vm *vm, size_t size,
 			   enum ttm_bo_type type, uint32_t flags);

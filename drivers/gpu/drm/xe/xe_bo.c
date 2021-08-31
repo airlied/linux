@@ -60,6 +60,41 @@ static void xe_bo_placement(struct xe_bo *bo,
 	};
 }
 
+static int xe_bo_placement_for_flags(struct xe_device *xe, struct xe_bo *bo,
+				     uint32_t bo_flags)
+{
+	struct ttm_place *places = bo->placements;
+	u32 c = 0;
+
+	if (xe->vram.size && (bo_flags & XE_BO_CREATE_LOCAL_BIT)) {
+		places[c++] = (struct ttm_place) {
+			.mem_type = TTM_PL_VRAM,
+		};
+	}
+
+	if (!xe->vram.size || (bo_flags & XE_BO_CREATE_SYSTEM_BIT)) {
+		places[c++] = (struct ttm_place) {
+			.mem_type = TTM_PL_TT,
+		};
+	}
+
+	if (!c)
+		return -EINVAL;
+
+	places[c++] = (struct ttm_place) {
+		.mem_type = TTM_PL_SYSTEM,
+	};
+
+	bo->placement = (struct ttm_placement) {
+		.num_placement = c,
+		.placement = places,
+		.num_busy_placement = c,
+		.busy_placement = places,
+	};
+
+	return 0;
+}
+
 static void xe_evict_flags(struct ttm_buffer_object *tbo,
 			   struct ttm_placement *placement)
 {
@@ -244,7 +279,6 @@ struct xe_bo *xe_bo_create(struct xe_device *xe, struct xe_vm *vm,
 		.no_wait_gpu = false,
 	};
 	int err;
-	bool system;
 
 	bo = kzalloc(sizeof(*bo), GFP_KERNEL);
 	if (!bo)
@@ -259,8 +293,10 @@ struct xe_bo *xe_bo_create(struct xe_device *xe, struct xe_vm *vm,
 	if (vm)
 		xe_vm_assert_held(vm);
 
-	system = flags & XE_BO_CREATE_SYSTEM_BIT;
-	xe_bo_placement(bo, system, system, !system);
+	err = xe_bo_placement_for_flags(xe, bo, flags);
+	if (WARN_ON(err))
+		return ERR_PTR(err);
+
 	err = ttm_bo_init_reserved(&xe->ttm, &bo->ttm, size, type,
 				   &bo->placement, SZ_64K >> PAGE_SHIFT,
 				   &ctx, NULL, vm ? &vm->resv : NULL,
@@ -290,8 +326,13 @@ struct xe_bo *xe_bo_create(struct xe_device *xe, struct xe_vm *vm,
 static struct xe_bo *xe_bo_create_user(struct xe_device *xe, struct xe_vm *vm,
 				       size_t size, bool system)
 {
-	return xe_bo_create(xe, vm, size, ttm_bo_type_device,
-			    XE_BO_CREATE_USER_BIT | (system ? XE_BO_CREATE_SYSTEM_BIT : 0));
+	uint32_t bo_flags;
+
+	bo_flags = XE_BO_CREATE_USER_BIT | XE_BO_CREATE_SYSTEM_BIT;
+	if (!system)
+		bo_flags |= XE_BO_CREATE_LOCAL_BIT;
+
+	return xe_bo_create(xe, vm, size, ttm_bo_type_device, bo_flags);
 }
 
 int xe_bo_populate(struct xe_bo *bo)
