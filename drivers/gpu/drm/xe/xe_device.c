@@ -281,7 +281,7 @@ err_irq:
 	xe_irq_uninstall(xe);
 err_hw_engines:
 	for (i = 0; i < ARRAY_SIZE(xe->hw_engines); i++) {
-		if (xe->hw_engines[i].xe)
+		if (xe_hw_engine_is_valid(&xe->hw_engines[i]))
 			xe_hw_engine_finish(&xe->hw_engines[i]);
 	}
 	xe_ggtt_finish(&xe->ggtt);
@@ -302,7 +302,7 @@ void xe_device_remove(struct xe_device *xe)
 	drm_dev_unregister(&xe->drm);
 	xe_irq_uninstall(xe);
 	for (i = 0; i < ARRAY_SIZE(xe->hw_engines); i++) {
-		if (xe->hw_engines[i].xe)
+		if (xe_hw_engine_is_valid(&xe->hw_engines[i]))
 			xe_hw_engine_finish(&xe->hw_engines[i]);
 	}
 	xe_ggtt_finish(&xe->ggtt);
@@ -322,7 +322,7 @@ struct xe_hw_engine *xe_device_hw_engine(struct xe_device *xe,
 	int i;
 
 	for (i = 0; i < ARRAY_SIZE(xe->hw_engines); i++) {
-		if (xe->hw_engines[i].xe &&
+		if (xe_hw_engine_is_valid(&xe->hw_engines[i]) &&
 		    xe->hw_engines[i].class == class &&
 		    xe->hw_engines[i].instance == instance)
 			return &xe->hw_engines[i];

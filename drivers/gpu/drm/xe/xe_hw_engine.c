@@ -169,7 +169,7 @@ int xe_hw_engine_init(struct xe_device *xe, struct xe_hw_engine *hwe,
 
 	XE_BUG_ON(hwe->xe);
 
-	hwe->name = info->name;
+	hwe->xe = xe;
 	hwe->class = info->class;
 	hwe->instance = info->instance;
 	hwe->mmio_base = engine_info_mmio_base(info, GRAPHICS_VER(xe));
@@ -189,7 +189,7 @@ int xe_hw_engine_init(struct xe_device *xe, struct xe_hw_engine *hwe,
 	spin_lock_init(&hwe->fence_lock);
 	INIT_LIST_HEAD(&hwe->signal_jobs);
 
-	hwe->xe = xe;
+	hwe->name = info->name;
 
 	return 0;
 
