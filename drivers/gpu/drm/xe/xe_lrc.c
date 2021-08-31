@@ -705,6 +705,13 @@ uint32_t *xe_lrc_regs(struct xe_lrc *lrc)
 	return __xe_lrc_regs_map(lrc);
 }
 
+uint64_t xe_lrc_status(struct xe_lrc *lrc)
+{
+	uint32_t *pphwsp = xe_lrc_pphwsp(lrc);
+
+	return (uint64_t)pphwsp[33] << 32 | pphwsp[32];
+}
+
 int xe_lrc_init(struct xe_lrc *lrc, struct xe_hw_engine *hwe,
 		struct xe_vm *vm, uint32_t ring_size)
 {

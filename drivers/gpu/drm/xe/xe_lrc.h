@@ -39,6 +39,7 @@ uint32_t xe_lrc_seqno_ggtt_addr(struct xe_lrc *lrc);
 uint32_t xe_lrc_ggtt_addr(struct xe_lrc *lrc);
 void *xe_lrc_pphwsp(struct xe_lrc *lrc);
 uint32_t *xe_lrc_regs(struct xe_lrc *lrc);
+uint64_t xe_lrc_status(struct xe_lrc *lrc);
 
 uint64_t xe_lrc_descriptor(struct xe_lrc *lrc);
 
