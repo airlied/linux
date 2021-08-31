@@ -49,6 +49,19 @@ static bool xe_sched_fence_signaled(struct dma_fence *fence)
 	return xe_sched_job_complete(__dma_fence_to_xe_sched_job(fence));
 }
 
+static void xe_sched_fence_cleanup(struct dma_fence *fence)
+{
+	struct xe_sched_job *job = __dma_fence_to_xe_sched_job(fence);
+	unsigned long flags;
+
+	spin_lock_irqsave(fence->lock, flags);
+	if (test_bit(DMA_FENCE_FLAG_ENABLE_SIGNAL_BIT, &fence->flags) &&
+	    !test_bit(DMA_FENCE_FLAG_SIGNALED_BIT, &fence->flags)) {
+		list_del(&job->signal_link);
+	}
+	spin_unlock_irqrestore(fence->lock, flags);
+}
+
 static void xe_sched_job_destroy(struct xe_sched_job *job);
 
 static void xe_sched_fence_release(struct dma_fence *job_fence)
@@ -108,6 +121,8 @@ static void xe_sched_job_destroy(struct xe_sched_job *job)
 {
 	struct dma_fence *f;
 	unsigned long i;
+
+	xe_sched_fence_cleanup(&job->fence);
 
 	xa_for_each_start(&job->deps, i, f, job->first_dep)
 		dma_fence_put(f);

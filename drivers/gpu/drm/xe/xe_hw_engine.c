@@ -216,16 +216,24 @@ static void xe_hw_engine_signal_complete_jobs(struct xe_hw_engine *hwe)
 {
 	unsigned long flags;
 	struct xe_sched_job *job, *next;
+	int err;
+	bool tmp;
+
+	tmp = dma_fence_begin_signalling();
 
 	spin_lock_irqsave(&hwe->fence_lock, flags);
 	list_for_each_entry_safe(job, next, &hwe->signal_jobs, signal_link) {
 		if (!xe_sched_job_complete(job))
 			continue;
 
-		dma_fence_signal_locked(&job->fence);
+		err = dma_fence_signal_locked(&job->fence);
 		list_del(&job->signal_link);
+
+		XE_WARN_ON(err);
 	}
 	spin_unlock_irqrestore(&hwe->fence_lock, flags);
+
+	dma_fence_end_signalling(tmp);
 }
 
 void xe_hw_engine_handle_irq(struct xe_hw_engine *hwe, uint16_t intr_vec)
