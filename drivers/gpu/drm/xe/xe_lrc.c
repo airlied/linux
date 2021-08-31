@@ -803,7 +803,7 @@ uint32_t xe_lrc_ring_space(struct xe_lrc *lrc)
 	const uint32_t tail = lrc->ring_tail;
 	const uint32_t size = lrc->ring_size;
 
-	return ((tail - head - 1) & (size - 1)) + 1;
+	return ((head - tail - 1) & (size - 1)) + 1;
 }
 
 static void xe_lrc_assert_ring_space(struct xe_lrc *lrc, size_t size)
