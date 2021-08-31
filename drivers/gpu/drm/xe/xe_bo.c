@@ -119,7 +119,6 @@ static struct ttm_tt *xe_ttm_tt_create(struct ttm_buffer_object *ttm_bo,
 
 static void xe_ttm_tt_destroy(struct ttm_device *ttm_dev, struct ttm_tt *tt)
 {
-	ttm_tt_destroy_common(ttm_dev, tt);
 	ttm_tt_fini(tt);
 	kfree(tt);
 }

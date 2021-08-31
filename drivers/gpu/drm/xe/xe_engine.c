@@ -332,7 +332,7 @@ int xe_exec_ioctl(struct drm_device *dev, void *data, struct drm_file *file)
 			goto err_put_job;
 	}
 
-	drm_sched_entity_push_job(&job->drm, engine->entity);
+	drm_sched_entity_push_job(&job->drm);
 
 	for (i = 0; i < num_syncs; i++)
 		signal_sync(&syncs[i], &job->fence);
