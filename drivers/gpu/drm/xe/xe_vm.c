@@ -93,8 +93,6 @@ struct xe_pt {
 	struct xe_bo *bo;
 	unsigned int level;
 	unsigned int num_live;
-
-	struct ttm_bo_kmap_obj map;
 };
 
 struct xe_pt_dir {
@@ -144,14 +142,21 @@ static uint64_t __xe_vm_empty_pte(struct xe_vm *vm, unsigned int level)
 				       XE_CACHE_WB);
 }
 
-static void xe_pt_write(struct xe_pt *pt, unsigned int idx, uint64_t data)
+static int __xe_pt_kmap(struct xe_pt *pt, struct ttm_bo_kmap_obj *map)
+{
+	XE_BUG_ON(pt->bo->size % PAGE_SIZE);
+	return ttm_bo_kmap(&pt->bo->ttm, 0, pt->bo->size / PAGE_SIZE, map);
+}
+
+static void __xe_pt_write(struct ttm_bo_kmap_obj *map,
+			  unsigned int idx, uint64_t data)
 {
 	bool is_iomem;
-	uint64_t *map;
+	uint64_t *map_u64;
 
-	map = ttm_kmap_obj_virtual(&pt->map, &is_iomem);
+	map_u64 = ttm_kmap_obj_virtual(map, &is_iomem);
 	WARN_ON_ONCE(is_iomem);
-	map[idx] = data;
+	map_u64[idx] = data;
 }
 
 struct xe_pt *xe_pt_create(struct xe_vm *vm, unsigned int level)
@@ -159,6 +164,7 @@ struct xe_pt *xe_pt_create(struct xe_vm *vm, unsigned int level)
 	struct xe_pt *pt;
 	struct xe_bo *bo;
 	size_t size;
+	struct ttm_bo_kmap_obj map;
 	uint64_t empty;
 	int err, i;
 
@@ -175,20 +181,22 @@ struct xe_pt *xe_pt_create(struct xe_vm *vm, unsigned int level)
 	}
 	pt->bo = bo;
 
-	err = ttm_bo_kmap(&pt->bo->ttm, 0, 1, &pt->map);
+	err = __xe_pt_kmap(pt, &map);
 	if (err)
-		goto err_bo;
+		goto err_put_bo;
 
 	pt->level = level;
 	pt->num_live = 0;
 
 	empty = __xe_vm_empty_pte(vm, level);
 	for (i = 0; i < GEN8_PDES; i++)
-		xe_pt_write(pt, i, empty);
+		__xe_pt_write(&map, i, empty);
+
+	ttm_bo_kunmap(&map);
 
 	return pt;
 
-err_bo:
+err_put_bo:
 	xe_bo_put(bo);
 err_kfree:
 	kfree(pt);
@@ -198,8 +206,6 @@ err_kfree:
 static void xe_pt_destroy(struct xe_pt *pt)
 {
 	int i;
-
-	ttm_bo_kunmap(&pt->map);
 
 	XE_BUG_ON(!list_empty(&pt->bo->vmas));
 	xe_bo_put(pt->bo);
@@ -237,6 +243,7 @@ static void __xe_pt_clear(struct xe_vm *vm, struct xe_pt *pt,
 			  bool depopulate)
 {
 	uint64_t next_pt_start = xe_pt_next_start(*start, level);
+	struct ttm_bo_kmap_obj map;
 	uint64_t empty;
 
 	XE_BUG_ON(*start >= end);
@@ -246,6 +253,8 @@ static void __xe_pt_clear(struct xe_vm *vm, struct xe_pt *pt,
 		*start = next_pt_start;
 		return;
 	}
+
+	BUG_ON(__xe_pt_kmap(pt, &map));
 
 	empty = __xe_vm_empty_pte(vm, level);
 	if (level == 0) {
@@ -258,7 +267,7 @@ static void __xe_pt_clear(struct xe_vm *vm, struct xe_pt *pt,
 			if (!xe_pt_0_is_live(pt_0, i))
 				continue;
 
-			xe_pt_write(pt, i, empty);
+			__xe_pt_write(&map, i, empty);
 			xe_pt_0_clear_live(pt_0, i);
 			pt->num_live--;
 		}
@@ -272,13 +281,15 @@ static void __xe_pt_clear(struct xe_vm *vm, struct xe_pt *pt,
 			__xe_pt_clear(vm, entry, level - 1, start, end,
 				      depopulate);
 			if (entry && !entry->num_live && depopulate) {
-				xe_pt_write(pt, i, empty);
+				__xe_pt_write(&map, i, empty);
 				xe_pt_destroy(entry);
 				pt_dir->entries[i] = NULL;
 				pt->num_live--;
 			}
 		}
 	}
+
+	ttm_bo_kunmap(&map);
 }
 
 static void xe_pt_clear(struct xe_vm *vm, struct xe_pt *pt,
@@ -293,6 +304,7 @@ static int __xe_pt_populate(struct xe_vm *vm, struct xe_pt *pt,
 			    uint64_t *start, uint64_t end)
 {
 	uint64_t next_pt_start = xe_pt_next_start(*start, level);
+	struct ttm_bo_kmap_obj map = { .virtual = NULL };
 	struct xe_pt_dir *pt_dir;
 	int err;
 
@@ -315,21 +327,32 @@ static int __xe_pt_populate(struct xe_vm *vm, struct xe_pt *pt,
 			uint64_t pde;
 
 			entry = xe_pt_create(vm, level - 1);
-			if (IS_ERR(entry))
-				return PTR_ERR(entry);
+			if (IS_ERR(entry)) {
+				err = PTR_ERR(entry);
+				goto err_unmap;
+			}
+
+			if (!map.virtual) {
+				err = __xe_pt_kmap(pt, &map);
+				if (err)
+					goto err_unmap;
+			}
 
 			pde = gen8_pde_encode(entry->bo, 0, XE_CACHE_WB);
-			xe_pt_write(pt, i, pde);
+			__xe_pt_write(&map, i, pde);
 			pt_dir->entries[i] = entry;
 			pt->num_live--;
 		}
 		err = __xe_pt_populate(vm, pt_dir->entries[i],
 				       level - 1, start, end);
 		if (err < 0)
-			return err;
+			goto err_unmap;
 	}
 
-	return 0;
+err_unmap:
+	if (map.virtual)
+		ttm_bo_kunmap(&map);
+	return err;
 }
 
 static int xe_pt_populate(struct xe_vm *vm, struct xe_pt *pt,
@@ -341,6 +364,17 @@ static int xe_pt_populate(struct xe_vm *vm, struct xe_pt *pt,
 static void xe_pt_set_pte(struct xe_pt *pt, uint64_t addr, uint64_t pte)
 {
 	unsigned int i = xe_pt_idx(addr, pt->level);
+	struct ttm_bo_kmap_obj map;
+
+	/* TODO:  In theory, we could handle kmap failures safely in the
+	 * xe_pt_fill() path because we can return an error there.
+	 * However, if we return an error, we have to back-track and clear
+	 * all the old ones we've already filled out up to this point.  The
+	 * only way to safely do that would be to keep every kmap open and
+	 * only unmap them all at the end.  Otherwise, we could have a kmap
+	 * failure on the clean-up path and then we'd be sunk.
+	 */
+	BUG_ON(__xe_pt_kmap(pt, &map));
 
 	if (pt->level > 0) {
 		struct xe_pt_dir *pt_dir = as_xe_pt_dir(pt);
@@ -350,12 +384,14 @@ static void xe_pt_set_pte(struct xe_pt *pt, uint64_t addr, uint64_t pte)
 	} else {
 		struct xe_pt_0 *pt_0 = as_xe_pt_0(pt);
 
-		xe_pt_write(pt, i, pte);
+		__xe_pt_write(&map, i, pte);
 		if (!xe_pt_0_is_live(pt_0, i)) {
 			xe_pt_0_set_live(pt_0, i);
 			pt->num_live++;
 		}
 	}
+
+	ttm_bo_kunmap(&map);
 }
 
 static int xe_pt_fill(struct xe_pt *pt, struct xe_bo *bo, uint64_t bo_offset,
