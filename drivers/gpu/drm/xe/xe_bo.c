@@ -14,6 +14,7 @@
 #include <drm/xe_drm.h>
 
 #include "xe_device.h"
+#include "xe_res_cursor.h"
 
 static const struct ttm_place sys_placement_flags = {
 	.fpfn = 0,
@@ -210,12 +211,23 @@ out:
 
 }
 
+static unsigned long xe_ttm_io_mem_pfn(struct ttm_buffer_object *bo,
+				       unsigned long page_offset)
+{
+	struct xe_device *xe = ttm_to_xe_device(bo->bdev);
+	struct xe_res_cursor cursor;
+
+	xe_res_first(bo->resource, (u64)page_offset << PAGE_SHIFT, 0, &cursor);
+	return (xe->vram.io_start + cursor.start) >> PAGE_SHIFT;
+}
+
 struct ttm_device_funcs xe_ttm_funcs = {
 	.ttm_tt_create = xe_ttm_tt_create,
 	.ttm_tt_destroy = xe_ttm_tt_destroy,
 	.evict_flags = xe_evict_flags,
 	.move = xe_bo_move,
 	.io_mem_reserve = xe_ttm_io_mem_reserve,
+	.io_mem_pfn = xe_ttm_io_mem_pfn,
 };
 
 static void xe_ttm_bo_destroy(struct ttm_buffer_object *ttm_bo)
