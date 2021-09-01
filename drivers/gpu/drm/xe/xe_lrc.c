@@ -620,13 +620,6 @@ static void reset_stop_ring(uint32_t *regs, struct xe_hw_engine *hwe)
 	}
 }
 
-static void *__xe_lrc_get_map(struct xe_lrc *lrc)
-{
-	XE_BUG_ON(dma_buf_map_is_null(&lrc->bo->vmap));
-	WARN_ON_ONCE(lrc->bo->vmap.is_iomem);
-	return lrc->bo->vmap.vaddr;
-}
-
 static inline uint32_t __xe_lrc_ring_offset(struct xe_lrc *lrc)
 {
 	return 0;
@@ -652,9 +645,13 @@ static inline uint32_t __xe_lrc_regs_offset(struct xe_lrc *lrc)
 }
 
 #define DECL_MAP_ADDR_HELPERS(elem) \
-static inline void *__xe_lrc_##elem##_map(struct xe_lrc *lrc) \
+static inline struct dma_buf_map __xe_lrc_##elem##_map(struct xe_lrc *lrc) \
 { \
-	return __xe_lrc_get_map(lrc) + __xe_lrc_##elem##_offset(lrc); \
+	struct dma_buf_map map = lrc->bo->vmap; \
+\
+	XE_BUG_ON(dma_buf_map_is_null(&map)); \
+	dma_buf_map_incr(&map, __xe_lrc_##elem##_offset(lrc)); \
+	return map; \
 } \
 static inline uint32_t __xe_lrc_##elem##_ggtt_addr(struct xe_lrc *lrc) \
 { \
@@ -675,7 +672,13 @@ uint32_t xe_lrc_ggtt_addr(struct xe_lrc *lrc)
 
 uint32_t xe_lrc_last_seqno(struct xe_lrc *lrc)
 {
-	return *(uint32_t *)__xe_lrc_seqno_map(lrc);
+	struct dma_buf_map map;
+
+	map = __xe_lrc_seqno_map(lrc);
+	if (map.is_iomem)
+		return readl(map.vaddr_iomem);
+	else
+		return *(uint32_t *)map.vaddr;
 }
 
 uint32_t xe_lrc_seqno_ggtt_addr(struct xe_lrc *lrc)
@@ -685,16 +688,26 @@ uint32_t xe_lrc_seqno_ggtt_addr(struct xe_lrc *lrc)
 
 uint32_t xe_lrc_read_ctx_reg(struct xe_lrc *lrc, int reg_nr)
 {
-	uint32_t *regs = __xe_lrc_regs_map(lrc);
+	struct dma_buf_map map;
 
-	return regs[reg_nr];
+	map = __xe_lrc_regs_map(lrc);
+	dma_buf_map_incr(&map, reg_nr * sizeof(uint32_t));
+	if (map.is_iomem)
+		return readl(map.vaddr_iomem);
+	else
+		return *(uint32_t *)map.vaddr;
 }
 
 void xe_lrc_write_ctx_reg(struct xe_lrc *lrc, int reg_nr, uint32_t val)
 {
-	uint32_t *regs = __xe_lrc_regs_map(lrc);
+	struct dma_buf_map map;
 
-	regs[reg_nr] = val;
+	map = __xe_lrc_regs_map(lrc);
+	dma_buf_map_incr(&map, reg_nr * sizeof(uint32_t));
+	if (map.is_iomem)
+		writel(val, map.vaddr_iomem);
+	else
+		*(uint32_t *)map.vaddr = val;
 }
 
 static void *empty_lrc_data(struct xe_hw_engine *hwe)
@@ -729,6 +742,7 @@ static void xe_lrc_set_ppgtt(struct xe_lrc *lrc, struct xe_vm *vm)
 int xe_lrc_init(struct xe_lrc *lrc, struct xe_hw_engine *hwe,
 		struct xe_vm *vm, uint32_t ring_size)
 {
+	struct dma_buf_map map;
 	struct xe_device *xe = hwe->xe;
 	void *init_data;
 	uint32_t arb_enable;
@@ -756,7 +770,8 @@ int xe_lrc_init(struct xe_lrc *lrc, struct xe_hw_engine *hwe,
 	}
 
 	/* Per-Process of HW status Page */
-	memcpy(__xe_lrc_pphwsp_map(lrc), init_data, lrc_size(xe, hwe->class));
+	map = __xe_lrc_pphwsp_map(lrc);
+	dma_buf_map_memcpy_to(&map, init_data, lrc_size(xe, hwe->class));
 	kfree(init_data);
 
 	if (vm)
@@ -820,16 +835,17 @@ static void xe_lrc_assert_ring_space(struct xe_lrc *lrc, size_t size)
 #endif
 }
 
-static void __xe_lrc_write_ring(struct xe_lrc *lrc, void *ring,
+static void __xe_lrc_write_ring(struct xe_lrc *lrc, struct dma_buf_map ring,
 				const void *data, size_t size)
 {
-	memcpy(ring + lrc->ring_tail, data, size);
+	dma_buf_map_incr(&ring, lrc->ring_tail);
+	dma_buf_map_memcpy_to(&ring, data, size);
 	lrc->ring_tail = (lrc->ring_tail + size) & (lrc->ring_size - 1);
 }
 
 void xe_lrc_write_ring(struct xe_lrc *lrc, const void *data, size_t size)
 {
-	void *ring;
+	struct dma_buf_map ring;
 	uint32_t rhs;
 	size_t aligned_size;
 
