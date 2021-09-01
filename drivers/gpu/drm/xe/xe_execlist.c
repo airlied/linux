@@ -35,7 +35,7 @@ static void __start_lrc(struct xe_hw_engine *hwe, struct xe_lrc *lrc,
 	XE_BUG_ON(!FIELD_FIT(GEN11_SW_CTX_ID, ctx_id));
 	lrc_desc |= FIELD_PREP(GEN11_SW_CTX_ID, ctx_id);
 
-	xe_lrc_regs(lrc)[CTX_RING_TAIL] = lrc->ring_tail;
+	xe_lrc_write_ctx_reg(lrc, CTX_RING_TAIL, lrc->ring_tail);
 	lrc->ring_old_tail = lrc->ring_tail;
 
 	/*

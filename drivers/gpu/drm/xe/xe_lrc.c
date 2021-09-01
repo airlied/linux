@@ -595,14 +595,6 @@ static void set_context_control(uint32_t * regs, struct xe_hw_engine *hwe,
 	/* TODO: Timestamp */
 }
 
-static void set_ppgtt(uint32_t *regs, struct xe_vm *vm)
-{
-	uint64_t desc = xe_vm_pdp4_descriptor(vm);
-
-	regs[CTX_PDP0_UDW] = upper_32_bits(desc);
-	regs[CTX_PDP0_LDW] = lower_32_bits(desc);
-}
-
 static int lrc_ring_mi_mode(struct xe_hw_engine *hwe)
 {
 	if (GRAPHICS_VERx10(hwe->xe) >= 125)
@@ -691,9 +683,26 @@ uint32_t xe_lrc_seqno_ggtt_addr(struct xe_lrc *lrc)
 	return __xe_lrc_seqno_ggtt_addr(lrc);
 }
 
-uint32_t *xe_lrc_regs(struct xe_lrc *lrc)
+uint32_t xe_lrc_read_ctx_reg(struct xe_lrc *lrc, int reg_nr)
 {
-	return __xe_lrc_regs_map(lrc);
+	uint32_t *regs = __xe_lrc_regs_map(lrc);
+
+	return regs[reg_nr];
+}
+
+void xe_lrc_write_ctx_reg(struct xe_lrc *lrc, int reg_nr, uint32_t val)
+{
+	uint32_t *regs = __xe_lrc_regs_map(lrc);
+
+	regs[reg_nr] = val;
+}
+
+static void xe_lrc_set_ppgtt(struct xe_lrc *lrc, struct xe_vm *vm)
+{
+	uint64_t desc = xe_vm_pdp4_descriptor(vm);
+
+	xe_lrc_write_ctx_reg(lrc, CTX_PDP0_UDW, upper_32_bits(desc));
+	xe_lrc_write_ctx_reg(lrc, CTX_PDP0_LDW, lower_32_bits(desc));
 }
 
 int xe_lrc_init(struct xe_lrc *lrc, struct xe_hw_engine *hwe,
@@ -721,21 +730,23 @@ int xe_lrc_init(struct xe_lrc *lrc, struct xe_hw_engine *hwe,
 	/* Per-Process of HW status Page */
 	memset(__xe_lrc_pphwsp_map(lrc), 0, LRC_PPHWSP_SIZE);
 
-	regs = xe_lrc_regs(lrc);
+	regs = __xe_lrc_regs_map(lrc);
 	memset(regs, 0, SZ_4K);
 	set_offsets(regs, reg_offsets(hwe->xe, hwe->class), hwe, true);
 	set_context_control(regs, hwe, true);
-	if (vm)
-		set_ppgtt(regs, vm);
 
 	/* TODO: init_wa_bb_regs */
 
 	reset_stop_ring(regs, hwe);
 
-	regs[CTX_RING_START] = __xe_lrc_ring_ggtt_addr(lrc);
-	regs[CTX_RING_HEAD] = 0;
-	regs[CTX_RING_TAIL] = lrc->ring_tail;
-	regs[CTX_RING_CTL] = RING_CTL_SIZE(lrc->ring_size) | RING_VALID;
+	if (vm)
+		xe_lrc_set_ppgtt(lrc, vm);
+
+	xe_lrc_write_ctx_reg(lrc, CTX_RING_START, __xe_lrc_ring_ggtt_addr(lrc));
+	xe_lrc_write_ctx_reg(lrc, CTX_RING_HEAD, 0);
+	xe_lrc_write_ctx_reg(lrc, CTX_RING_TAIL, lrc->ring_tail);
+	xe_lrc_write_ctx_reg(lrc, CTX_RING_CTL,
+			     RING_CTL_SIZE(lrc->ring_size) | RING_VALID);
 
 	lrc->desc = GEN8_CTX_VALID;
 	lrc->desc |= INTEL_LEGACY_64B_CONTEXT << GEN8_CTX_ADDRESSING_MODE_SHIFT;
@@ -767,7 +778,7 @@ void xe_lrc_finish(struct xe_lrc *lrc)
 
 uint32_t xe_lrc_ring_head(struct xe_lrc *lrc)
 {
-	return xe_lrc_regs(lrc)[CTX_RING_HEAD];
+	return xe_lrc_read_ctx_reg(lrc, CTX_RING_HEAD);
 }
 
 uint32_t xe_lrc_ring_space(struct xe_lrc *lrc)
