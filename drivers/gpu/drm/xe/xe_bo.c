@@ -355,7 +355,8 @@ bool xe_bo_is_xe_bo(struct ttm_buffer_object *bo)
 	return false;
 }
 
-dma_addr_t xe_bo_addr(struct xe_bo *bo, uint64_t offset, size_t page_size)
+dma_addr_t xe_bo_addr(struct xe_bo *bo, uint64_t offset,
+		      size_t page_size, bool *is_lmem)
 {
 	uint64_t page;
 
@@ -366,6 +367,8 @@ dma_addr_t xe_bo_addr(struct xe_bo *bo, uint64_t offset, size_t page_size)
 
 	page = offset >> PAGE_SHIFT;
 	offset &= (PAGE_SIZE - 1);
+
+	*is_lmem = bo->ttm.resource->mem_type == TTM_PL_VRAM;
 
 	return bo->ttm.ttm->dma_address[page] + offset;
 }

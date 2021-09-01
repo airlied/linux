@@ -41,11 +41,13 @@ enum xe_cache_level {
 static uint64_t gen8_pde_encode(struct xe_bo *bo, uint64_t bo_offset,
 				const enum xe_cache_level level)
 {
-	uint64_t pde = xe_bo_addr(bo, bo_offset, GEN8_PAGE_SIZE);
+	uint64_t pde;
+	bool is_lmem;
 
+	pde = xe_bo_addr(bo, bo_offset, GEN8_PAGE_SIZE, &is_lmem);
 	pde |= _PAGE_PRESENT | _PAGE_RW;
 
-	if (xe_bo_is_in_lmem(bo))
+	if (is_lmem)
 		pde |= GEN12_PPGTT_PTE_LM;
 
 	if (level != XE_CACHE_NONE)
@@ -60,14 +62,16 @@ static uint64_t gen8_pte_encode(struct xe_bo *bo, uint64_t bo_offset,
 				enum xe_cache_level level,
 				uint32_t flags)
 {
-	uint64_t pte = xe_bo_addr(bo, bo_offset, GEN8_PAGE_SIZE);
+	uint64_t pte;
+	bool is_lmem;
 
+	pte = xe_bo_addr(bo, bo_offset, GEN8_PAGE_SIZE, &is_lmem);
 	pte |= _PAGE_PRESENT | _PAGE_RW;
 
 	if (unlikely(flags & PTE_READ_ONLY))
 		pte &= ~_PAGE_RW;
 
-	if (xe_bo_is_in_lmem(bo))
+	if (is_lmem)
 		pte |= GEN12_PPGTT_PTE_LM;
 
 	switch (level) {

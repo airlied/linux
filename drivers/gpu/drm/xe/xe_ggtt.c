@@ -22,11 +22,13 @@
 
 static uint64_t gen8_pte_encode(struct xe_bo *bo, uint64_t bo_offset)
 {
-	uint64_t pte = xe_bo_addr(bo, bo_offset, GEN8_PAGE_SIZE);
+	uint64_t pte;
+	bool is_lmem;
 
+	pte = xe_bo_addr(bo, bo_offset, GEN8_PAGE_SIZE, &is_lmem);
 	pte |= _PAGE_PRESENT;
 
-	if (xe_bo_is_in_lmem(bo))
+	if (is_lmem)
 		pte |= GEN12_PPGTT_PTE_LM;
 
 	return pte;
