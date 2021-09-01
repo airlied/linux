@@ -7,6 +7,8 @@
 #ifndef _XE_BO_H_
 #define _XE_BO_H_
 
+#include <linux/dma-buf-map.h>
+
 #include <drm/drm_mm.h>
 #include <drm/ttm/ttm_bo_api.h>
 #include <drm/ttm/ttm_device.h>
@@ -33,6 +35,8 @@ struct xe_bo {
 	struct ttm_placement placement;
 
 	struct drm_mm_node ggtt_node;
+
+	struct dma_buf_map vmap;
 };
 
 #define XE_BO_CREATE_USER_BIT BIT(1)
@@ -110,6 +114,9 @@ xe_bo_ggtt_addr(struct xe_bo *bo)
 	XE_BUG_ON(bo->ggtt_node.start + bo->ggtt_node.size > (1ull << 32));
 	return bo->ggtt_node.start;
 }
+
+int xe_bo_vmap(struct xe_bo *bo);
+void xe_bo_vunmap(struct xe_bo *bo);
 
 extern struct ttm_device_funcs xe_ttm_funcs;
 

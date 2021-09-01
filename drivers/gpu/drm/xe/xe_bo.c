@@ -184,25 +184,28 @@ static int xe_ttm_io_mem_reserve(struct ttm_device *bdev,
 	return 0;
 }
 
-static int xe_bo_move(struct ttm_buffer_object *bo, bool evict,
+static int xe_bo_move(struct ttm_buffer_object *ttm_bo, bool evict,
 		      struct ttm_operation_ctx *ctx,
 		      struct ttm_resource *new_mem,
 		      struct ttm_place *hop)
 {
-	struct ttm_resource *old_mem = bo->resource;
+	struct xe_bo *bo = ttm_to_xe_bo(ttm_bo);
+	struct ttm_resource *old_mem = bo->ttm.resource;
 	int r;
 
-	if (old_mem->mem_type == TTM_PL_SYSTEM && bo->ttm == NULL) {
-		ttm_bo_move_null(bo, new_mem);
+	xe_bo_vunmap(bo);
+
+	if (old_mem->mem_type == TTM_PL_SYSTEM && bo->ttm.ttm == NULL) {
+		ttm_bo_move_null(&bo->ttm, new_mem);
 		goto out;
 	}
 	if (old_mem->mem_type == TTM_PL_SYSTEM &&
 	    (new_mem->mem_type == TTM_PL_TT)) {
-		ttm_bo_move_null(bo, new_mem);
+		ttm_bo_move_null(&bo->ttm, new_mem);
 		goto out;
 	}
 
-	r = ttm_bo_move_memcpy(bo, ctx, new_mem);
+	r = ttm_bo_move_memcpy(&bo->ttm, ctx, new_mem);
 	if (r)
 		return r;
 
@@ -253,6 +256,8 @@ static void xe_ttm_bo_destroy(struct ttm_buffer_object *ttm_bo)
 			}
 		}
 	}
+
+	xe_bo_vunmap(bo);
 
 	if (bo->ggtt_node.size)
 		xe_ggtt_remove_bo(&xe_bo_device(bo)->ggtt, bo);
@@ -389,6 +394,23 @@ dma_addr_t xe_bo_addr(struct xe_bo *bo, uint64_t offset,
 		xe_res_first(bo->ttm.resource, page, page_size, &cur);
 		return (cur.start << PAGE_SHIFT) + offset;
 	}
+}
+
+int xe_bo_vmap(struct xe_bo *bo)
+{
+	if (!dma_buf_map_is_null(&bo->vmap))
+		return 0;
+
+	return ttm_bo_vmap(&bo->ttm, &bo->vmap);
+}
+
+void xe_bo_vunmap(struct xe_bo *bo)
+{
+	if (dma_buf_map_is_null(&bo->vmap))
+		return;
+
+	ttm_bo_vunmap(&bo->ttm, &bo->vmap);
+	dma_buf_map_clear(&bo->vmap);
 }
 
 #define ALL_DRM_XE_GEM_CREATE_FLAGS (\
