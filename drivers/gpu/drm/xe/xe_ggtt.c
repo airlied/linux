@@ -145,11 +145,9 @@ void xe_ggtt_printk(struct xe_ggtt *ggtt, const char *prefix)
 
 int xe_ggtt_insert_bo(struct xe_ggtt *ggtt, struct xe_bo *bo)
 {
+	bool is_lmem = bo->ttm.resource->mem_type == TTM_PL_VRAM;
 	uint64_t offset, pte;
 	int err;
-
-	printk(KERN_INFO "xe_ggtt_insert_bo(bo = 0x%p, size = 0x%lx)",
-			 bo, bo->size);
 
 	if (XE_WARN_ON(bo->ggtt_node.size)) {
 		/* Someone's already inserted this BO in the GGTT */
@@ -171,6 +169,9 @@ int xe_ggtt_insert_bo(struct xe_ggtt *ggtt, struct xe_bo *bo)
 			pte = gen8_pte_encode(bo, offset);
 			xe_ggtt_set_pte(ggtt, start + offset, pte);
 		}
+		printk(KERN_INFO "xe_ggtt_insert_bo(bo = 0x%p, size = 0x%lx, "
+				 "lmem = %s) -> 0x%08x", bo, bo->size,
+				 is_lmem ? "true" : "false", (u32)start);
 	}
 
 	mutex_unlock(&ggtt->lock);
