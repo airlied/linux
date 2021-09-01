@@ -391,27 +391,6 @@ dma_addr_t xe_bo_addr(struct xe_bo *bo, uint64_t offset,
 	}
 }
 
-void *xe_bo_kmap(struct xe_bo *bo, unsigned long offset, unsigned long range,
-		 struct ttm_bo_kmap_obj *kmap)
-{
-	unsigned long start_page, end_page, num_pages;
-	bool is_iomem;
-	void *map;
-	int err;
-
-	start_page = offset / PAGE_SIZE;
-	end_page = (range + offset - 1) / PAGE_SIZE;
-	num_pages = end_page - start_page + 1;
-	err = ttm_bo_kmap(&bo->ttm, start_page, num_pages, kmap);
-	if (err)
-		return ERR_PTR(err);
-
-	map = ttm_kmap_obj_virtual(kmap, &is_iomem);
-	XE_BUG_ON(is_iomem);
-
-	return map + (offset % PAGE_SIZE);
-}
-
 #define ALL_DRM_XE_GEM_CREATE_FLAGS (\
 	DRM_XE_GEM_CREATE_SYSTEM)
 
