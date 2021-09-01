@@ -232,27 +232,29 @@ static uint64_t xe_pt_next_start(uint64_t start, unsigned int level)
 	return (start + pt_range) & ~(pt_range - 1);
 }
 
-static uint64_t __xe_pt_clear(struct xe_vm *vm, struct xe_pt *pt,
-			      unsigned int level, uint64_t start, uint64_t end,
-			      bool depopulate)
+static void __xe_pt_clear(struct xe_vm *vm, struct xe_pt *pt,
+			  unsigned int level, uint64_t *start, uint64_t end,
+			  bool depopulate)
 {
-	uint64_t next_pt_start = xe_pt_next_start(start, level);
+	uint64_t next_pt_start = xe_pt_next_start(*start, level);
 	uint64_t empty;
 
-	XE_BUG_ON(start >= end);
-	XE_BUG_ON(start & GEN8_PTE_MASK);
+	XE_BUG_ON(*start >= end);
+	XE_BUG_ON(*start & GEN8_PTE_MASK);
 
-	if (!pt)
-		return next_pt_start;
+	if (!pt) {
+		*start = next_pt_start;
+		return;
+	}
 
 	empty = __xe_vm_empty_pte(vm, level);
 	if (level == 0) {
 		struct xe_pt_0 *pt_0 = as_xe_pt_0(pt);
 
-		while (start < end && start < next_pt_start) {
-			unsigned int i = xe_pt_idx(start, 0);
+		while (*start < end && *start < next_pt_start) {
+			unsigned int i = xe_pt_idx(*start, 0);
 
-			start += GEN8_PAGE_SIZE;
+			*start += GEN8_PAGE_SIZE;
 			if (!xe_pt_0_is_live(pt_0, i))
 				continue;
 
@@ -263,12 +265,12 @@ static uint64_t __xe_pt_clear(struct xe_vm *vm, struct xe_pt *pt,
 	} else {
 		struct xe_pt_dir *pt_dir = as_xe_pt_dir(pt);
 
-		while (start < end && start < next_pt_start) {
-			unsigned int i = xe_pt_idx(start, level);
+		while (*start < end && *start < next_pt_start) {
+			unsigned int i = xe_pt_idx(*start, level);
 			struct xe_pt *entry = pt_dir->entries[i];
 
-			start = __xe_pt_clear(vm, entry, level - 1, start, end,
-					      depopulate);
+			__xe_pt_clear(vm, entry, level - 1, start, end,
+				      depopulate);
 			if (entry && !entry->num_live && depopulate) {
 				xe_pt_write(pt, i, empty);
 				xe_pt_destroy(entry);
@@ -277,15 +279,13 @@ static uint64_t __xe_pt_clear(struct xe_vm *vm, struct xe_pt *pt,
 			}
 		}
 	}
-
-	return start;
 }
 
 static void xe_pt_clear(struct xe_vm *vm, struct xe_pt *pt,
 			uint64_t start, uint64_t end,
 			bool depopulate)
 {
-	__xe_pt_clear(vm, pt, pt->level, start, end, depopulate);
+	__xe_pt_clear(vm, pt, pt->level, &start, end, depopulate);
 }
 
 static int __xe_pt_populate(struct xe_vm *vm, struct xe_pt *pt,
