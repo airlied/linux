@@ -224,6 +224,13 @@ static unsigned long xe_ttm_io_mem_pfn(struct ttm_buffer_object *bo,
 	return (xe->vram.io_start + cursor.start) >> PAGE_SHIFT;
 }
 
+static void xe_ttm_bo_release_notify(struct ttm_buffer_object *ttm_bo)
+{
+	struct xe_bo *bo = ttm_to_xe_bo(ttm_bo);
+
+	xe_bo_vunmap(bo);
+}
+
 struct ttm_device_funcs xe_ttm_funcs = {
 	.ttm_tt_create = xe_ttm_tt_create,
 	.ttm_tt_destroy = xe_ttm_tt_destroy,
@@ -231,6 +238,7 @@ struct ttm_device_funcs xe_ttm_funcs = {
 	.move = xe_bo_move,
 	.io_mem_reserve = xe_ttm_io_mem_reserve,
 	.io_mem_pfn = xe_ttm_io_mem_pfn,
+	.release_notify = xe_ttm_bo_release_notify,
 };
 
 static void xe_ttm_bo_destroy(struct ttm_buffer_object *ttm_bo)
@@ -256,8 +264,6 @@ static void xe_ttm_bo_destroy(struct ttm_buffer_object *ttm_bo)
 			}
 		}
 	}
-
-	xe_bo_vunmap(bo);
 
 	if (bo->ggtt_node.size)
 		xe_ggtt_remove_bo(&xe_bo_device(bo)->ggtt, bo);
