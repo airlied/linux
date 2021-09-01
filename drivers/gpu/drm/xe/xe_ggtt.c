@@ -87,7 +87,7 @@ int xe_ggtt_init(struct xe_device *xe, struct xe_ggtt *ggtt)
 
 	ggtt->scratch = xe_bo_create(xe, NULL, GEN8_PAGE_SIZE,
 				     ttm_bo_type_kernel,
-				     XE_BO_CREATE_SYSTEM_BIT);
+				     XE_BO_CREATE_LOCAL_BIT);
 	if (IS_ERR(ggtt->scratch)) {
 		err = PTR_ERR(ggtt->scratch);
 		goto err_iomap;

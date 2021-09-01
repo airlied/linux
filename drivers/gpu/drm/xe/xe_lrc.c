@@ -721,7 +721,7 @@ int xe_lrc_init(struct xe_lrc *lrc, struct xe_hw_engine *hwe,
 
 	lrc->bo = xe_bo_create(xe, vm, ring_size + lrc_size(xe, hwe->class),
 			       ttm_bo_type_kernel,
-			       XE_BO_CREATE_SYSTEM_BIT | XE_BO_CREATE_GGTT_BIT);
+			       XE_BO_CREATE_LOCAL_BIT | XE_BO_CREATE_GGTT_BIT);
 	if (IS_ERR(lrc->bo))
 		return PTR_ERR(lrc->bo);
 
