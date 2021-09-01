@@ -393,8 +393,9 @@ dma_addr_t xe_bo_addr(struct xe_bo *bo, uint64_t offset,
 	} else {
 		struct xe_res_cursor cur;
 
-		xe_res_first(bo->ttm.resource, page, page_size, &cur);
-		return (cur.start << PAGE_SHIFT) + offset;
+		xe_res_first(bo->ttm.resource, page << PAGE_SHIFT,
+			     page_size, &cur);
+		return cur.start + offset;
 	}
 }
 
