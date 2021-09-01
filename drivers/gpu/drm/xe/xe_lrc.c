@@ -676,11 +676,6 @@ DECL_MAP_ADDR_HELPERS(regs)
 
 #undef DECL_MAP_ADDR_HELPERS
 
-void *xe_lrc_pphwsp(struct xe_lrc *lrc)
-{
-	return __xe_lrc_pphwsp_map(lrc);
-}
-
 uint32_t xe_lrc_ggtt_addr(struct xe_lrc *lrc)
 {
 	return __xe_lrc_pphwsp_ggtt_addr(lrc);
@@ -699,13 +694,6 @@ uint32_t xe_lrc_seqno_ggtt_addr(struct xe_lrc *lrc)
 uint32_t *xe_lrc_regs(struct xe_lrc *lrc)
 {
 	return __xe_lrc_regs_map(lrc);
-}
-
-uint64_t xe_lrc_status(struct xe_lrc *lrc)
-{
-	uint32_t *pphwsp = xe_lrc_pphwsp(lrc);
-
-	return (uint64_t)pphwsp[33] << 32 | pphwsp[32];
 }
 
 int xe_lrc_init(struct xe_lrc *lrc, struct xe_hw_engine *hwe,
@@ -731,7 +719,7 @@ int xe_lrc_init(struct xe_lrc *lrc, struct xe_hw_engine *hwe,
 	lrc->ring_tail = 0;
 
 	/* Per-Process of HW status Page */
-	memset(xe_lrc_pphwsp(lrc), 0, LRC_PPHWSP_SIZE);
+	memset(__xe_lrc_pphwsp_map(lrc), 0, LRC_PPHWSP_SIZE);
 
 	regs = xe_lrc_regs(lrc);
 	memset(regs, 0, SZ_4K);
