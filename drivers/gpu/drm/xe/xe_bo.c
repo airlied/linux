@@ -361,6 +361,10 @@ int xe_bo_populate(struct xe_bo *bo)
 		.no_wait_gpu = false
 	};
 
+	/* only populate non-VRAM */
+	if (bo->ttm.resource->mem_type == TTM_PL_VRAM)
+		return 0;
+
 	xe_bo_assert_held(bo);
 
 	return ttm_tt_populate(bo->ttm.bdev, bo->ttm.ttm, &ctx);
