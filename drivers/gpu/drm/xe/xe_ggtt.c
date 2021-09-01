@@ -10,6 +10,7 @@
 #include <drm/i915_drm.h>
 
 #include "xe_bo.h"
+#include "xe_device.h"
 
 #define PTE_READ_ONLY	BIT(0)
 #define PTE_LM		BIT(1)

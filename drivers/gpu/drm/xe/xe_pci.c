@@ -16,6 +16,7 @@
 
 #include "xe_drv.h"
 #include "xe_device.h"
+#include "xe_macros.h"
 
 #include "../i915/i915_reg.h"
 

@@ -7,6 +7,7 @@
 #include "xe_lrc.h"
 
 #include "xe_bo.h"
+#include "xe_device.h"
 
 #include "../i915/i915_reg.h"
 #include "../i915/gt/intel_gpu_commands.h"

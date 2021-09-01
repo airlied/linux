@@ -8,6 +8,8 @@
 
 #include <drm/xe_drm.h>
 
+#include "xe_macros.h"
+
 #include "../i915/i915_reg.h"
 
 static int xe_set_dma_info(struct xe_device *xe)

@@ -11,7 +11,8 @@
 #include <drm/ttm/ttm_bo_api.h>
 #include <drm/ttm/ttm_device.h>
 #include <drm/ttm/ttm_placement.h>
-#include "xe_device.h"
+
+#include "xe_macros.h"
 #include "xe_vm.h"
 
 #define XE_DEFAULT_GTT_SIZE_MB          3072ULL /* 3GB by default */
@@ -52,10 +53,7 @@ static inline struct xe_bo *gem_to_xe_bo(const struct drm_gem_object *obj)
 	return container_of(obj, struct xe_bo, ttm.base);
 }
 
-static inline struct xe_device *xe_bo_device(struct xe_bo *bo)
-{
-	return ttm_to_xe_device(bo->ttm.bdev);
-}
+#define xe_bo_device(bo) ttm_to_xe_device((bo)->ttm.bdev)
 
 static inline struct xe_bo *xe_bo_get(struct xe_bo *bo)
 {

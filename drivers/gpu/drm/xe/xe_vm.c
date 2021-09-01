@@ -11,6 +11,7 @@
 #include <linux/mm.h>
 
 #include "xe_bo.h"
+#include "xe_device.h"
 
 enum xe_cache_level {
 	XE_CACHE_NONE,
