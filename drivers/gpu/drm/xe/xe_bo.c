@@ -166,6 +166,7 @@ static int xe_ttm_io_mem_reserve(struct ttm_device *bdev,
 
 	switch (mem->mem_type) {
 	case TTM_PL_SYSTEM:
+	case TTM_PL_TT:
 		return 0;
 	case TTM_PL_VRAM:
 		mem->bus.offset = mem->start << PAGE_SHIFT;
