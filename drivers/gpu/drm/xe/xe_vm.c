@@ -156,8 +156,10 @@ static void __xe_pt_write(struct ttm_bo_kmap_obj *map,
 	uint64_t *map_u64;
 
 	map_u64 = ttm_kmap_obj_virtual(map, &is_iomem);
-	WARN_ON_ONCE(is_iomem);
-	map_u64[idx] = data;
+	if (is_iomem)
+		writeq(data, (uint64_t __iomem *)map_u64);
+	else
+		map_u64[idx] = data;
 }
 
 struct xe_pt *xe_pt_create(struct xe_vm *vm, unsigned int level)
