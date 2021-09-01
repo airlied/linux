@@ -82,10 +82,6 @@ static int xe_bo_placement_for_flags(struct xe_device *xe, struct xe_bo *bo,
 	if (!c)
 		return -EINVAL;
 
-	places[c++] = (struct ttm_place) {
-		.mem_type = TTM_PL_SYSTEM,
-	};
-
 	bo->placement = (struct ttm_placement) {
 		.num_placement = c,
 		.placement = places,
