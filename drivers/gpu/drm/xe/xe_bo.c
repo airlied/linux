@@ -375,14 +375,20 @@ dma_addr_t xe_bo_addr(struct xe_bo *bo, uint64_t offset,
 	xe_bo_assert_held(bo);
 
 	XE_BUG_ON(page_size > PAGE_SIZE);
-	XE_BUG_ON(!bo->ttm.ttm && !bo->ttm.ttm->dma_address);
-
 	page = offset >> PAGE_SHIFT;
 	offset &= (PAGE_SIZE - 1);
 
 	*is_lmem = bo->ttm.resource->mem_type == TTM_PL_VRAM;
 
-	return bo->ttm.ttm->dma_address[page] + offset;
+	if (!*is_lmem) {
+		XE_BUG_ON(!bo->ttm.ttm || !bo->ttm.ttm->dma_address);
+		return bo->ttm.ttm->dma_address[page] + offset;
+	} else {
+		struct xe_res_cursor cur;
+
+		xe_res_first(bo->ttm.resource, page, page_size, &cur);
+		return (cur.start << PAGE_SHIFT) + offset;
+	}
 }
 
 void *xe_bo_kmap(struct xe_bo *bo, unsigned long offset, unsigned long range,
