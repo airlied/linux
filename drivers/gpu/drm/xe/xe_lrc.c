@@ -835,8 +835,6 @@ void xe_lrc_write_ring(struct xe_lrc *lrc, const void *data, size_t size)
 
 		__xe_lrc_write_ring(lrc, ring, &noop, sizeof(noop));
 	}
-
-	xe_lrc_regs(lrc)[CTX_RING_TAIL] = lrc->ring_tail;
 }
 
 uint64_t xe_lrc_descriptor(struct xe_lrc *lrc)
