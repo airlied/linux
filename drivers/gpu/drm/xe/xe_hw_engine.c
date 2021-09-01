@@ -174,9 +174,7 @@ int xe_hw_engine_init(struct xe_device *xe, struct xe_hw_engine *hwe,
 	hwe->instance = info->instance;
 	hwe->mmio_base = engine_info_mmio_base(info, GRAPHICS_VER(xe));
 
-	hwe->hwsp = xe_bo_create(xe, NULL, SZ_4K, ttm_bo_type_kernel,
-			         XE_BO_CREATE_SYSTEM_BIT |
-				 XE_BO_CREATE_GGTT_BIT);
+	hwe->hwsp = xe_bo_create_internal(xe, NULL, SZ_4K, true);
 	if (IS_ERR(hwe->hwsp))
 		return PTR_ERR(hwe->hwsp);
 

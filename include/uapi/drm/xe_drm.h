@@ -168,6 +168,7 @@ struct drm_xe_gem_create {
 	__u32 flags;
 
 #define DRM_XE_GEM_CREATE_SYSTEM	0x1
+#define DRM_XE_GEM_CREATE_VRAM		0x2
 
 	/**
 	 * @vm_id: Attached VM, if any

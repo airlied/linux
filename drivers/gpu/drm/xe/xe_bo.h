@@ -47,6 +47,11 @@ struct xe_bo {
 struct xe_bo *xe_bo_create(struct xe_device *xe, struct xe_vm *vm, size_t size,
 			   enum ttm_bo_type type, uint32_t flags);
 
+/* create a BO that is LOCAL on DG, SYSTEM on IG */
+struct xe_bo *xe_bo_create_internal(struct xe_device *xe,
+				    struct xe_vm *vm,
+				    size_t size, bool bind_ggtt);
+
 static inline struct xe_bo *ttm_to_xe_bo(const struct ttm_buffer_object *bo)
 {
 	return container_of(bo, struct xe_bo, ttm);
