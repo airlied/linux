@@ -14,7 +14,6 @@ struct xe_vm;
 
 struct xe_lrc {
 	struct xe_bo *bo;
-	struct ttm_bo_kmap_obj kmap;
 
 	uint32_t ring_size;
 	uint32_t ring_tail;
@@ -26,9 +25,6 @@ struct xe_lrc {
 int xe_lrc_init(struct xe_lrc *lrc, struct xe_hw_engine *hwe,
 		struct xe_vm *vm, uint32_t ring_size);
 void xe_lrc_finish(struct xe_lrc *lrc);
-
-int xe_lrc_map(struct xe_lrc *lrc);
-void xe_lrc_unmap(struct xe_lrc *lrc);
 
 uint32_t xe_lrc_ring_head(struct xe_lrc *lrc);
 uint32_t xe_lrc_ring_space(struct xe_lrc *lrc);

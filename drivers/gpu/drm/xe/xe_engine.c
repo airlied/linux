@@ -94,6 +94,28 @@ struct xe_engine *xe_engine_lookup(struct xe_file *xef, u32 id)
 	return e;
 }
 
+static int xe_engine_begin(struct xe_engine *e)
+{
+	int err;
+
+	xe_vm_lock(e->vm, NULL);
+
+	err = xe_bo_vmap(e->lrc.bo);
+	if (err)
+		goto err_unlock_vm;
+
+	return 0;
+
+err_unlock_vm:
+	xe_vm_unlock(e->vm);
+	return err;
+}
+
+static void xe_engine_end(struct xe_engine *e)
+{
+	xe_vm_unlock(e->vm);
+}
+
 static const enum xe_engine_class user_to_xe_engine_class[] = {
 	[DRM_XE_ENGINE_CLASS_RENDER] = XE_ENGINE_CLASS_RENDER,
 	[DRM_XE_ENGINE_CLASS_COPY] = XE_ENGINE_CLASS_COPY,
@@ -324,12 +346,14 @@ int xe_exec_ioctl(struct drm_device *dev, void *data, struct drm_file *file)
 			goto err_syncs;
 	}
 
-	xe_vm_lock(engine->vm, NULL);
+	err = xe_engine_begin(engine);
+	if (err)
+		goto err_syncs;
 
 	job = xe_sched_job_create(engine, args->address);
 	if (IS_ERR(job)) {
 		err = PTR_ERR(job);
-		goto err_unlock_vm;
+		goto err_engine_end;
 	}
 
 	for (i = 0; i < num_syncs; i++) {
@@ -349,8 +373,8 @@ int xe_exec_ioctl(struct drm_device *dev, void *data, struct drm_file *file)
 err_put_job:
 	if (err)
 		xe_sched_job_put(job);
-err_unlock_vm:
-	xe_vm_unlock(engine->vm);
+err_engine_end:
+	xe_engine_end(engine);
 err_syncs:
 	for (i = 0; i < num_syncs; i++)
 		put_sync(&syncs[i]);

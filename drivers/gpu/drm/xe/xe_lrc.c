@@ -630,14 +630,9 @@ static void reset_stop_ring(uint32_t *regs, struct xe_hw_engine *hwe)
 
 static void *__xe_lrc_get_map(struct xe_lrc *lrc)
 {
-	bool is_iomem;
-	void *map;
-
-	XE_BUG_ON(!lrc->kmap.virtual);
-	map = ttm_kmap_obj_virtual(&lrc->kmap, &is_iomem);
-	WARN_ON_ONCE(is_iomem);
-
-	return map;
+	XE_BUG_ON(dma_buf_map_is_null(&lrc->bo->vmap));
+	WARN_ON_ONCE(lrc->bo->vmap.is_iomem);
+	return lrc->bo->vmap.vaddr;
 }
 
 static inline uint32_t __xe_lrc_ring_offset(struct xe_lrc *lrc)
@@ -726,10 +721,8 @@ int xe_lrc_init(struct xe_lrc *lrc, struct xe_hw_engine *hwe,
 	if (IS_ERR(lrc->bo))
 		return PTR_ERR(lrc->bo);
 
-	XE_BUG_ON(lrc->bo->size % PAGE_SIZE);
-	err = ttm_bo_kmap(&lrc->bo->ttm, 0, lrc->bo->size / PAGE_SIZE,
-			  &lrc->kmap);
-	if (WARN_ON(err)) {
+	err = xe_bo_vmap(lrc->bo);
+	if (err) {
 		xe_bo_put(lrc->bo);
 		return err;
 	}
@@ -782,21 +775,6 @@ int xe_lrc_init(struct xe_lrc *lrc, struct xe_hw_engine *hwe,
 void xe_lrc_finish(struct xe_lrc *lrc)
 {
 	xe_bo_put(lrc->bo);
-}
-
-int xe_lrc_map(struct xe_lrc *lrc)
-{
-	XE_BUG_ON(lrc->kmap.virtual);
-	BUILD_BUG_ON(PAGE_SIZE > SZ_8K);
-
-	return ttm_bo_kmap(&lrc->bo->ttm, 0,
-			   (lrc->ring_size + SZ_8K) / PAGE_SIZE,
-			   &lrc->kmap);
-}
-
-void xe_lrc_unmap(struct xe_lrc *lrc)
-{
-	ttm_bo_kunmap(&lrc->kmap);
 }
 
 uint32_t xe_lrc_ring_head(struct xe_lrc *lrc)
