@@ -697,6 +697,27 @@ void xe_lrc_write_ctx_reg(struct xe_lrc *lrc, int reg_nr, uint32_t val)
 	regs[reg_nr] = val;
 }
 
+static void *empty_lrc_data(struct xe_hw_engine *hwe)
+{
+	void *data;
+	uint32_t *regs;
+
+	data = kzalloc(lrc_size(hwe->xe, hwe->class), GFP_KERNEL);
+	if (!data)
+		return NULL;
+
+	/* Per-Process of HW status Page */
+	memset(data, 0, LRC_PPHWSP_SIZE);
+
+	regs = data + LRC_PPHWSP_SIZE;
+	memset(regs, 0, SZ_4K);
+	set_offsets(regs, reg_offsets(hwe->xe, hwe->class), hwe, true);
+	set_context_control(regs, hwe, true);
+	reset_stop_ring(regs, hwe);
+
+	return data;
+}
+
 static void xe_lrc_set_ppgtt(struct xe_lrc *lrc, struct xe_vm *vm)
 {
 	uint64_t desc = xe_vm_pdp4_descriptor(vm);
@@ -709,7 +730,8 @@ int xe_lrc_init(struct xe_lrc *lrc, struct xe_hw_engine *hwe,
 		struct xe_vm *vm, uint32_t ring_size)
 {
 	struct xe_device *xe = hwe->xe;
-	uint32_t *regs, arb_enable;
+	void *init_data;
+	uint32_t arb_enable;
 	int err;
 
 	lrc->bo = xe_bo_create(xe, vm, ring_size + lrc_size(xe, hwe->class),
@@ -727,17 +749,15 @@ int xe_lrc_init(struct xe_lrc *lrc, struct xe_hw_engine *hwe,
 	lrc->ring_size = ring_size;
 	lrc->ring_tail = 0;
 
+	init_data = empty_lrc_data(hwe);
+	if (!init_data) {
+		xe_bo_put(lrc->bo);
+		return -ENOMEM;
+	}
+
 	/* Per-Process of HW status Page */
-	memset(__xe_lrc_pphwsp_map(lrc), 0, LRC_PPHWSP_SIZE);
-
-	regs = __xe_lrc_regs_map(lrc);
-	memset(regs, 0, SZ_4K);
-	set_offsets(regs, reg_offsets(hwe->xe, hwe->class), hwe, true);
-	set_context_control(regs, hwe, true);
-
-	/* TODO: init_wa_bb_regs */
-
-	reset_stop_ring(regs, hwe);
+	memcpy(__xe_lrc_pphwsp_map(lrc), init_data, lrc_size(xe, hwe->class));
+	kfree(init_data);
 
 	if (vm)
 		xe_lrc_set_ppgtt(lrc, vm);
