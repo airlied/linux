@@ -340,6 +340,7 @@ int xe_exec_ioctl(struct drm_device *dev, void *data, struct drm_file *file)
 
 	drm_sched_job_arm(&job->drm);
 
+	/* TODO: Use &job->s_fence->finished */
 	for (i = 0; i < num_syncs; i++)
 		signal_sync(&syncs[i], &job->fence);
 
