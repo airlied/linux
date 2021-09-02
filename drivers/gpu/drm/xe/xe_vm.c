@@ -154,7 +154,7 @@ static void __xe_pt_write(struct ttm_bo_kmap_obj *map,
 
 	map_u64 = ttm_kmap_obj_virtual(map, &is_iomem);
 	if (is_iomem)
-		writeq(data, (uint64_t __iomem *)map_u64);
+		writeq(data, (uint64_t __iomem *)&map_u64[idx]);
 	else
 		map_u64[idx] = data;
 }
