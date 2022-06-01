@@ -904,36 +904,19 @@ nv50_msto_prepare(struct nv50_msto *msto)
 	struct nouveau_drm *drm = nouveau_drm(msto->encoder.dev);
 	struct nv50_mstc *mstc = msto->mstc;
 	struct nv50_mstm *mstm = mstc->mstm;
-	struct {
-		struct nv50_disp_mthd_v1 base;
-		struct nv50_disp_sor_dp_mst_vcpi_v0 vcpi;
-	} args = {
-		.base.version = 1,
-		.base.method = NV50_DISP_MTHD_V1_SOR_DP_MST_VCPI,
-		.base.hasht  = mstm->outp->dcb->hasht,
-		.base.hashm  = (0xf0ff & mstm->outp->dcb->hashm) |
-			       (0x0100 << msto->head->base.index),
-	};
+	struct drm_dp_payload *payload = NULL;
 
 	mutex_lock(&mstm->mgr.payload_lock);
-
 	NV_ATOMIC(drm, "%s: msto prepare\n", msto->encoder.name);
-	if (mstc->port->vcpi.vcpi > 0) {
-		struct drm_dp_payload *payload = nv50_msto_payload(msto);
-		if (payload) {
-			args.vcpi.start_slot = payload->start_slot;
-			args.vcpi.num_slots = payload->num_slots;
-			args.vcpi.pbn = mstc->port->vcpi.pbn;
-			args.vcpi.aligned_pbn = mstc->port->vcpi.aligned_pbn;
-		}
+
+	if (mstc->port->vcpi.vcpi > 0 && (payload = nv50_msto_payload(msto))) {
+		nvif_outp_dp_mst_vcpi(&mstm->outp->outp, msto->head->base.index,
+				      payload->start_slot, payload->num_slots,
+				      mstc->port->vcpi.pbn, mstc->port->vcpi.aligned_pbn);
+	} else {
+		nvif_outp_dp_mst_vcpi(&mstm->outp->outp, msto->head->base.index, 0, 0, 0, 0);
 	}
 
-	NV_ATOMIC(drm, "%s: %s: %02x %02x %04x %04x\n",
-		  msto->encoder.name, msto->head->base.base.name,
-		  args.vcpi.start_slot, args.vcpi.num_slots,
-		  args.vcpi.pbn, args.vcpi.aligned_pbn);
-
-	nvif_mthd(&drm->display->disp.object, 0, &args, sizeof(args));
 	mutex_unlock(&mstm->mgr.payload_lock);
 }
 
