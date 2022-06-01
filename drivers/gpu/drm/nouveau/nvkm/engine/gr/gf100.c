@@ -1890,10 +1890,11 @@ gf100_gr_init_ctxctl(struct gf100_gr *gr)
 	return ret;
 }
 
-void
+int
 gf100_gr_oneinit_sm_id(struct gf100_gr *gr)
 {
 	int tpc, gpc;
+
 	for (tpc = 0; tpc < gr->tpc_max; tpc++) {
 		for (gpc = 0; gpc < gr->gpc_nr; gpc++) {
 			if (tpc < gr->tpc_nr[gpc]) {
@@ -1903,6 +1904,8 @@ gf100_gr_oneinit_sm_id(struct gf100_gr *gr)
 			}
 		}
 	}
+
+	return 0;
 }
 
 void
@@ -2020,6 +2023,8 @@ gf100_gr_oneinit(struct nvkm_gr *base)
 			if (gr->ppc_tpc_max < gr->ppc_tpc_nr[i][j])
 				gr->ppc_tpc_max = gr->ppc_tpc_nr[i][j];
 		}
+
+		gr->ppc_total += gr->ppc_nr[i];
 	}
 
 	/* Allocate global context buffers. */
@@ -2047,8 +2052,8 @@ gf100_gr_oneinit(struct nvkm_gr *base)
 
 	memset(gr->tile, 0xff, sizeof(gr->tile));
 	gr->func->oneinit_tiles(gr);
-	gr->func->oneinit_sm_id(gr);
-	return 0;
+
+	return gr->func->oneinit_sm_id(gr);
 }
 
 static int
