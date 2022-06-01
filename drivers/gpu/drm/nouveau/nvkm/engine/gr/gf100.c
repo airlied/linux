@@ -753,7 +753,7 @@ gf100_gr_fecs_ctrl_ctxsw(struct gf100_gr *gr, u32 mthd)
 	struct nvkm_device *device = gr->base.engine.subdev.device;
 
 	nvkm_wr32(device, 0x409804, 0xffffffff);
-	nvkm_wr32(device, 0x409840, 0xffffffff);
+	nvkm_wr32(device, 0x409800, 0x00000000);
 	nvkm_wr32(device, 0x409500, 0xffffffff);
 	nvkm_wr32(device, 0x409504, mthd);
 	nvkm_msec(device, 2000,
@@ -802,7 +802,7 @@ gf100_gr_fecs_bind_pointer(struct gf100_gr *gr, u32 inst)
 {
 	struct nvkm_device *device = gr->base.engine.subdev.device;
 
-	nvkm_wr32(device, 0x409840, 0x00000030);
+	nvkm_mask(device, 0x409800, 0x00000030, 0x00000000);
 	nvkm_wr32(device, 0x409500, inst);
 	nvkm_wr32(device, 0x409504, 0x00000003);
 	nvkm_msec(device, 2000,
@@ -893,7 +893,7 @@ gf100_gr_fecs_discover_pm_image_size(struct gf100_gr *gr, u32 *psize)
 {
 	struct nvkm_device *device = gr->base.engine.subdev.device;
 
-	nvkm_wr32(device, 0x409840, 0xffffffff);
+	nvkm_wr32(device, 0x409800, 0x00000000);
 	nvkm_wr32(device, 0x409500, 0x00000000);
 	nvkm_wr32(device, 0x409504, 0x00000025);
 	nvkm_msec(device, 2000,
@@ -909,7 +909,7 @@ gf100_gr_fecs_discover_zcull_image_size(struct gf100_gr *gr, u32 *psize)
 {
 	struct nvkm_device *device = gr->base.engine.subdev.device;
 
-	nvkm_wr32(device, 0x409840, 0xffffffff);
+	nvkm_wr32(device, 0x409800, 0x00000000);
 	nvkm_wr32(device, 0x409500, 0x00000000);
 	nvkm_wr32(device, 0x409504, 0x00000016);
 	nvkm_msec(device, 2000,
@@ -925,7 +925,7 @@ gf100_gr_fecs_discover_image_size(struct gf100_gr *gr, u32 *psize)
 {
 	struct nvkm_device *device = gr->base.engine.subdev.device;
 
-	nvkm_wr32(device, 0x409840, 0xffffffff);
+	nvkm_wr32(device, 0x409800, 0x00000000);
 	nvkm_wr32(device, 0x409500, 0x00000000);
 	nvkm_wr32(device, 0x409504, 0x00000010);
 	nvkm_msec(device, 2000,
@@ -941,7 +941,7 @@ gf100_gr_fecs_set_watchdog_timeout(struct gf100_gr *gr, u32 timeout)
 {
 	struct nvkm_device *device = gr->base.engine.subdev.device;
 
-	nvkm_wr32(device, 0x409840, 0xffffffff);
+	nvkm_wr32(device, 0x409800, 0x00000000);
 	nvkm_wr32(device, 0x409500, timeout);
 	nvkm_wr32(device, 0x409504, 0x00000021);
 }
@@ -1747,7 +1747,7 @@ gf100_gr_init_ctxctl_ext(struct gf100_gr *gr)
 	nvkm_mc_unk260(device, 1);
 
 	/* start both of them running */
-	nvkm_wr32(device, 0x409840, 0xffffffff);
+	nvkm_wr32(device, 0x409800, 0x00000000);
 	nvkm_wr32(device, 0x41a10c, 0x00000000);
 	nvkm_wr32(device, 0x40910c, 0x00000000);
 
