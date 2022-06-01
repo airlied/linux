@@ -35,7 +35,6 @@
 #include <drm/drm_probe_helper.h>
 #include <drm/drm_vblank.h>
 
-#include "nouveau_fbcon.h"
 #include "nouveau_crtc.h"
 #include "nouveau_gem.h"
 #include "nouveau_connector.h"
@@ -392,7 +391,7 @@ nouveau_user_framebuffer_create(struct drm_device *dev,
 
 static const struct drm_mode_config_funcs nouveau_mode_config_funcs = {
 	.fb_create = nouveau_user_framebuffer_create,
-	.output_poll_changed = nouveau_fbcon_output_poll_changed,
+	.output_poll_changed = drm_fb_helper_output_poll_changed,
 };
 
 
@@ -593,10 +592,20 @@ nouveau_display_init(struct drm_device *dev, bool resume, bool runtime)
 	if (ret)
 		return ret;
 
+	/* Enable console. */
+	drm_fb_helper_set_suspend_unlocked(dev->fb_helper, false);
+
 	/* enable connector detection and polling for connectors without HPD
 	 * support
 	 */
 	drm_kms_helper_poll_enable(dev);
+
+	/* Send hotplug event to catch changes across resume. */
+	if (resume) {
+		dev->dev->power.disable_depth++;
+		drm_kms_helper_hotplug_event(dev);
+		dev->dev->power.disable_depth--;
+	}
 
 	return ret;
 }
@@ -629,6 +638,10 @@ nouveau_display_fini(struct drm_device *dev, bool suspend, bool runtime)
 		cancel_work_sync(&drm->hpd_work);
 
 	drm_kms_helper_poll_disable(dev);
+
+	/* Disable console. */
+	drm_fb_helper_set_suspend_unlocked(dev->fb_helper, true);
+
 	disp->fini(dev, runtime, suspend);
 }
 
