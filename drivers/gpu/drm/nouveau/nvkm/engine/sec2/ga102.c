@@ -152,6 +152,11 @@ MODULE_FIRMWARE("nvidia/ga102/sec2/image.bin");
 MODULE_FIRMWARE("nvidia/ga102/sec2/sig.bin");
 MODULE_FIRMWARE("nvidia/ga102/sec2/hs_bl_sig.bin");
 
+MODULE_FIRMWARE("nvidia/ga103/sec2/desc.bin");
+MODULE_FIRMWARE("nvidia/ga103/sec2/image.bin");
+MODULE_FIRMWARE("nvidia/ga103/sec2/sig.bin");
+MODULE_FIRMWARE("nvidia/ga103/sec2/hs_bl_sig.bin");
+
 MODULE_FIRMWARE("nvidia/ga104/sec2/desc.bin");
 MODULE_FIRMWARE("nvidia/ga104/sec2/image.bin");
 MODULE_FIRMWARE("nvidia/ga104/sec2/sig.bin");

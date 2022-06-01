@@ -183,6 +183,12 @@ MODULE_FIRMWARE("nvidia/ga102/gr/gpccs_bl.bin");
 MODULE_FIRMWARE("nvidia/ga102/gr/gpccs_sig.bin");
 MODULE_FIRMWARE("nvidia/ga102/gr/NET_img.bin");
 
+MODULE_FIRMWARE("nvidia/ga103/gr/fecs_bl.bin");
+MODULE_FIRMWARE("nvidia/ga103/gr/fecs_sig.bin");
+MODULE_FIRMWARE("nvidia/ga103/gr/gpccs_bl.bin");
+MODULE_FIRMWARE("nvidia/ga103/gr/gpccs_sig.bin");
+MODULE_FIRMWARE("nvidia/ga103/gr/NET_img.bin");
+
 MODULE_FIRMWARE("nvidia/ga104/gr/fecs_bl.bin");
 MODULE_FIRMWARE("nvidia/ga104/gr/fecs_sig.bin");
 MODULE_FIRMWARE("nvidia/ga104/gr/gpccs_bl.bin");

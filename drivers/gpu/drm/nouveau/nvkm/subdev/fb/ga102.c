@@ -67,6 +67,7 @@ ga102_fb_new(struct nvkm_device *device, enum nvkm_subdev_type type, int inst, s
 }
 
 MODULE_FIRMWARE("nvidia/ga102/nvdec/scrubber.bin");
+MODULE_FIRMWARE("nvidia/ga103/nvdec/scrubber.bin");
 MODULE_FIRMWARE("nvidia/ga104/nvdec/scrubber.bin");
 MODULE_FIRMWARE("nvidia/ga106/nvdec/scrubber.bin");
 MODULE_FIRMWARE("nvidia/ga107/nvdec/scrubber.bin");

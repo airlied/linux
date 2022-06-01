@@ -228,6 +228,7 @@ ga102_acr_wpr_parse(struct nvkm_acr *acr)
 }
 
 MODULE_FIRMWARE("nvidia/ga102/acr/ucode_unload.bin");
+MODULE_FIRMWARE("nvidia/ga103/acr/ucode_unload.bin");
 MODULE_FIRMWARE("nvidia/ga104/acr/ucode_unload.bin");
 MODULE_FIRMWARE("nvidia/ga106/acr/ucode_unload.bin");
 MODULE_FIRMWARE("nvidia/ga107/acr/ucode_unload.bin");
@@ -239,6 +240,7 @@ ga102_acr_unload_fwif[] = {
 };
 
 MODULE_FIRMWARE("nvidia/ga102/acr/ucode_asb.bin");
+MODULE_FIRMWARE("nvidia/ga103/acr/ucode_asb.bin");
 MODULE_FIRMWARE("nvidia/ga104/acr/ucode_asb.bin");
 MODULE_FIRMWARE("nvidia/ga106/acr/ucode_asb.bin");
 MODULE_FIRMWARE("nvidia/ga107/acr/ucode_asb.bin");
@@ -259,6 +261,7 @@ ga102_acr_ahesasc_0 = {
 };
 
 MODULE_FIRMWARE("nvidia/ga102/acr/ucode_ahesasc.bin");
+MODULE_FIRMWARE("nvidia/ga103/acr/ucode_ahesasc.bin");
 MODULE_FIRMWARE("nvidia/ga104/acr/ucode_ahesasc.bin");
 MODULE_FIRMWARE("nvidia/ga106/acr/ucode_ahesasc.bin");
 MODULE_FIRMWARE("nvidia/ga107/acr/ucode_ahesasc.bin");
