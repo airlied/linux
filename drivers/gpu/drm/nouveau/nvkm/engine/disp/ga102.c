@@ -24,6 +24,7 @@
 #include "head.h"
 #include "ior.h"
 
+#include <subdev/gsp.h>
 #include <subdev/timer.h>
 
 #include <nvif/class.h>
@@ -146,5 +147,8 @@ int
 ga102_disp_new(struct nvkm_device *device, enum nvkm_subdev_type type, int inst,
 	       struct nvkm_disp **pdisp)
 {
+	if (nvkm_gsp_rm(device->gsp))
+		return -ENODEV;
+
 	return nvkm_disp_new_(&ga102_disp, device, type, inst, pdisp);
 }
