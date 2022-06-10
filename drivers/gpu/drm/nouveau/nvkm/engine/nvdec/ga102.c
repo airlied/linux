@@ -21,6 +21,7 @@
  */
 #include "priv.h"
 
+#include <subdev/gsp.h>
 #include <subdev/mc.h>
 #include <subdev/timer.h>
 
@@ -57,5 +58,8 @@ int
 ga102_nvdec_new(struct nvkm_device *device, enum nvkm_subdev_type type, int inst,
 		struct nvkm_nvdec **pnvdec)
 {
+	if (nvkm_gsp_rm(device->gsp))
+		return -ENODEV;
+
 	return nvkm_nvdec_new_(ga102_nvdec_fwif, device, type, inst, 0x848000, pnvdec);
 }
