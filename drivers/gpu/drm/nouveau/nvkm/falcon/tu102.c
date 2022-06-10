@@ -21,38 +21,8 @@
  */
 #include "priv.h"
 
-#include "fw/booter/load/tu116.h"
-#include "fw/booter/unload/tu116.h"
-#include "fw/gsp-rm/boot/tu102.h"
-
-static const struct nvkm_gsp_func
-tu116_gsp_r515_48_07 = {
-	.flcn = &tu102_gsp_flcn,
-	.fwsec = &tu102_gsp_fwsec,
-
-	.booter.ctor = tu102_gsp_booter_ctor,
-	.booter.load = &tu116_gsp_booter_load_fw,
-	.booter.unload = &tu116_gsp_booter_unload_fw,
-
-	.boot = &tu102_gsp_gsp_rm_boot_fw,
-
-	.dtor = r515_gsp_dtor,
-	.oneinit = tu102_gsp_oneinit,
-	.init = r515_gsp_init,
-	.fini = r515_gsp_fini,
-	.reset = tu102_gsp_reset,
-};
-
-static struct nvkm_gsp_fwif
-tu116_gsps[] = {
-	{ 5154807,  r515_gsp_load, &tu116_gsp_r515_48_07, ".fwsignature_tu11x" },
-	{      -1, gv100_gsp_nofw, &gv100_gsp },
-	{}
-};
-
-int
-tu116_gsp_new(struct nvkm_device *device, enum nvkm_subdev_type type, int inst,
-	      struct nvkm_gsp **pgsp)
+bool
+tu102_flcn_riscv_active(struct nvkm_falcon *falcon)
 {
-	return nvkm_gsp_new_(tu116_gsps, device, type, inst, pgsp);
+	return (nvkm_falcon_rd32(falcon, falcon->addr2 + 0x240) & 0x00000001) != 0;
 }

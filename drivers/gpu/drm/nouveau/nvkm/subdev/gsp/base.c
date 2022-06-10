@@ -20,15 +20,53 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 #include "priv.h"
-#include <core/falcon.h>
-#include <core/firmware.h>
-#include <subdev/acr.h>
-#include <subdev/top.h>
+
+static int
+nvkm_gsp_fini(struct nvkm_subdev *subdev, bool suspend)
+{
+	struct nvkm_gsp *gsp = nvkm_gsp(subdev);
+	int ret;
+
+	if (!gsp->running)
+		return 0;
+
+	ret = gsp->func->fini(gsp);
+	if (ret)
+		return ret;
+
+	return 0;
+}
+
+static int
+nvkm_gsp_init(struct nvkm_subdev *subdev)
+{
+	struct nvkm_gsp *gsp = nvkm_gsp(subdev);
+
+	if (!gsp->func->init)
+		return 0;
+
+	return gsp->func->init(gsp);
+}
+
+static int
+nvkm_gsp_oneinit(struct nvkm_subdev *subdev)
+{
+	struct nvkm_gsp *gsp = nvkm_gsp(subdev);
+
+	if (!gsp->func->oneinit)
+		return 0;
+
+	return gsp->func->oneinit(gsp);
+}
 
 static void *
 nvkm_gsp_dtor(struct nvkm_subdev *subdev)
 {
 	struct nvkm_gsp *gsp = nvkm_gsp(subdev);
+
+	if (gsp->func->dtor)
+		gsp->func->dtor(gsp);
+
 	nvkm_falcon_dtor(&gsp->falcon);
 	return gsp;
 }
@@ -36,6 +74,9 @@ nvkm_gsp_dtor(struct nvkm_subdev *subdev)
 static const struct nvkm_subdev_func
 nvkm_gsp = {
 	.dtor = nvkm_gsp_dtor,
+	.oneinit = nvkm_gsp_oneinit,
+	.init = nvkm_gsp_init,
+	.fini = nvkm_gsp_fini,
 };
 
 int
@@ -48,6 +89,8 @@ nvkm_gsp_new_(const struct nvkm_gsp_fwif *fwif, struct nvkm_device *device,
 		return -ENOMEM;
 
 	nvkm_subdev_ctor(&nvkm_gsp, device, type, inst, &gsp->subdev);
+	mutex_init(&gsp->cmdq.mutex);
+	mutex_init(&gsp->msgq.mutex);
 
 	fwif = nvkm_firmware_load(&gsp->subdev, fwif, "Gsp", gsp);
 	if (IS_ERR(fwif))

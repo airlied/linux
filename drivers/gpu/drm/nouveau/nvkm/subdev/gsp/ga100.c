@@ -21,9 +21,32 @@
  */
 #include "priv.h"
 
+#include "fw/booter/load/ga100.h"
+#include "fw/booter/unload/ga100.h"
+#include "fw/gsp-rm/boot/ga100.h"
+
+static const struct nvkm_gsp_func
+ga100_gsp_r515_48_07 = {
+	.flcn = &tu102_gsp_flcn,
+	.fwsec = &tu102_gsp_fwsec,
+
+	.booter.ctor = tu102_gsp_booter_ctor,
+	.booter.load = &ga100_gsp_booter_load_fw,
+	.booter.unload = &ga100_gsp_booter_unload_fw,
+
+	.boot = &ga100_gsp_gsp_rm_boot_fw,
+
+	.dtor = r515_gsp_dtor,
+	.oneinit = tu102_gsp_oneinit,
+	.init = r515_gsp_init,
+	.fini = r515_gsp_fini,
+	.reset = tu102_gsp_reset,
+};
+
 static struct nvkm_gsp_fwif
 ga100_gsps[] = {
-	{ -1, gv100_gsp_nofw, &gv100_gsp },
+	{ 5154807,  r515_gsp_load, &ga100_gsp_r515_48_07, ".fwsignature_ga100" },
+	{      -1, gv100_gsp_nofw, &gv100_gsp },
 	{}
 };
 
