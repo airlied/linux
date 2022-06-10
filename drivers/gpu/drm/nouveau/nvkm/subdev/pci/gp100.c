@@ -23,6 +23,8 @@
  */
 #include "priv.h"
 
+#include <subdev/gsp.h>
+
 static void
 gp100_pci_msi_rearm(struct nvkm_pci *pci)
 {
@@ -41,5 +43,8 @@ int
 gp100_pci_new(struct nvkm_device *device, enum nvkm_subdev_type type, int inst,
 	      struct nvkm_pci **ppci)
 {
+	if (nvkm_gsp_rm(device->gsp))
+		return -ENODEV;
+
 	return nvkm_pci_new_(&gp100_pci_func, device, type, inst, ppci);
 }
