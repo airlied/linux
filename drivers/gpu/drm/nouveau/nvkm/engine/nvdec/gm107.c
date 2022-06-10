@@ -21,8 +21,6 @@
  */
 #include "priv.h"
 
-#include <subdev/gsp.h>
-
 static const struct nvkm_falcon_func
 gm107_nvdec_flcn = {
 	.disable = gm200_flcn_disable,
@@ -56,8 +54,5 @@ int
 gm107_nvdec_new(struct nvkm_device *device, enum nvkm_subdev_type type, int inst,
 		struct nvkm_nvdec **pnvdec)
 {
-	if (nvkm_gsp_rm(device->gsp))
-		return -ENODEV;
-
 	return nvkm_nvdec_new_(gm107_nvdec_fwif, device, type, inst, 0, pnvdec);
 }
