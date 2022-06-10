@@ -4,6 +4,8 @@
 #define nvkm_mc(p) container_of((p), struct nvkm_mc, subdev)
 #include <subdev/mc.h>
 
+int r515_mc_new(const struct nvkm_mc_func *, struct nvkm_device *, enum nvkm_subdev_type, int,
+		struct nvkm_mc **);
 int nvkm_mc_new_(const struct nvkm_mc_func *, struct nvkm_device *, enum nvkm_subdev_type, int,
 		 struct nvkm_mc **);
 
@@ -15,6 +17,7 @@ struct nvkm_mc_map {
 };
 
 struct nvkm_mc_func {
+	void (*dtor)(struct nvkm_mc *);
 	void (*init)(struct nvkm_mc *);
 
 	const struct nvkm_intr_func *intr;

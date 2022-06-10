@@ -114,7 +114,12 @@ nvkm_mc_init(struct nvkm_subdev *subdev)
 static void *
 nvkm_mc_dtor(struct nvkm_subdev *subdev)
 {
-	return nvkm_mc(subdev);
+	struct nvkm_mc *mc = nvkm_mc(subdev);
+
+	if (mc->func->dtor)
+		mc->func->dtor(mc);
+
+	return mc;
 }
 
 static const struct nvkm_subdev_func
