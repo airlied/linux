@@ -23,8 +23,6 @@
  */
 #include "priv.h"
 
-#include <subdev/gsp.h>
-
 static const struct nvkm_timer_func
 gk20a_timer = {
 	.intr = nv04_timer_intr,
@@ -38,8 +36,5 @@ int
 gk20a_timer_new(struct nvkm_device *device, enum nvkm_subdev_type type, int inst,
 		struct nvkm_timer **ptmr)
 {
-	if (nvkm_gsp_rm(device->gsp))
-		return -ENODEV;
-
 	return nvkm_timer_new_(&gk20a_timer, device, type, inst, ptmr);
 }
