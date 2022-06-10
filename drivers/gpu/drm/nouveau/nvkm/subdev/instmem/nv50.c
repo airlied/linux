@@ -27,6 +27,7 @@
 #include <core/memory.h>
 #include <subdev/bar.h>
 #include <subdev/fb.h>
+#include <subdev/gsp.h>
 #include <subdev/mmu.h>
 
 struct nv50_instmem {
@@ -407,6 +408,9 @@ nv50_instmem_new(struct nvkm_device *device, enum nvkm_subdev_type type, int ins
 		 struct nvkm_instmem **pimem)
 {
 	struct nv50_instmem *imem;
+
+	if (nvkm_gsp_rm(device->gsp))
+		return -ENODEV;
 
 	if (!(imem = kzalloc(sizeof(*imem), GFP_KERNEL)))
 		return -ENOMEM;
