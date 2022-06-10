@@ -22,6 +22,8 @@
 #include "gf100.h"
 #include "ram.h"
 
+#include <subdev/gsp.h>
+
 int
 gv100_fb_init_page(struct nvkm_fb *fb)
 {
@@ -47,6 +49,9 @@ gv100_fb = {
 int
 gv100_fb_new(struct nvkm_device *device, enum nvkm_subdev_type type, int inst, struct nvkm_fb **pfb)
 {
+	if (nvkm_gsp_rm(device->gsp))
+		return r515_fb_new(&gv100_fb, device, type, inst, pfb);
+
 	return gp102_fb_new_(&gv100_fb, device, type, inst, pfb);
 }
 
