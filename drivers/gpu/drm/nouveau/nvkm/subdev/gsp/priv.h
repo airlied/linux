@@ -14,6 +14,10 @@ struct nvkm_gsp_fwif {
 	const struct nvkm_gsp_func *func;
 };
 
+int gv100_gsp_nofw(struct nvkm_gsp *, int, const struct nvkm_gsp_fwif *);
+
 int nvkm_gsp_new_(const struct nvkm_gsp_fwif *, struct nvkm_device *, enum nvkm_subdev_type, int,
 		  struct nvkm_gsp **);
+
+extern const struct nvkm_gsp_func gv100_gsp;
 #endif
