@@ -1204,7 +1204,7 @@ r515_gsp_oneinit(struct nvkm_gsp *gsp)
 
 static const struct nvkm_firmware_func
 r515_gsp_fw = {
-	.type = NVKM_FIRMWARE_IMG_DMA,
+	.type = NVKM_FIRMWARE_IMG_SGT,
 };
 
 void
@@ -1270,9 +1270,10 @@ r515_gsp_load(struct nvkm_gsp *gsp, int ver, const struct nvkm_gsp_fwif *fwif)
 
 	/* Build radix3 page table for ELF image. */
 	addr = gsp->fw.phys;
-	size = sg_dma_len(&gsp->fw.mem.sgl);
+	size = gsp->fw.len;
 
 	for (i = ARRAY_SIZE(gsp->radix3) - 1; i >= 0; i--) {
+		int idx;
 		gsp->radix3[i].size = ALIGN((size / GSP_PAGE_SIZE) * sizeof(u64), GSP_PAGE_SIZE);
 		gsp->radix3[i].data = dma_alloc_coherent(subdev->device->dev, gsp->radix3[i].size,
 							 &gsp->radix3[i].addr, GFP_KERNEL);
@@ -1280,9 +1281,16 @@ r515_gsp_load(struct nvkm_gsp *gsp, int ver, const struct nvkm_gsp_fwif *fwif)
 			return -ENOMEM;
 
 		ptes = gsp->radix3[i].data;
-		for (j = 0; j < size / GSP_PAGE_SIZE; j++)
-			*ptes++ = addr + GSP_PAGE_SIZE * j;
-
+		if (i == 2) {
+			struct scatterlist *s;
+			for_each_sgtable_dma_sg(gsp->fw.mem.sgt, s, idx) {
+				for (j = 0; j < sg_dma_len(s) / GSP_PAGE_SIZE; j++)
+					*ptes++ = sg_dma_address(s) + (GSP_PAGE_SIZE * j);
+			}
+		} else {
+			for (j = 0; j < size / GSP_PAGE_SIZE; j++)
+				*ptes++ = addr + GSP_PAGE_SIZE * j;
+		}
 		size = gsp->radix3[i].size;
 		addr = gsp->radix3[i].addr;
 	}

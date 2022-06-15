@@ -121,10 +121,10 @@ nvkm_firmware_mem_map(struct nvkm_memory *memory, u64 offset, struct nvkm_vmm *v
 	struct nvkm_vmm_map map = {
 		.memory = &fw->mem.memory,
 		.offset = offset,
-		.sgl = &fw->mem.sgl,
+		.sgl = fw->func->type == NVKM_FIRMWARE_IMG_DMA ? &fw->mem.sgl : fw->mem.sgt->sgl,
 	};
 
-	if (WARN_ON(fw->func->type != NVKM_FIRMWARE_IMG_DMA))
+	if (WARN_ON(fw->func->type != NVKM_FIRMWARE_IMG_DMA && fw->func->type != NVKM_FIRMWARE_IMG_SGT))
 		return -ENOSYS;
 
 	return nvkm_vmm_map(vmm, vma, argv, argc, &map);
@@ -186,12 +186,59 @@ nvkm_firmware_dtor(struct nvkm_firmware *fw)
 		nvkm_memory_unref(&memory);
 		dma_free_coherent(fw->device->dev, sg_dma_len(&fw->mem.sgl), fw->img, fw->phys);
 		break;
+	case NVKM_FIRMWARE_IMG_SGT:
+		nvkm_memory_unref(&memory);
+		dma_unmap_sgtable(fw->device->dev, fw->mem.sgt, DMA_FROM_DEVICE, 0);
+		sg_free_table(fw->mem.sgt);
+		kfree(fw->mem.sgt);
+		vfree(fw->img);
+		break;
 	default:
 		WARN_ON(1);
 		break;
 	}
 
 	fw->img = NULL;
+}
+
+/* Create sg_table from a vmalloc'd buffer. */
+static struct sg_table *vmalloc_to_sgt(char *data, uint32_t size, int *sg_ents)
+{
+	int ret, s, i;
+	struct sg_table *sgt;
+	struct scatterlist *sg;
+	struct page *pg;
+
+	if (WARN_ON(!PAGE_ALIGNED(data)))
+		return NULL;
+
+	sgt = kmalloc(sizeof(*sgt), GFP_KERNEL);
+	if (!sgt)
+		return NULL;
+
+	*sg_ents = DIV_ROUND_UP(size, PAGE_SIZE);
+	ret = sg_alloc_table(sgt, *sg_ents, GFP_KERNEL);
+	if (ret) {
+		kfree(sgt);
+		return NULL;
+	}
+
+	for_each_sgtable_sg(sgt, sg, i) {
+		pg = vmalloc_to_page(data);
+		if (!pg) {
+			sg_free_table(sgt);
+			kfree(sgt);
+			return NULL;
+		}
+
+		s = min_t(int, PAGE_SIZE, size);
+		sg_set_page(sg, pg, s, 0);
+
+		size -= s;
+		data += s;
+	}
+
+	return sgt;
 }
 
 int
@@ -209,15 +256,42 @@ nvkm_firmware_ctor(const struct nvkm_firmware_func *func, const char *name,
 		break;
 	case NVKM_FIRMWARE_IMG_DMA:
 		len = ALIGN(fw->len, PAGE_SIZE);
-
 		fw->img = dma_alloc_coherent(fw->device->dev, len, &fw->phys, GFP_KERNEL);
 		if (fw->img)
 			memcpy(fw->img, src, fw->len);
-
 		sg_init_one(&fw->mem.sgl, fw->img, len);
 		sg_dma_address(&fw->mem.sgl) = fw->phys;
 		sg_dma_len(&fw->mem.sgl) = len;
 		break;
+	case NVKM_FIRMWARE_IMG_SGT: {
+		int sg_ents, ret;
+		struct sg_table *sgt;
+
+		len = ALIGN(fw->len, PAGE_SIZE);
+
+		fw->img = vmalloc(len);
+		if (fw->img)
+			memcpy(fw->img, src, fw->len);
+		else {
+			printk(KERN_ERR "failed to vmalloc\n");
+			return -EINVAL;
+		}
+
+		sgt = vmalloc_to_sgt(fw->img, len, &sg_ents);
+		if (!sgt) {
+			printk(KERN_ERR "unable to allocate fw sg table\n");
+			return -EINVAL;
+		}
+
+		fw->mem.sgt = sgt;
+
+		ret = dma_map_sgtable(fw->device->dev, sgt, DMA_FROM_DEVICE, 0);
+		if (ret) {
+			WARN_ON(1);
+			return ret;
+		}
+		break;
+	}
 	default:
 		WARN_ON(1);
 		return -EINVAL;
