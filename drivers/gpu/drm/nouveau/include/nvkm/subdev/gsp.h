@@ -113,13 +113,50 @@ struct nvkm_gsp {
 
 	const struct nvkm_gsp_rpc {
 		int (*update_bar_pde)(struct nvkm_gsp *, int bar, u64 addr);
+
+		void *(*rm_alloc_get)(struct nvkm_gsp *, u32 client, u32 parent, u32 object,
+				      u32 oclass, u32 argc);
+		void *(*rm_alloc_push)(struct nvkm_gsp *, void *argv, bool wait, u32 repc);
+		void (*rm_alloc_done)(struct nvkm_gsp *, void *repv);
 	} *rpc;
+
+	atomic_t client_id; /*XXX: allocator */
 };
 
 static inline bool
 nvkm_gsp_rm(struct nvkm_gsp *gsp)
 {
 	return gsp && gsp->fw.img != NULL;
+}
+
+static inline void *
+nvkm_gsp_rm_alloc_get(struct nvkm_gsp *gsp, u32 client, u32 parent, u32 object,
+		      u32 oclass, u32 argc)
+{
+	return gsp->rpc->rm_alloc_get(gsp, client, parent, object, oclass, argc);
+}
+
+static inline void *
+nvkm_gsp_rm_alloc_push(struct nvkm_gsp *gsp, void *argv, bool wait, u32 repc)
+{
+	return gsp->rpc->rm_alloc_push(gsp, argv, wait, repc);
+}
+
+static inline int
+nvkm_gsp_rm_alloc_wr(struct nvkm_gsp *gsp, void *argv, bool wait)
+{
+	void *repv = gsp->rpc->rm_alloc_push(gsp, argv, wait, 0);
+
+	if (IS_ERR(repv))
+		return PTR_ERR(repv);
+
+	return 0;
+}
+
+static inline void
+nvkm_gsp_rm_alloc_done(struct nvkm_gsp *gsp, void *repv)
+{
+	gsp->rpc->rm_alloc_done(gsp, repv);
 }
 
 int gv100_gsp_new(struct nvkm_device *, enum nvkm_subdev_type, int, struct nvkm_gsp **);

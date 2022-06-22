@@ -22,6 +22,7 @@
 #include "priv.h"
 
 #include <core/pci.h> //XXX
+#include <subdev/gsp/client.h>
 #include <subdev/timer.h>
 #include <engine/sec2.h>
 
@@ -389,6 +390,84 @@ r515_gsp_rpc_rd(struct nvkm_gsp *gsp, u32 fn, u32 argc)
 }
 
 static int
+r515_gsp_client_ctor(struct nvkm_gsp_client *client)
+{
+	struct {
+		u32  client;
+		u32  process_id;
+		char process_name[100];
+	} *args;
+
+	args = nvkm_gsp_rm_alloc_get(client->gsp, client->handle, 0, 0, 0, sizeof(*args));
+	if (IS_ERR(args))
+		return PTR_ERR(args);
+
+	args->client = client->handle;
+	args->process_id = ~0;
+
+	return nvkm_gsp_rm_alloc_wr(client->gsp, args, true);
+}
+
+const struct nvkm_gsp_client_func
+r515_gsp_client = {
+	.ctor = r515_gsp_client_ctor,
+};
+
+struct r515_gsp_rpc_rm_alloc {
+	u32 client;
+	u32 parent;
+	u32 object;
+	u32 oclass;
+	u32 status;
+	u32 argc;
+	u8  argv[];
+};
+
+void
+r515_gsp_rpc_rm_alloc_done(struct nvkm_gsp *gsp, void *repv)
+{
+	struct r515_gsp_rpc_rm_alloc *rpc = container_of(repv, typeof(*rpc), argv);
+
+	r515_gsp_rpc_done(gsp, rpc);
+}
+
+void *
+r515_gsp_rpc_rm_alloc_push(struct nvkm_gsp *gsp, void *argv, bool wait, u32 repc)
+{
+	struct r515_gsp_rpc_rm_alloc *rpc = container_of(argv, typeof(*rpc), argv);
+
+	rpc = r515_gsp_rpc_push(gsp, rpc, wait, sizeof(*rpc) + repc);
+	if (IS_ERR_OR_NULL(rpc))
+		return rpc;
+
+	if (rpc->status) {
+		nvkm_error(&gsp->subdev, "RM_ALLOC: 0x%x\n", rpc->status);
+		return ERR_PTR(-EINVAL);
+	}
+
+	return rpc->argv;
+}
+
+void *
+r515_gsp_rpc_rm_alloc_get(struct nvkm_gsp *gsp, u32 client, u32 parent, u32 object,
+			  u32 oclass, u32 argc)
+{
+	struct r515_gsp_rpc_rm_alloc *rpc;
+
+	rpc = r515_gsp_rpc_get(gsp, 103, sizeof(*rpc) + argc);
+	if (IS_ERR(rpc))
+		return rpc;
+
+	rpc->client = client;
+	rpc->parent = parent;
+	rpc->object = object;
+	rpc->oclass = oclass;
+	rpc->status = 0;
+	rpc->argc   = argc;
+	return rpc->argv;
+}
+
+static int
 r515_gsp_rpc_update_bar_pde(struct nvkm_gsp *gsp, int id, u64 addr)
 {
 	struct {
@@ -411,6 +490,9 @@ r515_gsp_rpc_update_bar_pde(struct nvkm_gsp *gsp, int id, u64 addr)
 const struct nvkm_gsp_rpc
 r515_gsp_rpc = {
 	.update_bar_pde = r515_gsp_rpc_update_bar_pde,
+	.rm_alloc_get = r515_gsp_rpc_rm_alloc_get,
+	.rm_alloc_push = r515_gsp_rpc_rm_alloc_push,
+	.rm_alloc_done = r515_gsp_rpc_rm_alloc_done,
 };
 
 static int
@@ -1115,6 +1197,8 @@ r515_gsp_oneinit(struct nvkm_gsp *gsp)
 
 	gsp->fb.heap.size = 0x100000;
 	gsp->fb.heap.addr = gsp->fb.wpr2.addr - gsp->fb.heap.size;
+
+	atomic_set(&gsp->client_id, 0xc1d00000);
 	return 0;
 }
 

@@ -3,6 +3,7 @@
 #define __NVKM_GSP_PRIV_H__
 #include <subdev/gsp.h>
 enum nvkm_acr_lsf_id;
+struct nvkm_gsp_client;
 
 int nvkm_gsp_fwsec_frts(struct nvkm_gsp *);
 int nvkm_gsp_fwsec_sb(struct nvkm_gsp *);
@@ -67,6 +68,7 @@ struct nvkm_gsp_func {
 	int (*reset)(struct nvkm_gsp *);
 
 	const struct nvkm_gsp_rpc *rpc;
+	const struct nvkm_gsp_client_func *client;
 };
 
 extern const struct nvkm_gsp_func gv100_gsp;
@@ -83,6 +85,7 @@ int r515_gsp_oneinit(struct nvkm_gsp *);
 int r515_gsp_init(struct nvkm_gsp *);
 int r515_gsp_fini(struct nvkm_gsp *);
 extern const struct nvkm_gsp_rpc r515_gsp_rpc;
+extern const struct nvkm_gsp_client_func r515_gsp_client;
 
 int nvkm_gsp_new_(const struct nvkm_gsp_fwif *, struct nvkm_device *, enum nvkm_subdev_type, int,
 		  struct nvkm_gsp **);

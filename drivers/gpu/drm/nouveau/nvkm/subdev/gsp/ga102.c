@@ -98,6 +98,7 @@ ga102_gsp_r515_48_07 = {
 	.reset = ga102_gsp_reset,
 
 	.rpc = &r515_gsp_rpc,
+	.client = &r515_gsp_client,
 };
 
 static const struct nvkm_gsp_func

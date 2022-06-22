@@ -160,6 +160,7 @@ tu102_gsp_r515_48_07 = {
 	.reset = tu102_gsp_reset,
 
 	.rpc = &r515_gsp_rpc,
+	.client = &r515_gsp_client,
 };
 
 static struct nvkm_gsp_fwif

@@ -19,43 +19,35 @@
  * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
  * OTHER DEALINGS IN THE SOFTWARE.
  */
+#include <subdev/gsp/client.h>
 #include "priv.h"
 
-#include "fw/booter/load/tu116.h"
-#include "fw/booter/unload/tu116.h"
-#include "fw/gsp-rm/boot/tu102.h"
-
-static const struct nvkm_gsp_func
-tu116_gsp_r515_48_07 = {
-	.flcn = &tu102_gsp_flcn,
-	.fwsec = &tu102_gsp_fwsec,
-
-	.booter.ctor = tu102_gsp_booter_ctor,
-	.booter.load = &tu116_gsp_booter_load_fw,
-	.booter.unload = &tu116_gsp_booter_unload_fw,
-
-	.boot = &tu102_gsp_gsp_rm_boot_fw,
-
-	.dtor = r515_gsp_dtor,
-	.oneinit = tu102_gsp_oneinit,
-	.init = r515_gsp_init,
-	.fini = r515_gsp_fini,
-	.reset = tu102_gsp_reset,
-
-	.rpc = &r515_gsp_rpc,
-	.client = &r515_gsp_client,
-};
-
-static struct nvkm_gsp_fwif
-tu116_gsps[] = {
-	{ 5154807,  r515_gsp_load, &tu116_gsp_r515_48_07, ".fwsignature_tu11x" },
-	{      -1, gv100_gsp_nofw, &gv100_gsp },
-	{}
-};
+void
+nvkm_gsp_client_del(struct nvkm_gsp_client **pclient)
+{
+	kfree(*pclient);
+	*pclient = NULL;
+}
 
 int
-tu116_gsp_new(struct nvkm_device *device, enum nvkm_subdev_type type, int inst,
-	      struct nvkm_gsp **pgsp)
+nvkm_gsp_client_new(struct nvkm_gsp *gsp, struct nvkm_gsp_client **pclient)
 {
-	return nvkm_gsp_new_(tu116_gsps, device, type, inst, pgsp);
+	struct nvkm_gsp_client *client;
+	int ret;
+
+	if (!gsp->func->client)
+		return -ENODEV;
+
+	if (!(client = *pclient = kmalloc(sizeof(*client), GFP_KERNEL)))
+		return -ENOMEM;
+
+	client->func = gsp->func->client;
+	client->gsp = gsp;
+	client->handle = atomic_inc_return(&gsp->client_id);
+
+	ret = gsp->func->client->ctor(client);
+	if (ret)
+		nvkm_gsp_client_del(pclient);
+
+	return ret;
 }
