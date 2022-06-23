@@ -126,7 +126,7 @@ static inline void
 nvkm_vmm_flush(struct nvkm_vmm_iter *it)
 {
 	if (it->flush != NVKM_VMM_LEVELS_MAX) {
-		if (it->vmm->func->flush) {
+		if (it->vmm->func->flush && it->vmm->mmu->ready) {
 			TRA(it, "flush: %d", it->flush);
 			it->vmm->func->flush(it->vmm, it->flush);
 		}

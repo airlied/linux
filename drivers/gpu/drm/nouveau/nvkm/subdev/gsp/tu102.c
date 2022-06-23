@@ -158,6 +158,8 @@ tu102_gsp_r515_48_07 = {
 	.init = r515_gsp_init,
 	.fini = r515_gsp_fini,
 	.reset = tu102_gsp_reset,
+
+	.rpc = &r515_gsp_rpc,
 };
 
 static struct nvkm_gsp_fwif

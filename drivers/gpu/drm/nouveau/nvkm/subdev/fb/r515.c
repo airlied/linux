@@ -20,6 +20,21 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 #include "priv.h"
+#include "ram.h"
+
+#include <subdev/gsp.h>
+
+static const struct nvkm_ram_func
+r515_fb_ram = {
+};
+
+static int
+r515_fb_ram_new(struct nvkm_fb *fb, struct nvkm_ram **pram)
+{
+	struct nvkm_gsp *gsp = fb->subdev.device->gsp;
+
+	return nvkm_ram_new_(&r515_fb_ram, fb, 0, gsp->fb.size - gsp->fb.heap.addr, pram);
+}
 
 static void *
 r515_fb_dtor(struct nvkm_fb *fb)
@@ -42,6 +57,7 @@ r515_fb_new(const struct nvkm_fb_func *hw,
 	rm->sysmem.flush_page_init = hw->sysmem.flush_page_init;
 	rm->vidmem.type = hw->vidmem.type;
 	rm->vidmem.size = hw->vidmem.size;
+	rm->ram_new = r515_fb_ram_new;
 
 	ret = nvkm_fb_new_(rm, device, type, inst, pfb);
 	if (ret)

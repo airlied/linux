@@ -46,6 +46,8 @@ struct nvkm_vmm {
 	void *nullp;
 
 	bool replay;
+
+	u64 rm_bar2_pdb;
 };
 
 int nvkm_vmm_new(struct nvkm_device *, u64 addr, u64 size, void *argv, u32 argc,
@@ -86,6 +88,8 @@ struct nvkm_vmm *nvkm_uvmm_search(struct nvkm_client *, u64 handle);
 struct nvkm_mmu {
 	const struct nvkm_mmu_func *func;
 	struct nvkm_subdev subdev;
+
+	bool ready;
 
 	u8  dma_bits;
 

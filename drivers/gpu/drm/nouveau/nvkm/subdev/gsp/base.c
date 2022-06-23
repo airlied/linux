@@ -97,6 +97,7 @@ nvkm_gsp_new_(const struct nvkm_gsp_fwif *fwif, struct nvkm_device *device,
 		return PTR_ERR(fwif);
 
 	gsp->func = fwif->func;
+	gsp->rpc = gsp->func->rpc;
 
 	return nvkm_falcon_ctor(gsp->func->flcn, &gsp->subdev, gsp->subdev.name, 0, &gsp->falcon);
 }

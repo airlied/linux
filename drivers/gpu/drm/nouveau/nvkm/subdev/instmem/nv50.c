@@ -409,9 +409,6 @@ nv50_instmem_new(struct nvkm_device *device, enum nvkm_subdev_type type, int ins
 {
 	struct nv50_instmem *imem;
 
-	if (nvkm_gsp_rm(device->gsp))
-		return -ENODEV;
-
 	if (!(imem = kzalloc(sizeof(*imem), GFP_KERNEL)))
 		return -ENOMEM;
 	nvkm_instmem_ctor(&nv50_instmem, device, type, inst, &imem->base);

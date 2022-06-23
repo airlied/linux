@@ -389,6 +389,31 @@ r515_gsp_rpc_rd(struct nvkm_gsp *gsp, u32 fn, u32 argc)
 }
 
 static int
+r515_gsp_rpc_update_bar_pde(struct nvkm_gsp *gsp, int id, u64 addr)
+{
+	struct {
+		u32 bar;
+		u64 addr;
+		u64 shift;
+	} *rpc;
+
+	rpc = r515_gsp_rpc_get(gsp, 70, sizeof(*rpc));
+	if (WARN_ON(IS_ERR_OR_NULL(rpc)))
+		return -EIO;
+
+	rpc->bar = id - 1;
+	rpc->addr = addr ? ((addr >> 4) | 2) : 0; /* PD3 entry format! */
+	rpc->shift = 47; //XXX: probably fetch this from mmu!
+
+	return r515_gsp_rpc_wr(gsp, rpc, true);
+}
+
+const struct nvkm_gsp_rpc
+r515_gsp_rpc = {
+	.update_bar_pde = r515_gsp_rpc_update_bar_pde,
+};
+
+static int
 r515_gsp_rpc_unloading_guest_driver(struct nvkm_gsp *gsp)
 {
 	struct nvfw_registry {
@@ -420,6 +445,8 @@ r515_gsp_rpc_get_gsp_static_info(struct nvkm_gsp *gsp)
 	gsp->client = rpc->hInternalClient;
 	gsp->device = rpc->hInternalDevice;
 	gsp->subdevice = rpc->hInternalSubdevice;
+	gsp->bar.rm_bar1_pdb = rpc->bar1PdeBase;
+	gsp->bar.rm_bar2_pdb = rpc->bar2PdeBase;
 
 	r515_gsp_rpc_done(gsp, rpc);
 	return 0;

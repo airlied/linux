@@ -65,6 +65,8 @@ struct nvkm_gsp_func {
 	int (*init)(struct nvkm_gsp *);
 	int (*fini)(struct nvkm_gsp *);
 	int (*reset)(struct nvkm_gsp *);
+
+	const struct nvkm_gsp_rpc *rpc;
 };
 
 extern const struct nvkm_gsp_func gv100_gsp;
@@ -80,6 +82,7 @@ void r515_gsp_dtor(struct nvkm_gsp *);
 int r515_gsp_oneinit(struct nvkm_gsp *);
 int r515_gsp_init(struct nvkm_gsp *);
 int r515_gsp_fini(struct nvkm_gsp *);
+extern const struct nvkm_gsp_rpc r515_gsp_rpc;
 
 int nvkm_gsp_new_(const struct nvkm_gsp_fwif *, struct nvkm_device *, enum nvkm_subdev_type, int,
 		  struct nvkm_gsp **);

@@ -105,6 +105,15 @@ struct nvkm_gsp {
 	u32 client;
 	u32 device;
 	u32 subdevice;
+
+	struct {
+		u64 rm_bar1_pdb;
+		u64 rm_bar2_pdb;
+	} bar;
+
+	const struct nvkm_gsp_rpc {
+		int (*update_bar_pde)(struct nvkm_gsp *, int bar, u64 addr);
+	} *rpc;
 };
 
 static inline bool
