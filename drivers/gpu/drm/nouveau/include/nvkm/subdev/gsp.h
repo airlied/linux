@@ -114,6 +114,8 @@ struct nvkm_gsp {
 		u32 gpc_id;
 		u32 tpc_mask;
 	} tpc[GPC_MAX];
+	u32 tpc_max;
+	u32 tpc_total;
 
 	struct {
 		u64 rm_bar1_pdb;
@@ -173,4 +175,6 @@ int tu102_gsp_new(struct nvkm_device *, enum nvkm_subdev_type, int, struct nvkm_
 int tu116_gsp_new(struct nvkm_device *, enum nvkm_subdev_type, int, struct nvkm_gsp **);
 int ga100_gsp_new(struct nvkm_device *, enum nvkm_subdev_type, int, struct nvkm_gsp **);
 int ga102_gsp_new(struct nvkm_device *, enum nvkm_subdev_type, int, struct nvkm_gsp **);
+
+u64 nvkm_gsp_units(struct nvkm_gsp *gsp);
 #endif

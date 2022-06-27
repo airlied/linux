@@ -531,9 +531,12 @@ r515_gsp_rpc_get_gsp_static_info(struct nvkm_gsp *gsp)
 	gsp->bar.rm_bar2_pdb = rpc->bar2PdeBase;
 
 	gsp->gpc_mask = rpc->gpcInfo.gpcMask;
+	gsp->tpc_max = 0;
 	for (i = 0; i < GPC_MAX; i++) {
 		gsp->tpc[i].gpc_id = rpc->tpcInfo[i].gpcId;
 		gsp->tpc[i].tpc_mask = rpc->tpcInfo[i].tpcMask;
+		gsp->tpc_max = max(gsp->tpc_max, hweight32(gsp->tpc[i].tpc_mask));
+		gsp->tpc_total += hweight32(gsp->tpc[i].tpc_mask);
 	}
 	r515_gsp_rpc_done(gsp, rpc);
 	return 0;
@@ -1302,4 +1305,14 @@ r515_gsp_load(struct nvkm_gsp *gsp, int ver, const struct nvkm_gsp_fwif *fwif)
 
 	r515_gsp_msg_ntfy_add(gsp, 0x00001002, r515_gsp_msg_run_cpu_sequencer, gsp);
 	return 0;
+}
+
+u64 nvkm_gsp_units(struct nvkm_gsp *gsp)
+{
+	u64 cfg;
+
+	cfg = (u32)hweight32(gsp->gpc_mask);
+	cfg |= (u32)gsp->tpc_total << 8;
+	/* ROP NR */
+	return cfg;
 }
