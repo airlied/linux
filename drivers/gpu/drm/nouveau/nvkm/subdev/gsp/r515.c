@@ -519,7 +519,7 @@ static int
 r515_gsp_rpc_get_gsp_static_info(struct nvkm_gsp *gsp)
 {
 	GspStaticConfigInfo *rpc;
-
+	u32 i;
 	rpc = r515_gsp_rpc_rd(gsp, 65, sizeof(*rpc));
 	if (IS_ERR(rpc))
 		return PTR_ERR(rpc);
@@ -530,6 +530,11 @@ r515_gsp_rpc_get_gsp_static_info(struct nvkm_gsp *gsp)
 	gsp->bar.rm_bar1_pdb = rpc->bar1PdeBase;
 	gsp->bar.rm_bar2_pdb = rpc->bar2PdeBase;
 
+	gsp->gpc_mask = rpc->gpcInfo.gpcMask;
+	for (i = 0; i < GPC_MAX; i++) {
+		gsp->tpc[i].gpc_id = rpc->tpcInfo[i].gpcId;
+		gsp->tpc[i].tpc_mask = rpc->tpcInfo[i].tpcMask;
+	}
 	r515_gsp_rpc_done(gsp, rpc);
 	return 0;
 }

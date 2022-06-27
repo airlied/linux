@@ -5,6 +5,8 @@
 #include <core/falcon.h>
 #include <core/firmware.h>
 
+#define GPC_MAX 32
+
 struct nvkm_gsp_mem {
 	u32 size;
 	void *data;
@@ -105,6 +107,13 @@ struct nvkm_gsp {
 	u32 client;
 	u32 device;
 	u32 subdevice;
+
+	u32 gpc_mask;
+
+	struct {
+		u32 gpc_id;
+		u32 tpc_mask;
+	} tpc[GPC_MAX];
 
 	struct {
 		u64 rm_bar1_pdb;
