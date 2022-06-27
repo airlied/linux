@@ -1690,7 +1690,7 @@ nvkm_device_pci_new(struct pci_dev *pci_dev, const char *cfg, const char *dbg,
 	if (pdev->device.mmu && !pdev->device.pci->agp.bridge)
 		bits = pdev->device.mmu->dma_bits;
 	else
-		bits = 32;
+		bits = 47;
 
 	ret = dma_set_mask_and_coherent(&pci_dev->dev, DMA_BIT_MASK(bits));
 	if (ret && bits != 32) {
