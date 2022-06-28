@@ -240,8 +240,8 @@ retry:
 
 	if (fn && msg->function == fn) {
 		if (repc) {
-			if (msg->length != sizeof(*msg) + repc) {
-				nvkm_error(subdev, "msg len %d != %zd\n",
+			if (msg->length < sizeof(*msg) + repc) {
+				nvkm_error(subdev, "msg len %d < %zd\n",
 					   msg->length, sizeof(*msg) + repc);
 				r515_gsp_msg_dump(gsp, msg, NV_DBG_ERROR);
 				r515_gsp_msg_done(gsp, msg);
@@ -413,6 +413,60 @@ r515_gsp_client = {
 	.ctor = r515_gsp_client_ctor,
 };
 
+struct r515_gsp_rpc_rm_ctrl {
+	u32 client;
+	u32 object;
+	u32 cmd;
+	u32 status;
+	u32 argc;
+	u8  serialized;
+	u8  reserved[3];
+	u8  argv[];
+};
+
+void
+r515_gsp_rpc_rm_ctrl_done(struct nvkm_gsp *gsp, void *repv)
+{
+	struct r515_gsp_rpc_rm_ctrl *rpc = container_of(repv, typeof(*rpc), argv);
+
+	r515_gsp_rpc_done(gsp, rpc);
+}
+
+void *
+r515_gsp_rpc_rm_ctrl_push(struct nvkm_gsp *gsp, void *argv, bool wait, u32 repc)
+{
+	struct r515_gsp_rpc_rm_ctrl *rpc = container_of(argv, typeof(*rpc), argv);
+
+	rpc = r515_gsp_rpc_push(gsp, rpc, wait, repc);
+	if (IS_ERR_OR_NULL(rpc))
+		return rpc;
+
+	if (rpc->status) {
+		nvkm_error(&gsp->subdev, "RM_CTRL: 0x%x\n", rpc->status);
+		return ERR_PTR(-EINVAL);
+	}
+
+	return rpc->argv;
+}
+
+void *
+r515_gsp_rpc_rm_ctrl_get(struct nvkm_gsp *gsp, u32 client, u32 object, u32 cmd, u32 argc)
+{
+	struct r515_gsp_rpc_rm_ctrl *rpc;
+
+	rpc = r515_gsp_rpc_get(gsp, 76, sizeof(*rpc) + argc);
+	if (IS_ERR(rpc))
+		return rpc;
+
+	rpc->client     = client;
+	rpc->object     = object;
+	rpc->cmd	= cmd;
+	rpc->status     = 0;
+	rpc->serialized = 0;
+	rpc->argc       = argc;
+	return rpc->argv;
+}
+
 struct r515_gsp_rpc_rm_alloc {
 	u32 client;
 	u32 parent;
@@ -493,6 +547,9 @@ r515_gsp_rpc = {
 	.rm_alloc_get = r515_gsp_rpc_rm_alloc_get,
 	.rm_alloc_push = r515_gsp_rpc_rm_alloc_push,
 	.rm_alloc_done = r515_gsp_rpc_rm_alloc_done,
+	.rm_ctrl_get = r515_gsp_rpc_rm_ctrl_get,
+	.rm_ctrl_push = r515_gsp_rpc_rm_ctrl_push,
+	.rm_ctrl_done = r515_gsp_rpc_rm_ctrl_done,
 };
 
 static int
