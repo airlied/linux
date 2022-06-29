@@ -6,6 +6,7 @@
 #include <core/firmware.h>
 
 #define GPC_MAX 32
+#define GSP_MAX_ENGINES 0x34
 
 struct nvkm_gsp_mem {
 	u32 size;
@@ -116,6 +117,9 @@ struct nvkm_gsp {
 	} tpc[GPC_MAX];
 	u32 tpc_max;
 	u32 tpc_total;
+
+	u32 num_engines;
+	u32 engine_ids[GSP_MAX_ENGINES];
 
 	struct {
 		u64 rm_bar1_pdb;

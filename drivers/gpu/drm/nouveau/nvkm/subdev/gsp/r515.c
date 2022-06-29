@@ -599,6 +599,33 @@ r515_gsp_rpc_get_gsp_static_info(struct nvkm_gsp *gsp)
 	return 0;
 }
 
+#define NV2080_CTRL_CMD_GPU_GET_ENGINES_V2 (0x20800170)
+#define GSP_MAX_ENGINES   0x34
+struct get_engines_v2_params {
+	u32 engine_count;
+	u32 engine_list[GSP_MAX_ENGINES];
+};
+
+static int
+r515_gsp_get_engines_v2(struct nvkm_gsp *gsp)
+{
+	struct get_engines_v2_params *params;
+
+	params = nvkm_gsp_rm_ctrl_get(gsp, gsp->client, gsp->subdevice, NV2080_CTRL_CMD_GPU_GET_ENGINES_V2,
+				      sizeof(*params));
+	if (IS_ERR(params))
+		return PTR_ERR(params);
+
+	params = nvkm_gsp_rm_ctrl_push(gsp, params, true, sizeof(*params));
+
+	gsp->num_engines = params->engine_count;
+	for (unsigned i = 0; i < params->engine_count; i++)
+		gsp->engine_ids[i] = params->engine_list[i];
+
+	nvkm_gsp_rm_ctrl_done(gsp, params);
+	return 0;
+}
+
 static int
 r515_gsp_rpc_set_registry(struct nvkm_gsp *gsp)
 {
@@ -1191,6 +1218,11 @@ r515_gsp_init(struct nvkm_gsp *gsp)
 	gsp->running = true;
 
 	ret = r515_gsp_rpc_get_gsp_static_info(gsp);
+	if (WARN_ON(ret))
+		return ret;
+
+
+	ret = r515_gsp_get_engines_v2(gsp);
 	if (WARN_ON(ret))
 		return ret;
 
