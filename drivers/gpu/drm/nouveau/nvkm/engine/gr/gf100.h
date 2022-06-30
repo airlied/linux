@@ -271,6 +271,10 @@ void tu102_gr_init_zcull(struct gf100_gr *);
 void tu102_gr_init_fs(struct gf100_gr *);
 void tu102_gr_init_fecs_exceptions(struct gf100_gr *);
 
+int
+r515_gr_new(struct nvkm_device *device, enum nvkm_subdev_type type, int inst,
+	    struct nvkm_gr **pgr);
+
 #define gf100_gr_chan(p) container_of((p), struct gf100_gr_chan, object)
 #include <core/object.h>
 

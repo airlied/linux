@@ -12,4 +12,8 @@ extern const struct nvkm_object_func gv100_ce_cclass;
 int ga100_ce_oneinit(struct nvkm_engine *);
 int ga100_ce_init(struct nvkm_engine *);
 int ga100_ce_fini(struct nvkm_engine *, bool);
+
+int
+r515_ce_new(struct nvkm_device *device, enum nvkm_subdev_type type, int inst,
+	    struct nvkm_engine **pengine);
 #endif
