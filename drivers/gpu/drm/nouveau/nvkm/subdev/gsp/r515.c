@@ -1096,6 +1096,56 @@ r515_gsp_libos_id8(const char *name)
 	return id;
 }
 
+/**
+ * fill_ptes - creates a PTE array of a physically contiguous buffer
+ * @ptes: pointer to the array
+ * @addr: base address of physically contiguous buffer (GSP_PAGE_SIZE aligned)
+ * @size: size of the buffer
+ *
+ * GSP-RM sometimes expects physically-contiguous buffers to have an array of
+ * PTEs for each page in that buffer.
+ *
+ * See memdescGetPhysAddrs
+ */
+static void create_pte_array(u64 *ptes, dma_addr_t addr, size_t size)
+{
+	unsigned int num_pages = DIV_ROUND_UP_ULL(size, GSP_PAGE_SIZE);
+	unsigned int i;
+
+	for (i = 0; i < num_pages; i++)
+		ptes[i] = (u64)addr + (i << GSP_PAGE_SHIFT);
+}
+
+/**
+ * r515_gsp_libos_init -- create the libos arguments structure
+ * @void:
+ *
+ * The physical address map for the log buffer is stored in the buffer
+ * itself, starting with offset 1. Offset 0 contains the "put" pointer.
+ *
+ * The GSP only understands 4K pages (GSP_PAGE_SIZE), so even if the kernel is
+ * configured for a larger page size (e.g. 64K pages), we need to give
+ * the GSP an array of 4K pages. Fortunately, since the buffer is
+ * physically contiguous, it's simple math to calculate the addresses.
+ *
+ * The buffers must be a multiple of GSP_PAGE_SIZE.  GSP-RM also currently
+ * ignores the @kind field for LOGINIT and LOGRM but expects the buffers to be
+ * physically contiguous anyway.
+ *
+ * The memory allocated for the arguments must remain until the GSP sends the
+ * init_done RPC.
+ *
+ * The logging buffers (LOGINIT and LOGRM) are byte queues that contain
+ * encoded printf-like messages.  They need to be decoded by a special
+ * application that can parse the buffers.
+ *
+ * The 'loginit' buffer contains logs from early GSP init and
+ * exception dumps.  The 'logrm' buffer contains the subsequent logs. Both are
+ * written to directly by GSP-RM and can be any multiple of GSP_PAGE_SIZE.
+ *
+ * See _kgspInitLibosLoggingStructures (allocates memory for buffers)
+ * See kgspSetupLibosInitArgs_IMPL (creates pLibosInitArgs[] array)
+ */
 static int
 r515_gsp_libos_init(struct nvkm_gsp *gsp)
 {
@@ -1125,6 +1175,8 @@ r515_gsp_libos_init(struct nvkm_gsp *gsp)
 	args[0].size = gsp->loginit.size;
 	args[0].kind = LIBOS_MEMORY_REGION_CONTIGUOUS;
 	args[0].loc  = LIBOS_MEMORY_REGION_LOC_SYSMEM;
+	create_pte_array(gsp->loginit.data + sizeof(u64), gsp->loginit.addr,
+			 gsp->loginit.size);
 
 	ret = nvkm_gsp_mem_ctor(gsp, 0x10000, &gsp->logrm);
 	if (ret)
@@ -1135,6 +1187,8 @@ r515_gsp_libos_init(struct nvkm_gsp *gsp)
 	args[1].size = gsp->logrm.size;
 	args[1].kind = LIBOS_MEMORY_REGION_CONTIGUOUS;
 	args[1].loc  = LIBOS_MEMORY_REGION_LOC_SYSMEM;
+	create_pte_array(gsp->logrm.data + sizeof(u64), gsp->logrm.addr,
+			 gsp->logrm.size);
 
 	ret = r515_gsp_rmargs_init(gsp);
 	if (ret)
