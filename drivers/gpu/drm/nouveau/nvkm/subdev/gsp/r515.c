@@ -1096,6 +1096,135 @@ r515_gsp_libos_id8(const char *name)
 	return id;
 }
 
+#define NV_GSP_MSG_EVENT_UCODE_LIBOS_CLASS_PMU		0xf3d722
+
+/**
+ * r515_gsp_msg_libos_print - capture log message from the PMU
+ * @priv: gsp pointer
+ * @fn: function number (ignored)
+ * @repv: pointer to libos print RPC
+ * @repc: message size
+ *
+ * See _kgspRpcUcodeLibosPrint
+ */
+static int r515_gsp_msg_libos_print(void *priv, u32 fn, void *repv, u32 repc)
+{
+	struct nvkm_gsp *gsp = priv;
+	struct nvkm_subdev *subdev = &gsp->subdev;
+	struct {
+		u32 ucodeEngDesc;
+		u32 libosPrintBufSize;
+		u8 libosPrintBuf[];
+	} *rpc = repv;
+	unsigned int data = rpc->ucodeEngDesc >> 8;
+
+	nvkm_debug(subdev, "received libos print from class 0x%x for %u bytes\n",
+		   data, rpc->libosPrintBufSize);
+
+	if (data != NV_GSP_MSG_EVENT_UCODE_LIBOS_CLASS_PMU) {
+		nvkm_warn(subdev,
+			  "received libos print from unknown class 0x%x\n",
+			  data);
+		return -ENOMSG;
+	}
+	if (rpc->libosPrintBufSize > GSP_PAGE_SIZE) {
+		nvkm_error(subdev, "libos print is too large (%u bytes)\n",
+			   rpc->libosPrintBufSize);
+		return -E2BIG;
+
+	}
+	memcpy(gsp->blob_pmu.data, rpc->libosPrintBuf, rpc->libosPrintBufSize);
+
+	return 0;
+}
+
+/**
+ * r515_gsp_libos_debugfs_init - create logging debugfs entries
+ * @gsp:
+ *
+ * Create the debugfs entries.  This exposes the log buffers to
+ * userspace so that an external tool can parse it.
+ *
+ * The 'logpmu' contains exception dumps from the PMU. It is written via an
+ * RPC sent from GSP-RM and must be only 4KB.  We create it here because it's
+ * only useful if there is a debugfs entry to expose it.  If we get the PMU
+ * logging RPC and there is no debugfs entry, the RPC is just ignored.
+ *
+ * The blob_init, blob_rm, and blob_pmu objects can't be transient
+ * because debugfs_create_blob doesn't copy them.
+ *
+ * NOTE: OpenRM loads the logging elf image and prints the log messages
+ * in real-time. We may add that capability in the future, but that
+ * requires loading two ELF images that are not distributed with the
+ * driver, and adding the parsing code to Nouveau.
+ *
+ * FIXME: This should be part of nouveau_debugfs_init(), but that
+ * function is called much too late.  We really want to create these
+ * debugfs entries before r515_gsp_booter_load() is called, so that
+ * if GSP-RM crashes, there could still be a log to capture.
+ */
+static void r515_gsp_libos_debugfs_init(struct nvkm_gsp *gsp)
+{
+	struct dentry *dir_init, *dir_rm, *dir_pmu;
+	struct dentry *dir;
+	extern struct dentry *gsp_debugfs_logging_dir;
+
+	dir = debugfs_create_dir("nouveau", NULL);
+	if (PTR_ERR(dir) == -ENODEV) {
+		/* No debugfs */
+		return;
+	}
+
+	if (IS_ERR_OR_NULL(dir)) {
+		nvkm_error(&gsp->subdev,
+			   "error %li creating /sys/kernel/debug/nouveau/\n", PTR_ERR(dir));
+		return;
+	}
+
+	gsp->blob_init.data = gsp->loginit.data;
+	gsp->blob_init.size = gsp->loginit.size;
+
+	dir_init = debugfs_create_blob("loginit", 0444, dir, &gsp->blob_init);
+	if (IS_ERR_OR_NULL(dir_init)) {
+		nvkm_error(&gsp->subdev,
+			   "failed to create /sys/kernel/debug/nouveau/%s\n", "loginit");
+		return;
+	}
+
+	/*
+	 * We don't want to remove these entries until the driver is unloaded,
+	 * otherwise can't debug GSP-RM failures.
+	 */
+	gsp_debugfs_logging_dir = dir;
+
+	gsp->blob_rm.data = gsp->logrm.data;
+	gsp->blob_rm.size = gsp->logrm.size;
+	dir_rm = debugfs_create_blob("logrm", 0444, dir, &gsp->blob_rm);
+	if (IS_ERR_OR_NULL(dir_rm)) {
+		nvkm_error(&gsp->subdev,
+			   "failed to create /sys/kernel/debug/nouveau/%s\n", "logrm");
+	}
+
+	gsp->blob_pmu.size = GSP_PAGE_SIZE;
+	gsp->blob_pmu.data =
+		devm_kzalloc(gsp->subdev.device->dev, gsp->blob_pmu.size, GFP_KERNEL);
+	if (!gsp->blob_pmu.data)
+		return;
+
+	dir_pmu = debugfs_create_blob("logpmu", 0444, dir, &gsp->blob_pmu);
+	if (IS_ERR_OR_NULL(dir_pmu)) {
+		nvkm_error(&gsp->subdev,
+			   "failed to create /sys/kernel/debug/nouveau/%s\n", "logpmu");
+		devm_kfree(gsp->subdev.device->dev, gsp->blob_pmu.data);
+		gsp->blob_pmu.data = NULL;
+		return;
+	}
+
+	r515_gsp_msg_ntfy_add(gsp, 0x0000100C, r515_gsp_msg_libos_print, gsp);
+
+	nvkm_info(&gsp->subdev, "created debugfs logging entries\n");
+}
+
 /**
  * fill_ptes - creates a PTE array of a physically contiguous buffer
  * @ptes: pointer to the array
@@ -1199,6 +1328,9 @@ r515_gsp_libos_init(struct nvkm_gsp *gsp)
 	args[2].size = gsp->rmargs.size;
 	args[2].kind = LIBOS_MEMORY_REGION_CONTIGUOUS;
 	args[2].loc  = LIBOS_MEMORY_REGION_LOC_SYSMEM;
+
+	r515_gsp_libos_debugfs_init(gsp);
+
 	return 0;
 }
 
