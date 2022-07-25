@@ -72,7 +72,7 @@ nvkm_gr_tile(struct nvkm_engine *engine, int region, struct nvkm_fb_tile *tile)
 u64
 nvkm_gr_units(struct nvkm_gr *gr)
 {
-	if (gr->func->units)
+	if (gr && gr->func && gr->func->units)
 		return gr->func->units(gr);
 	return 0;
 }

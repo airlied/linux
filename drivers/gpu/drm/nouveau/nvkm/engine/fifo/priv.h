@@ -206,4 +206,8 @@ int nvkm_uchan_new(struct nvkm_fifo *, struct nvkm_cgrp *, const struct nvkm_ocl
 		   void *argv, u32 argc, struct nvkm_object **);
 int nvkm_ucgrp_new(struct nvkm_fifo *, const struct nvkm_oclass *, void *argv, u32 argc,
 		   struct nvkm_object **);
+
+int
+r515_fifo_new(struct nvkm_device *device, enum nvkm_subdev_type type, int inst,
+	      struct nvkm_fifo **pfifo);
 #endif

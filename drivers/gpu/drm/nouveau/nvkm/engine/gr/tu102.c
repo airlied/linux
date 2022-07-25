@@ -213,6 +213,9 @@ tu102_gr_load(struct gf100_gr *gr, int ver, const struct gf100_gr_fwif *fwif)
 {
 	int ret;
 
+	if (nvkm_gsp_rm(gr->base.engine.subdev.device->gsp)) {
+	  return 0;
+	}
 	ret = gm200_gr_load(gr, ver, fwif);
 	if (ret)
 		return ret;

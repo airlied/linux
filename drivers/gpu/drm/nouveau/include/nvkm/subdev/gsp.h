@@ -8,6 +8,40 @@
 #define GPC_MAX 32
 #define GSP_MAX_ENGINES 0x34
 
+#define NV2080_CTRL_FIFO_GET_DEVICE_INFO_TABLE_ENGINE_DATA_TYPES   16
+#define NV2080_CTRL_FIFO_GET_DEVICE_INFO_TABLE_ENGINE_MAX_PBDMA    2
+#define NV2080_CTRL_FIFO_GET_DEVICE_INFO_TABLE_ENGINE_MAX_NAME_LEN 16
+
+struct gsp_fifo_device_entry {
+	union {
+		struct {
+			u32 engine_data[NV2080_CTRL_FIFO_GET_DEVICE_INFO_TABLE_ENGINE_DATA_TYPES];
+		} raw;
+		struct {
+			u32 desc;
+			u32 id;
+			u32 nv2080;
+			u32 runlist;
+			u32 mmu_fault_id;
+			u32 rc_mask;
+			u32 reset;
+			u32 intr;
+			u32 mc;
+			u32 dev_type;
+			u32 instance_id;
+			u32 ga100_runlist_pri_base; // GA100+
+			u32 ga100_is_engine; // GA100+
+			u32 ga100_runlist_engine_id; //GA100+
+			u32 ga100_chram_pri_base; //GA100+
+			u32 invalid;
+		} vals;
+	};
+	u32 pbdma_ids[NV2080_CTRL_FIFO_GET_DEVICE_INFO_TABLE_ENGINE_MAX_PBDMA];
+	u32 pbdma_fault_ids[NV2080_CTRL_FIFO_GET_DEVICE_INFO_TABLE_ENGINE_MAX_PBDMA];
+	u32 num_pbdmas;
+	char engine_name[NV2080_CTRL_FIFO_GET_DEVICE_INFO_TABLE_ENGINE_MAX_NAME_LEN];
+};
+
 struct nvkm_gsp_mem {
 	u32 size;
 	void *data;
@@ -109,6 +143,8 @@ struct nvkm_gsp {
 	u32 device;
 	u32 subdevice;
 
+	struct gsp_fifo_device_entry *device_entries;
+	int num_device_entries;
 	u32 gpc_mask;
 
 	struct {
@@ -120,6 +156,10 @@ struct nvkm_gsp {
 
 	u32 num_engines;
 	u32 engine_ids[GSP_MAX_ENGINES];
+
+	struct nvkm_gsp_client *kernel_client;
+	u32 kernel_device;
+	u32 kernel_subdevice;
 
 	struct {
 		u64 rm_bar1_pdb;

@@ -191,7 +191,7 @@ nvkm_gsp_fwsec_v2(struct nvkm_gsp *gsp, const char *name,
 	fw->nmem_size = desc->IMEMLoadSize - desc->IMEMSecSize;
 
 	fw->imem_base_img = 0;
-	fw->imem_base = desc->IMEMSecBase;
+	fw->imem_base = desc->IMEMSecBase - desc->IMEMVirtBase + desc->IMEMPhysBase;
 	fw->imem_size = desc->IMEMSecSize;
 
 	fw->dmem_base_img = desc->DMEMOffset;

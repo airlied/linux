@@ -599,6 +599,120 @@ r515_gsp_rpc_get_gsp_static_info(struct nvkm_gsp *gsp)
 	return 0;
 }
 
+static int
+r515_gsp_subdevice_new(struct nvkm_gsp_client *client, u32 device, u32 handle)
+{
+       struct {
+           u32 subDeviceId;
+       } *args;
+
+       return nvkm_gsp_rm_alloc(client->gsp, client->handle, device, handle,
+                                0x2080, sizeof(*args));
+}
+
+static int
+r515_gsp_device_new(struct nvkm_gsp_client *client, u32 *phandle)
+{
+       struct {
+           u32 deviceId;
+           u32 hClientShare;
+           u32 hTargetClient;
+           u32 hTargetDevice;
+           u32 flags;
+           u64 vaSpaceSize;
+           u64 vaStartInternal;
+           u64 vaLimitInternal;
+           u32 vaMode;
+       } *args;
+       int ret;
+
+       *phandle = 0xde1d0000;
+
+       ret = nvkm_gsp_rm_alloc(client->gsp, client->handle, client->handle, *phandle,
+                               0x0080, sizeof(*args));
+       if (ret)
+               return ret;
+
+       return r515_gsp_subdevice_new(client, *phandle, 0x5d1d0000);
+}
+
+#define NV2080_CTRL_CMD_FIFO_GET_DEVICE_INFO_TABLE  (0x20801112)
+
+#define NV2080_CTRL_FIFO_GET_DEVICE_INFO_TABLE_MAX_DEVICES         256
+#define NV2080_CTRL_FIFO_GET_DEVICE_INFO_TABLE_MAX_ENTRIES         32
+
+struct fifo_get_device_info_table_params {
+	u32                         base_index;
+	u32                         num_entries;
+	bool                        b_more;
+	// C form: NV2080_CTRL_FIFO_DEVICE_ENTRY entries[NV2080_CTRL_FIFO_GET_DEVICE_INFO_TABLE_MAX_ENTRIES];
+	struct gsp_fifo_device_entry entries[NV2080_CTRL_FIFO_GET_DEVICE_INFO_TABLE_MAX_ENTRIES];
+};
+
+typedef enum
+{
+    // *ENG_XYZ, e.g.: ENG_GR, ENG_CE etc.,
+    ENGINE_INFO_TYPE_ENG_DESC = 0,
+    // HW engine ID
+    ENGINE_INFO_TYPE_FIFO_TAG,
+    // NV2080_ENGINE_TYPE_*
+    ENGINE_INFO_TYPE_NV2080,
+    // runlist id (meaning varies by GPU)
+    ENGINE_INFO_TYPE_RUNLIST,
+    // NV_PFIFO_INTR_MMU_FAULT_ENG_ID_*
+    ENGINE_INFO_TYPE_MMU_FAULT_ID,
+    // ROBUST_CHANNEL_*
+    ENGINE_INFO_TYPE_RC_MASK,
+    // Reset Bit Position. On Ampere, only valid if not _INVALID
+    ENGINE_INFO_TYPE_RESET,
+    // Interrupt Bit Position
+    ENGINE_INFO_TYPE_INTR,
+    // log2(MC_ENGINE_*)
+    ENGINE_INFO_TYPE_MC,
+    // The DEV_TYPE_ENUM for this engine
+    ENGINE_INFO_TYPE_DEV_TYPE_ENUM,
+    // The particular instance of this engine type
+    ENGINE_INFO_TYPE_INSTANCE_ID,
+    // The base address for this engine's NV_RUNLIST. Valid only on Ampere+
+    ENGINE_INFO_TYPE_RUNLIST_PRI_BASE,
+    // If this entry is a host-driven engine. Valid only on Ampere+
+    ENGINE_INFO_TYPE_IS_ENGINE,
+    // The index into the per-engine NV_RUNLIST registers. Valid only on Ampere+
+    ENGINE_INFO_TYPE_RUNLIST_ENGINE_ID,
+    // The base address for this engine's NV_CHRAM registers. Valid only on Ampere+
+    ENGINE_INFO_TYPE_CHRAM_PRI_BASE,
+
+    // Used for iterating the engine info table by the index passed.
+    ENGINE_INFO_TYPE_INVALID,
+
+    // Input-only parameter for fifoEngineInfoXlate.
+    ENGINE_INFO_TYPE_PBDMA_ID
+} ENGINE_INFO_TYPE;
+
+static int
+r515_gsp_get_fifo_device_info(struct nvkm_gsp *gsp)
+{
+	struct fifo_get_device_info_table_params *params;
+	params = nvkm_gsp_rm_ctrl_get(gsp, gsp->client, gsp->subdevice,
+				      NV2080_CTRL_CMD_FIFO_GET_DEVICE_INFO_TABLE,
+				      sizeof(*params));
+	if (IS_ERR(params))
+		return PTR_ERR(params);
+
+	params = nvkm_gsp_rm_ctrl_push(gsp, params, true, sizeof(*params));
+
+	gsp->device_entries = kzalloc(sizeof(struct gsp_fifo_device_entry) *
+				      params->num_entries, GFP_KERNEL);
+	gsp->num_device_entries = params->num_entries;
+	for (unsigned i = 0; i < params->num_entries; i++) {
+		memcpy(&gsp->device_entries[i], &params->entries[i],
+		       sizeof(struct gsp_fifo_device_entry));
+	}
+	nvkm_gsp_rm_ctrl_done(gsp, params);
+
+	return 0;
+
+}
 #define NV2080_CTRL_CMD_GPU_GET_ENGINES_V2 (0x20800170)
 #define GSP_MAX_ENGINES   0x34
 struct get_engines_v2_params {
@@ -1222,6 +1336,16 @@ r515_gsp_init(struct nvkm_gsp *gsp)
 		return ret;
 
 
+	ret = nvkm_gsp_client_new(gsp, &gsp->kernel_client);
+	if (ret)
+		return ret;
+
+	ret = r515_gsp_device_new(gsp->kernel_client, &gsp->kernel_device);
+	if (ret)
+		return ret;
+
+
+	r515_gsp_get_fifo_device_info(gsp);
 	ret = r515_gsp_get_engines_v2(gsp);
 	if (WARN_ON(ret))
 		return ret;
@@ -1310,6 +1434,7 @@ r515_gsp_dtor(struct nvkm_gsp *gsp)
 	mutex_destroy(&gsp->msgq.mutex);
 	mutex_destroy(&gsp->cmdq.mutex);
 
+	kfree(gsp->device_entries);
 	nvkm_gsp_mem_dtor(gsp, &gsp->radix3[2]);
 	nvkm_gsp_mem_dtor(gsp, &gsp->radix3[1]);
 	nvkm_gsp_mem_dtor(gsp, &gsp->radix3[0]);

@@ -26,6 +26,7 @@
 
 #include <core/firmware.h>
 #include <subdev/acr.h>
+#include <subdev/gsp.h>
 
 #include <nvfw/flcn.h>
 
@@ -223,6 +224,11 @@ gm200_gr_load(struct gf100_gr *gr, int ver, const struct gf100_gr_fwif *fwif)
 {
 	int ret;
 
+	if (nvkm_gsp_rm(gr->base.engine.subdev.device->gsp)) {
+	  gr->firmware = true;
+	  return 0;
+	}
+	
 	ret = nvkm_acr_lsfw_load_bl_inst_data_sig(&gr->base.engine.subdev,
 						  &gr->fecs.falcon,
 						  NVKM_ACR_LSF_FECS,

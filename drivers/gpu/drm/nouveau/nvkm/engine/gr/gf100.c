@@ -30,6 +30,7 @@
 #include <core/option.h>
 #include <subdev/acr.h>
 #include <subdev/fb.h>
+#include <subdev/gsp.h>
 #include <subdev/mc.h>
 #include <subdev/pmu.h>
 #include <subdev/therm.h>
@@ -1884,6 +1885,10 @@ gf100_gr_init_ctxctl(struct gf100_gr *gr)
 {
 	int ret;
 
+	if (nvkm_gsp_rm(gr->base.engine.subdev.device->gsp)) {
+	  return 0;
+	}
+
 	if (gr->firmware)
 		ret = gf100_gr_init_ctxctl_ext(gr);
 	else
@@ -2070,6 +2075,9 @@ gf100_gr_init_(struct nvkm_gr *base)
 	bool reset = device->chipset == 0x137 || device->chipset == 0x138;
 	int ret;
 
+	if (nvkm_gsp_rm(device->gsp)) {
+	  goto out;
+	}
 	/* On certain GP107/GP108 boards, we trigger a weird issue where
 	 * GR will stop responding to PRI accesses after we've asked the
 	 * SEC2 RTOS to boot the GR falcons.  This happens with far more
@@ -2103,7 +2111,7 @@ gf100_gr_init_(struct nvkm_gr *base)
 	ret = nvkm_falcon_get(&gr->gpccs.falcon, subdev);
 	if (ret)
 		return ret;
-
+ out:
 	ret = gr->func->init(gr);
 	if (ret)
 		return ret;
@@ -2455,7 +2463,9 @@ gf100_gr_init(struct gf100_gr *gr)
 	if (gr->func->init_400054)
 		gr->func->init_400054(gr);
 
-	gf100_gr_zbc_init(gr);
+	if (!nvkm_gsp_rm(gr->base.engine.subdev.device->gsp)) {
+	  gf100_gr_zbc_init(gr);
+	}
 
 	if (gr->func->init_4188a4)
 		gr->func->init_4188a4(gr);
@@ -2619,7 +2629,13 @@ gf100_gr_new_(const struct gf100_gr_fwif *fwif, struct nvkm_device *device,
 	ret = nvkm_gr_ctor(&gf100_gr_, device, type, inst, true, &gr->base);
 	if (ret)
 		return ret;
-
+	
+	if (nvkm_gsp_rm(device->gsp)) {
+	  gr->func = fwif->func;
+	  mutex_init(&gr->fecs.mutex);
+	  return 0;
+	}
+	
 	fwif = nvkm_firmware_load(&gr->base.engine.subdev, fwif, "Gr", gr);
 	if (IS_ERR(fwif))
 		return PTR_ERR(fwif);
