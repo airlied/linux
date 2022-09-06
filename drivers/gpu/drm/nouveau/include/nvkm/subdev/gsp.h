@@ -5,6 +5,8 @@
 #include <core/falcon.h>
 #include <core/firmware.h>
 
+#include <linux/debugfs.h>
+
 #define GPC_MAX 32
 #define GSP_MAX_ENGINES 0x34
 
@@ -99,6 +101,17 @@ struct nvkm_gsp {
 	struct nvkm_gsp_mem loginit;
 	struct nvkm_gsp_mem logrm;
 	struct nvkm_gsp_mem rmargs;
+
+	/*
+	 * Logging buffers in debugfs.  The wrapper objects need to remain
+	 * in memory until the dentry is deleted.
+	 *
+	 * Note that the top-level dentry is stored as global variable
+	 * gsp_debugfs_logging_dir.
+	 */
+	struct debugfs_blob_wrapper blob_init;
+	struct debugfs_blob_wrapper blob_rm;
+	struct debugfs_blob_wrapper blob_pmu;
 
 	struct {
 		struct nvkm_gsp_mem mem;

@@ -98,6 +98,13 @@ static struct drm_driver driver_stub;
 static struct drm_driver driver_pci;
 static struct drm_driver driver_platform;
 
+/*
+ * Dentry for the GSP logging debugfs files.  We don't want to remove these
+ * debugfs entries until the driver is unloaded, otherwise we can't debug
+ * GSP-RM failures.
+ */
+struct dentry *gsp_debugfs_logging_dir;
+
 static u64
 nouveau_pci_name(struct pci_dev *pdev)
 {
@@ -1366,6 +1373,8 @@ nouveau_drm_init(void)
 static void __exit
 nouveau_drm_exit(void)
 {
+	debugfs_remove(gsp_debugfs_logging_dir);
+
 	if (!nouveau_modeset)
 		return;
 
