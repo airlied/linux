@@ -448,6 +448,149 @@ nouveau_accel_gr_init(struct nouveau_drm *drm)
 	}
 }
 
+static bool
+nouveau_accel_test_(struct nouveau_drm *drm, const char *name, u64 engn,
+		    int subc, const struct nvif_mclass *cids)
+{
+	struct nouveau_channel *chan;
+	struct nvif_push *push;
+	struct nvif_object engobj;
+	int ret, cid;
+	u64 runm;
+
+	if (engn != NV_DEVICE_HOST_RUNLIST_ENGINES_CE)
+		runm = nvif_fifo_runlist(&drm->device, engn);
+	else
+		runm = nvif_fifo_runlist_ce(&drm->device);
+
+	if (!runm) {
+		NV_INFO(drm, "%s test: runlist not present\n", name);
+		return true;
+	}
+
+	ret = nouveau_channel_new(&drm->client, false, runm, 0, 0, &chan);
+	if (ret) {
+		NV_ERROR(drm, "%s test: alloc chan failed with %d\n", name, ret);
+		return false;
+	}
+
+	cid = nvif_mclass(&chan->user, cids);
+	if (cid < 0) {
+		NV_INFO(drm, "%s test: no supported classes\n", name);
+		nouveau_channel_del(&chan);
+		return true;
+	}
+
+	ret = nvif_object_ctor(&chan->user, name, 0, cids[cid].oclass, NULL, 0, &engobj);
+	if (ret) {
+		NV_ERROR(drm, "%s test: alloc class 0x%x failed with %d\n",
+			 name, cids[cid].oclass, ret);
+		nouveau_channel_del(&chan);
+		return false;
+	}
+
+
+	push = &chan->chan.push;
+	ret = PUSH_WAIT(push, 2);
+	if (ret) {
+		NV_ERROR(drm, "%s test: PUSH_WAIT failed with %d\n", name, ret);
+		nvif_object_dtor(&engobj);
+		nouveau_channel_del(&chan);
+		return false;
+	}
+
+	PUSH_DATA(push, 0x20010000 | (subc << 13));
+	PUSH_DATA(push, engobj.oclass);
+	PUSH_KICK(push);
+
+	ret = nouveau_channel_idle(chan);
+	if (ret) {
+		NV_ERROR(drm, "%s test: failed to idle channel\n", name);
+		nvif_object_dtor(&engobj);
+		nouveau_channel_del(&chan);
+		return false;
+	}
+
+	NV_INFO(drm, "%s test: alloc + bind class 0x%x ok!\n", name, cids[cid].oclass);
+
+	nvif_object_dtor(&engobj);
+	nouveau_channel_del(&chan);
+	return true;
+}
+
+static bool
+nouveau_accel_test(struct nouveau_drm *drm)
+{
+	static const struct nvif_mclass
+	ces[] = {
+		{ BLACKWELL_DMA_COPY_B, -1 },
+		{ BLACKWELL_DMA_COPY_A, -1 },
+		{    HOPPER_DMA_COPY_A, -1 },
+		{    AMPERE_DMA_COPY_B, -1 },
+		{    AMPERE_DMA_COPY_A, -1 },
+		{    TURING_DMA_COPY_A, -1 },
+		{}
+	};
+
+	static const struct nvif_mclass
+	twods[] = {
+		{ FERMI_TWOD_A, -1 },
+		{}
+	};
+
+	static const struct nvif_mclass
+	nvdecs[] = {
+		{ NVCFB0_VIDEO_DECODER, -1 },
+		{ NVCDB0_VIDEO_DECODER, -1 },
+		{ NVC9B0_VIDEO_DECODER, -1 },
+		{ NVC7B0_VIDEO_DECODER, -1 },
+		{ NVC6B0_VIDEO_DECODER, -1 },
+		{ NVC4B0_VIDEO_DECODER, -1 },
+		{}
+	};
+
+	static const struct nvif_mclass
+	nvencs[] = {
+		{ NVCFB7_VIDEO_ENCODER, -1 },
+		{ NVC9B7_VIDEO_ENCODER, -1 },
+		{ NVC7B7_VIDEO_ENCODER, -1 },
+		{ NVC4B7_VIDEO_ENCODER, -1 },
+		{}
+	};
+
+	static const struct nvif_mclass
+	nvjpgs[] = {
+		{ NVCFD1_VIDEO_NVJPG, -1 },
+		{ NVCDD1_VIDEO_NVJPG, -1 },
+		{ NVC9D1_VIDEO_NVJPG, -1 },
+		{ NVC4D1_VIDEO_NVJPG, -1 },
+		{ NVB8D1_VIDEO_NVJPG, -1 },
+		{}
+	};
+
+	static const struct nvif_mclass
+	ofas[] = {
+		{ NVCFFA_VIDEO_OFA, -1 },
+		{ NVCDFA_VIDEO_OFA, -1 },
+		{ NVC9FA_VIDEO_OFA, -1 },
+		{ NVC7FA_VIDEO_OFA, -1 },
+		{ NVC6FA_VIDEO_OFA, -1 },
+		{ NVB8FA_VIDEO_OFA, -1 },
+		{}
+	};
+
+
+	if (!nouveau_accel_test_(drm,    "ce", NV_DEVICE_HOST_RUNLIST_ENGINES_CE, 4, ces) ||
+	    !nouveau_accel_test_(drm,    "gr", NV_DEVICE_HOST_RUNLIST_ENGINES_GR, 3, twods) ||
+	    !nouveau_accel_test_(drm, "nvdec", NV_DEVICE_HOST_RUNLIST_ENGINES_NVDEC, 0, nvdecs) ||
+	    !nouveau_accel_test_(drm, "nvenc", NV_DEVICE_HOST_RUNLIST_ENGINES_NVENC, 0, nvencs) ||
+	    !nouveau_accel_test_(drm, "nvjpg", NV_DEVICE_HOST_RUNLIST_ENGINES_NVJPG, 0, nvjpgs) ||
+	    !nouveau_accel_test_(drm,   "ofa", NV_DEVICE_HOST_RUNLIST_ENGINES_OFA, 0, ofas))
+	    return false;
+
+	return true;
+}
+
 static void
 nouveau_accel_fini(struct nouveau_drm *drm)
 {
@@ -530,6 +673,11 @@ nouveau_accel_init(struct nouveau_drm *drm)
 	if (drm->client.device.info.family >= NV_DEVICE_INFO_V0_VOLTA) {
 		ret = nvif_user_ctor(device, "drmUsermode");
 		if (ret)
+			return;
+	}
+
+	if (1) {
+		if (!nouveau_accel_test(drm))
 			return;
 	}
 
