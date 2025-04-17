@@ -281,6 +281,12 @@ nouveau_drm_debugfs_init(struct drm_minor *minor)
 				 NOUVEAU_DEBUGFS_ENTRIES,
 				 minor->debugfs_root, minor);
 
+	ttm_resource_manager_create_debugfs(ttm_manager_type(&drm->ttm.bdev,
+							     TTM_PL_VRAM),
+					    minor->debugfs_root, "nouveau_vram_mm");
+	ttm_resource_manager_create_debugfs(ttm_manager_type(&drm->ttm.bdev,
+							     TTM_PL_TT),
+					    minor->debugfs_root, "nouveau_gtt_mm");
 	/* Set the size of the vbios since we know it, and it's confusing to
 	 * userspace if it wants to seek() but the file has a length of 0
 	 */
