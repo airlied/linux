@@ -180,11 +180,16 @@ nouveau_ttm_init_host(struct nouveau_drm *drm, u8 kind)
 static int
 nouveau_ttm_init_vram(struct nouveau_drm *drm)
 {
+	struct drm_device *dev = drm->dev;
 	if (drm->client.device.info.family >= NV_DEVICE_INFO_V0_TESLA) {
 		struct ttm_resource_manager *man = kzalloc(sizeof(*man), GFP_KERNEL);
 
 		if (!man)
 			return -ENOMEM;
+
+		man->cg = drmm_cgroup_register_region(dev, "vram", drm->gem.vram_available);
+		if  (IS_ERR(man->cg))
+			return PTR_ERR(man->cg);
 
 		man->func = &nouveau_vram_manager;
 
