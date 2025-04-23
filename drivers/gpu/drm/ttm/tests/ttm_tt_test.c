@@ -262,7 +262,7 @@ static void ttm_tt_populate_null_ttm(struct kunit *test)
 	struct ttm_operation_ctx ctx = { };
 	int err;
 
-	err = ttm_tt_populate(devs->ttm_dev, NULL, &ctx);
+	err = ttm_tt_populate(devs->ttm_dev, NULL, false, &ctx);
 	KUNIT_ASSERT_EQ(test, err, -EINVAL);
 }
 
@@ -283,11 +283,11 @@ static void ttm_tt_populate_populated_ttm(struct kunit *test)
 	err = ttm_tt_init(tt, bo, 0, ttm_cached, 0);
 	KUNIT_ASSERT_EQ(test, err, 0);
 
-	err = ttm_tt_populate(devs->ttm_dev, tt, &ctx);
+	err = ttm_tt_populate(devs->ttm_dev, tt, false, &ctx);
 	KUNIT_ASSERT_EQ(test, err, 0);
 	populated_page = *tt->pages;
 
-	err = ttm_tt_populate(devs->ttm_dev, tt, &ctx);
+	err = ttm_tt_populate(devs->ttm_dev, tt, false, &ctx);
 	KUNIT_ASSERT_PTR_EQ(test, populated_page, *tt->pages);
 }
 
@@ -307,7 +307,7 @@ static void ttm_tt_unpopulate_basic(struct kunit *test)
 	err = ttm_tt_init(tt, bo, 0, ttm_cached, 0);
 	KUNIT_ASSERT_EQ(test, err, 0);
 
-	err = ttm_tt_populate(devs->ttm_dev, tt, &ctx);
+	err = ttm_tt_populate(devs->ttm_dev, tt, false, &ctx);
 	KUNIT_ASSERT_EQ(test, err, 0);
 	KUNIT_ASSERT_TRUE(test, ttm_tt_is_populated(tt));
 
@@ -351,7 +351,7 @@ static void ttm_tt_swapin_basic(struct kunit *test)
 	err = ttm_tt_init(tt, bo, 0, ttm_cached, 0);
 	KUNIT_ASSERT_EQ(test, err, 0);
 
-	err = ttm_tt_populate(devs->ttm_dev, tt, &ctx);
+	err = ttm_tt_populate(devs->ttm_dev, tt, false, &ctx);
 	KUNIT_ASSERT_EQ(test, err, 0);
 	KUNIT_ASSERT_TRUE(test, ttm_tt_is_populated(tt));
 
