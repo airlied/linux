@@ -186,6 +186,7 @@ struct nvkm_gsp {
 	} msgq;
 
 	bool running;
+	bool self_hosted; /* GH100 in ARM mode */
 
 	/* Internal GSP-RM control handles. */
 	struct {

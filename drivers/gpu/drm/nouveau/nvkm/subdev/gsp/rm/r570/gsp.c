@@ -102,6 +102,8 @@ r570_gsp_get_static_info(struct nvkm_gsp *gsp)
 	gsp->bar.rm_bar1_pdb = rpc->bar1PdeBase;
 	gsp->bar.rm_bar2_pdb = rpc->bar2PdeBase;
 
+	gsp->self_hosted = rpc->bSelfHostedMode;
+
 	r535_gsp_get_static_info_fb(gsp, &rpc->fbRegionInfoParams);
 
 	if (gsp->rm->wpr->offset_set_by_acr) {
