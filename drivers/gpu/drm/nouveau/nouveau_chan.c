@@ -192,7 +192,7 @@ nouveau_channel_prep(struct nouveau_cli *cli,
 		chan->push.addr = chan->push.vma->addr;
 
 		if (device->info.family >= NV_DEVICE_INFO_V0_FERMI) {
-			return nouveau_bo_new_map_gpu(cli, NOUVEAU_GEM_DOMAIN_GART, PAGE_SIZE,
+			return nouveau_bo_new_map_gpu(cli, NOUVEAU_GEM_DOMAIN_GART | NOUVEAU_GEM_DOMAIN_COHERENT, PAGE_SIZE,
 						      &chan->sema.bo, &chan->sema.vma);
 		}
 

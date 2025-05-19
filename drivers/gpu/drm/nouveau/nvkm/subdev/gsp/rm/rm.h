@@ -112,7 +112,7 @@ struct nvkm_rm_api {
 		struct {
 			int (*alloc)(struct nvkm_gsp_device *, u32 handle,
 				     u32 nv2080_engine_type, u8 runq, bool priv, int chid,
-				     u64 inst_addr, u64 userd_addr, u64 mthdbuf_addr,
+				     u64 inst_addr, u64 userd_addr, bool userd_sys, u64 mthdbuf_addr,
 				     struct nvkm_vmm *, u64 gpfifo_offset, u32 gpfifo_length,
 				     struct nvkm_gsp_object *);
 		} chan;

@@ -134,6 +134,7 @@ r570_gr_scrubber_init(struct r535_gr *gr)
 					NV2080_ENGINE_TYPE_GR0, 0, false, gr->scrubber.chid,
 					nvkm_memory_addr(gr->scrubber.inst),
 					nvkm_memory_addr(gr->scrubber.inst) + 0x1000,
+					false,
 					nvkm_memory_addr(gr->scrubber.inst) + 0x2000,
 					gr->scrubber.vmm, 0, 0x1000, &gr->scrubber.chan);
 	if (ret)

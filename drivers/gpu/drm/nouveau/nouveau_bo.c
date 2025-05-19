@@ -1283,6 +1283,10 @@ retry:
 		}
 		fallthrough;	/* tiled memory */
 	case TTM_PL_VRAM:
+		if (drm->client.device.info.self_hosted) {
+			ret = -EINVAL;
+			goto out;
+		}
 		reg->bus.offset = (reg->start << PAGE_SHIFT) +
 			device->func->resource_addr(device, NVKM_BAR1_FB);
 		reg->bus.is_iomem = true;

@@ -73,7 +73,7 @@ r535_chan_ramfc_clear(struct nvkm_chan *chan)
 
 static int
 r535_chan_alloc(struct nvkm_gsp_device *device, u32 handle, u32 nv2080_engine_type, u8 runq,
-		bool priv, int chid, u64 inst_addr, u64 userd_addr, u64 mthdbuf_addr,
+		bool priv, int chid, u64 inst_addr, u64 userd_addr, bool userd_sys, u64 mthdbuf_addr,
 		struct nvkm_vmm *vmm, u64 gpfifo_offset, u32 gpfifo_length,
 		struct nvkm_gsp_object *chan)
 {
@@ -127,7 +127,7 @@ r535_chan_alloc(struct nvkm_gsp_device *device, u32 handle, u32 nv2080_engine_ty
 
 	args->userdMem.base = userd_addr;
 	args->userdMem.size = fifo->func->chan.func->userd->size;
-	args->userdMem.addressSpace = 2;
+	args->userdMem.addressSpace = userd_sys ? 1 : 2;
 	args->userdMem.cacheAttrib = 1;
 
 	args->ramfcMem.base = inst_addr;
@@ -180,9 +180,13 @@ r535_chan_ramfc_write(struct nvkm_chan *chan, u64 offset, u64 length, u32 devm, 
 	if (!chan->rm.mthdbuf.ptr)
 		return -ENOMEM;
 
+	u32 userd_target = nvkm_memory_target(chan->userd.mem);
+	bool userd_sys = userd_target == NVKM_MEM_TARGET_HOST ||
+	  userd_target == NVKM_MEM_TARGET_NCOH;
 	ret = rmapi->fifo->chan.alloc(&chan->vmm->rm.device, NVKM_RM_CHAN(chan->id),
 				      eT, chan->runq, priv, chan->id, chan->inst->addr,
 				      nvkm_memory_addr(chan->userd.mem) + chan->userd.base,
+				      userd_sys,
 				      chan->rm.mthdbuf.addr, chan->vmm, offset, length,
 				      &chan->rm.object);
 	if (ret)

@@ -174,6 +174,10 @@ r570_gsp_set_system_info(struct nvkm_gsp *gsp)
 	info->PCIDeviceID = (pdev->device << 16) | pdev->vendor;
 	info->PCISubDeviceID = (pdev->subsystem_device << 16) | pdev->subsystem_vendor;
 	info->PCIRevisionID = pdev->revision;
+#ifdef CONFIG_ARM64
+	info->oorArch = 0x3;
+	info->clPdbProperties = 0x00000011082020c1;
+#endif	
 	r570_gsp_acpi_info(gsp, &info->acpiMethodData);
 	info->bIsPrimary = video_is_primary_device(device->dev);
 	info->bPreserveVideoMemoryAllocations = false;

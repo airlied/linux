@@ -302,6 +302,7 @@ r535_gr_oneinit(struct nvkm_gr *base)
 					1, 0, true, rm->api->fifo->rsvd_chids,
 					nvkm_memory_addr(golden.inst),
 					nvkm_memory_addr(golden.inst) + 0x1000,
+					false,
 					nvkm_memory_addr(golden.inst) + 0x2000,
 					golden.vmm, 0, 0x1000, &golden.chan);
 	if (ret)

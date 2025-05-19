@@ -908,6 +908,9 @@ r535_gsp_set_system_info(struct nvkm_gsp *gsp)
 	info->maxUserVa = TASK_SIZE;
 	info->pciConfigMirrorBase = device->pci->func->cfg.addr;
 	info->pciConfigMirrorSize = device->pci->func->cfg.size;
+#ifdef CONFIG_ARM64
+	info->oorArch = 0x3;
+#endif
 	r535_gsp_acpi_info(gsp, &info->acpiMethodData);
 
 	return nvkm_gsp_rpc_wr(gsp, info, NVKM_GSP_RPC_REPLY_NOWAIT);
