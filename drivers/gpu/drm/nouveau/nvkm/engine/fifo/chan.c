@@ -279,7 +279,8 @@ nvkm_chan_del(struct nvkm_chan **pchan)
 		nvkm_cgrp_unref(&chan->cgrp);
 	}
 
-	nvkm_memory_unref(&chan->userd.mem);
+	if (chan->userd.mem)
+		nvkm_memory_unref(&chan->userd.mem);
 
 	if (chan->vmm) {
 		nvkm_vmm_part(chan->vmm, chan->inst->memory);
@@ -447,7 +448,9 @@ nvkm_chan_new_(const struct nvkm_chan_func *func, struct nvkm_runl *runl, int ru
 			}
 
 			ret = nvkm_memory_kmap(userd, &chan->userd.mem);
-			if (ret) {
+			if (ret == -ENOSYS) {
+				chan->userd.mem = nvkm_memory_ref(userd);
+			} else if (ret) {
 				RUNL_DEBUG(runl, "userd %d", ret);
 				return ret;
 			}

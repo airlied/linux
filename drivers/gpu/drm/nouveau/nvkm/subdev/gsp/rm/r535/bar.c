@@ -36,7 +36,7 @@ r535_bar_flush(struct nvkm_bar *bar)
 	/* Use NV_PFLUSH in resume path - needed on R570 to flush writes before
 	 * BAR2 page tables have been restored.
 	 */
-	if (unlikely(!bar->bar2)) {
+	if (unlikely(!bar->bar2 || bar->cpu_access_disabled)) {
 		g84_bar_flush(bar);
 		return;
 	}
@@ -71,6 +71,8 @@ r535_bar_bar2_fini(struct nvkm_bar *bar)
 	struct nvkm_vmm *vmm = gf100_bar(bar)->bar[0].vmm;
 	struct nvkm_gsp *gsp = bar->subdev.device->gsp;
 
+	if (bar->cpu_access_disabled)
+		return;
 	bar->flushBAR2 = bar->flushBAR2PhysMode;
 	nvkm_done(bar->flushFBZero);
 
@@ -88,6 +90,11 @@ r535_bar_bar2_init(struct nvkm_bar *bar)
 	u32 pdbe_lo, pdbe_hi;
 	u64 pdbe;
 
+	if (gsp->self_hosted) {
+		bar->cpu_access_disabled = true;
+		return;
+	}
+	
 	nvkm_kmap(pdb);
 	pdbe_lo = nvkm_ro32(pdb, pdb_offset + 0);
 	pdbe_hi = nvkm_ro32(pdb, pdb_offset + 4);
@@ -133,6 +140,10 @@ r535_bar_bar1_init(struct nvkm_bar *bar)
 	struct nvkm_memory *pd3;
 	int ret;
 
+	if (gsp->self_hosted) {
+		bar->cpu_access_disabled = true;
+		return;
+	}
 	ret = nvkm_ram_wrap(device, gsp->bar.rm_bar1_pdb, 0x1000, &pd3);
 	if (WARN_ON(ret))
 		return;
@@ -161,6 +172,17 @@ r535_bar_dtor(struct nvkm_bar *bar)
 	return data;
 }
 
+static int
+r535_bar_oneinit(struct nvkm_bar *bar)
+{
+	struct nvkm_gsp *gsp = bar->subdev.device->gsp;
+
+	if (gsp->self_hosted)
+		return 0;
+
+	return gf100_bar_oneinit(bar);
+}
+	
 int
 r535_bar_new_(const struct nvkm_bar_func *hw, struct nvkm_device *device,
 	      enum nvkm_subdev_type type, int inst, struct nvkm_bar **pbar)
@@ -173,7 +195,7 @@ r535_bar_new_(const struct nvkm_bar_func *hw, struct nvkm_device *device,
 		return -ENOMEM;
 
 	rm->dtor = r535_bar_dtor;
-	rm->oneinit = hw->oneinit;
+	rm->oneinit = r535_bar_oneinit;
 	rm->bar1.init = r535_bar_bar1_init;
 	rm->bar1.fini = r535_bar_bar1_fini;
 	rm->bar1.wait = r535_bar_bar1_wait;

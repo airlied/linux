@@ -117,6 +117,9 @@ gf100_chan_ramfc = {
 void
 gf100_chan_userd_clear(struct nvkm_chan *chan)
 {
+	if (nvkm_memory_target(chan->userd.mem) == NVKM_MEM_TARGET_HOST ||
+	    nvkm_memory_target(chan->userd.mem) == NVKM_MEM_TARGET_NCOH)
+		return;
 	nvkm_kmap(chan->userd.mem);
 	nvkm_wo32(chan->userd.mem, chan->userd.base + 0x040, 0x00000000);
 	nvkm_wo32(chan->userd.mem, chan->userd.base + 0x044, 0x00000000);

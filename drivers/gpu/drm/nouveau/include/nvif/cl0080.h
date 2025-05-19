@@ -32,7 +32,8 @@ struct nv_device_info_v0 {
 #define NV_DEVICE_INFO_V0_HOPPER                                           0x0f
 #define NV_DEVICE_INFO_V0_BLACKWELL                                        0x10
 	__u8  family;
-	__u8  pad06[2];
+	__u8  self_hosted;
+	__u8  pad06[1];
 	__u64 ram_size;
 	__u64 ram_user;
 	char  chip[16];

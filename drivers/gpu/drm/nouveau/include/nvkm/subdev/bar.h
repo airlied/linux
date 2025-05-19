@@ -17,6 +17,9 @@ struct nvkm_bar {
 
 	/* whether the BAR supports to be ioremapped WC or should be uncached */
 	bool iomap_uncached;
+
+	/* no cpu access - GH/B100 in self hosted mode */
+	bool cpu_access_disabled;
 };
 
 struct nvkm_vmm *nvkm_bar_bar1_vmm(struct nvkm_device *);

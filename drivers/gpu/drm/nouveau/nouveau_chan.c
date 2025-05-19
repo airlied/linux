@@ -159,7 +159,7 @@ nouveau_channel_prep(struct nouveau_cli *cli,
 
 	/* allocate memory for dma push buffer */
 	target = NOUVEAU_GEM_DOMAIN_GART | NOUVEAU_GEM_DOMAIN_COHERENT;
-	if (nouveau_vram_pushbuf)
+	if (nouveau_vram_pushbuf && !device->info.self_hosted)
 		target = NOUVEAU_GEM_DOMAIN_VRAM;
 
 	ret = nouveau_bo_new_map(cli, target, size, &chan->push.buffer);
@@ -319,8 +319,15 @@ nouveau_channel_ctor(struct nouveau_cli *cli, bool priv, u64 runm,
 
 	/* allocate userd */
 	if (hosts[cid].oclass >= VOLTA_CHANNEL_GPFIFO_A) {
+		u32 nvif_mem_flags = NVIF_MEM_MAPPABLE | NVIF_MEM_COHERENT;
+		if (device->info.self_hosted) {
+			nvif_mem_flags |= NVIF_MEM_HOST;
+		} else {
+			nvif_mem_flags |= NVIF_MEM_VRAM;
+		}
+		
 		ret = nvif_mem_ctor(&cli->mmu, "abi16ChanUSERD", NVIF_CLASS_MEM_GF100,
-				    NVIF_MEM_VRAM | NVIF_MEM_COHERENT | NVIF_MEM_MAPPABLE,
+				    nvif_mem_flags,
 				    0, PAGE_SIZE, NULL, 0, &chan->mem_userd);
 		if (ret)
 			return ret;
