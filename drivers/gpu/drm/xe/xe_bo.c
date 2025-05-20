@@ -321,12 +321,11 @@ static void xe_evict_flags(struct ttm_buffer_object *tbo,
 struct xe_ttm_tt {
 	struct ttm_tt ttm;
 	/** @xe - The xe device */
-	struct xe_device *xe;
 	struct sg_table sgt;
 	struct sg_table *sg;
 };
 
-static int xe_tt_map_sg(struct ttm_tt *tt)
+static int xe_tt_map_sg(struct xe_device *xe, struct ttm_tt *tt)
 {
 	struct xe_ttm_tt *xe_tt = container_of(tt, struct xe_ttm_tt, ttm);
 	unsigned long num_pages = tt->num_pages;
@@ -341,13 +340,13 @@ static int xe_tt_map_sg(struct ttm_tt *tt)
 	ret = sg_alloc_table_from_pages_segment(&xe_tt->sgt, tt->pages,
 						num_pages, 0,
 						(u64)num_pages << PAGE_SHIFT,
-						xe_sg_segment_size(xe_tt->xe->drm.dev),
+						xe_sg_segment_size(xe->drm.dev),
 						GFP_KERNEL);
 	if (ret)
 		return ret;
 
 	xe_tt->sg = &xe_tt->sgt;
-	ret = dma_map_sgtable(xe_tt->xe->drm.dev, xe_tt->sg, DMA_BIDIRECTIONAL,
+	ret = dma_map_sgtable(xe->drm.dev, xe_tt->sg, DMA_BIDIRECTIONAL,
 			      DMA_ATTR_SKIP_CPU_SYNC);
 	if (ret) {
 		sg_free_table(xe_tt->sg);
@@ -358,12 +357,12 @@ static int xe_tt_map_sg(struct ttm_tt *tt)
 	return 0;
 }
 
-static void xe_tt_unmap_sg(struct ttm_tt *tt)
+static void xe_tt_unmap_sg(struct xe_device *xe, struct ttm_tt *tt)
 {
 	struct xe_ttm_tt *xe_tt = container_of(tt, struct xe_ttm_tt, ttm);
 
 	if (xe_tt->sg) {
-		dma_unmap_sgtable(xe_tt->xe->drm.dev, xe_tt->sg,
+		dma_unmap_sgtable(xe->drm.dev, xe_tt->sg,
 				  DMA_BIDIRECTIONAL, 0);
 		sg_free_table(xe_tt->sg);
 		xe_tt->sg = NULL;
@@ -382,24 +381,24 @@ struct sg_table *xe_bo_sg(struct xe_bo *bo)
  * Account ttm pages against the device shrinker's shrinkable and
  * purgeable counts.
  */
-static void xe_ttm_tt_account_add(struct ttm_tt *tt)
+static void xe_ttm_tt_account_add(struct ttm_device *ttm_dev, struct ttm_tt *tt)
 {
-	struct xe_ttm_tt *xe_tt = container_of(tt, struct xe_ttm_tt, ttm);
+	struct xe_device *xe = ttm_to_xe_device(ttm_dev);
 
 	if (tt->page_flags & TTM_TT_FLAG_PURGEABLE)
-		xe_shrinker_mod_pages(xe_tt->xe->mem.shrinker, 0, tt->num_pages);
+		xe_shrinker_mod_pages(xe->mem.shrinker, 0, tt->num_pages);
 	else
-		xe_shrinker_mod_pages(xe_tt->xe->mem.shrinker, tt->num_pages, 0);
+		xe_shrinker_mod_pages(xe->mem.shrinker, tt->num_pages, 0);
 }
 
-static void xe_ttm_tt_account_subtract(struct ttm_tt *tt)
+static void xe_ttm_tt_account_subtract(struct ttm_device *ttm_dev, struct ttm_tt *tt)
 {
-	struct xe_ttm_tt *xe_tt = container_of(tt, struct xe_ttm_tt, ttm);
+	struct xe_device *xe = ttm_to_xe_device(ttm_dev);
 
 	if (tt->page_flags & TTM_TT_FLAG_PURGEABLE)
-		xe_shrinker_mod_pages(xe_tt->xe->mem.shrinker, 0, -(long)tt->num_pages);
+		xe_shrinker_mod_pages(xe->mem.shrinker, 0, -(long)tt->num_pages);
 	else
-		xe_shrinker_mod_pages(xe_tt->xe->mem.shrinker, -(long)tt->num_pages, 0);
+		xe_shrinker_mod_pages(xe->mem.shrinker, -(long)tt->num_pages, 0);
 }
 
 static struct ttm_tt *xe_ttm_tt_create(struct ttm_buffer_object *ttm_bo,
@@ -418,7 +417,6 @@ static struct ttm_tt *xe_ttm_tt_create(struct ttm_buffer_object *ttm_bo,
 		return NULL;
 
 	tt = &xe_tt->ttm;
-	xe_tt->xe = xe;
 
 	extra_pages = 0;
 	if (xe_bo_needs_ccs_pages(bo))
@@ -508,7 +506,7 @@ static int xe_ttm_tt_populate(struct ttm_device *ttm_dev, struct ttm_tt *tt,
 		return err;
 
 	tt->page_flags &= ~TTM_TT_FLAG_PURGEABLE;
-	xe_ttm_tt_account_add(tt);
+	xe_ttm_tt_account_add(ttm_dev, tt);
 
 	return 0;
 }
@@ -519,10 +517,10 @@ static void xe_ttm_tt_unpopulate(struct ttm_device *ttm_dev, struct ttm_tt *tt)
 	    !(tt->page_flags & TTM_TT_FLAG_EXTERNAL_MAPPABLE))
 		return;
 
-	xe_tt_unmap_sg(tt);
+	xe_tt_unmap_sg(ttm_to_xe_device(ttm_dev), tt);
 
 	ttm_pool_free(&ttm_dev->pool, tt);
-	xe_ttm_tt_account_subtract(tt);
+	xe_ttm_tt_account_subtract(ttm_dev, tt);
 }
 
 static void xe_ttm_tt_destroy(struct ttm_device *ttm_dev, struct ttm_tt *tt)
@@ -761,7 +759,7 @@ static int xe_bo_move(struct ttm_buffer_object *ttm_bo, bool evict,
 	/* Bo creation path, moving to system or TT. */
 	if ((!old_mem && ttm) && !handle_system_ccs) {
 		if (new_mem->mem_type == XE_PL_TT)
-			ret = xe_tt_map_sg(ttm);
+			ret = xe_tt_map_sg(xe, ttm);
 		if (!ret)
 			ttm_bo_move_null(ttm_bo, new_mem);
 		goto out;
@@ -784,7 +782,7 @@ static int xe_bo_move(struct ttm_buffer_object *ttm_bo, bool evict,
 		(!ttm && ttm_bo->type == ttm_bo_type_device);
 
 	if (new_mem->mem_type == XE_PL_TT) {
-		ret = xe_tt_map_sg(ttm);
+		ret = xe_tt_map_sg(xe, ttm);
 		if (ret)
 			goto out;
 	}
@@ -980,7 +978,7 @@ out:
 		if (timeout < 0)
 			ret = timeout;
 
-		xe_tt_unmap_sg(ttm_bo->ttm);
+		xe_tt_unmap_sg(xe, ttm_bo->ttm);
 	}
 
 	return ret;
@@ -1004,7 +1002,7 @@ static long xe_bo_shrink_purge(struct ttm_operation_ctx *ctx,
 		if (lret)
 			return lret;
 
-		xe_tt_unmap_sg(bo->ttm);
+		xe_tt_unmap_sg(ttm_to_xe_device(bo->bdev), bo->ttm);
 		ttm_bo_move_null(bo, new_resource);
 	}
 
@@ -1015,7 +1013,7 @@ static long xe_bo_shrink_purge(struct ttm_operation_ctx *ctx,
 			      .allow_move = false});
 
 	if (lret > 0)
-		xe_ttm_tt_account_subtract(bo->ttm);
+		xe_ttm_tt_account_subtract(bo->bdev, bo->ttm);
 
 	return lret;
 }
@@ -1043,10 +1041,9 @@ long xe_bo_shrink(struct ttm_operation_ctx *ctx, struct ttm_buffer_object *bo,
 		  unsigned long *scanned)
 {
 	struct ttm_tt *tt = bo->ttm;
-	struct xe_ttm_tt *xe_tt = container_of(tt, struct xe_ttm_tt, ttm);
 	struct ttm_place place = {.mem_type = bo->resource->mem_type};
 	struct xe_bo *xe_bo = ttm_to_xe_bo(bo);
-	struct xe_device *xe = xe_tt->xe;
+	struct xe_device *xe = ttm_to_xe_device(bo->bdev);
 	bool needs_rpm;
 	long lret = 0L;
 
@@ -1083,7 +1080,7 @@ long xe_bo_shrink(struct ttm_operation_ctx *ctx, struct ttm_buffer_object *bo,
 		xe_pm_runtime_put(xe);
 
 	if (lret > 0)
-		xe_ttm_tt_account_subtract(tt);
+		xe_ttm_tt_account_subtract(bo->bdev, tt);
 
 out_unref:
 	xe_bo_put(xe_bo);
@@ -2106,7 +2103,7 @@ int xe_bo_pin_external(struct xe_bo *bo)
 
 	ttm_bo_pin(&bo->ttm);
 	if (bo->ttm.ttm && ttm_tt_is_populated(bo->ttm.ttm))
-		xe_ttm_tt_account_subtract(bo->ttm.ttm);
+		xe_ttm_tt_account_subtract(bo->ttm.bdev, bo->ttm.ttm);
 
 	/*
 	 * FIXME: If we always use the reserve / unreserve functions for locking
@@ -2167,7 +2164,7 @@ int xe_bo_pin(struct xe_bo *bo)
 
 	ttm_bo_pin(&bo->ttm);
 	if (bo->ttm.ttm && ttm_tt_is_populated(bo->ttm.ttm))
-		xe_ttm_tt_account_subtract(bo->ttm.ttm);
+		xe_ttm_tt_account_subtract(bo->ttm.bdev, bo->ttm.ttm);
 
 	/*
 	 * FIXME: If we always use the reserve / unreserve functions for locking
@@ -2203,7 +2200,7 @@ void xe_bo_unpin_external(struct xe_bo *bo)
 
 	ttm_bo_unpin(&bo->ttm);
 	if (bo->ttm.ttm && ttm_tt_is_populated(bo->ttm.ttm))
-		xe_ttm_tt_account_add(bo->ttm.ttm);
+		xe_ttm_tt_account_add(bo->ttm.bdev, bo->ttm.ttm);
 
 	/*
 	 * FIXME: If we always use the reserve / unreserve functions for locking
@@ -2228,7 +2225,7 @@ void xe_bo_unpin(struct xe_bo *bo)
 	}
 	ttm_bo_unpin(&bo->ttm);
 	if (bo->ttm.ttm && ttm_tt_is_populated(bo->ttm.ttm))
-		xe_ttm_tt_account_add(bo->ttm.ttm);
+		xe_ttm_tt_account_add(bo->ttm.bdev, bo->ttm.ttm);
 }
 
 /**
