@@ -92,6 +92,8 @@ struct ttm_tt {
 	 *
 	 * TTM_TT_FLAG_ACCOUNTED: TTM internal. This tt has been accounted.
 	 *
+	 * TTM_TT_FLAG_PURGEABLE: The content of the TT pages are discardable.
+	 *
 	 * TTM_TT_FLAG_PRIV_POPULATED: TTM internal only. DO NOT USE. This is
 	 * set by TTM after ttm_tt_populate() has successfully returned, and is
 	 * then unset when TTM calls ttm_tt_unpopulate().
@@ -104,8 +106,9 @@ struct ttm_tt {
 #define TTM_TT_FLAG_DECRYPTED		BIT(4)
 #define TTM_TT_FLAG_BACKED_UP	        BIT(5)
 #define TTM_TT_FLAG_ACCOUNTED	        BIT(6)
+#define TTM_TT_FLAG_PURGEABLE           BIT(7)
 
-#define TTM_TT_FLAG_PRIV_POPULATED	BIT(7)
+#define TTM_TT_FLAG_PRIV_POPULATED	BIT(8)
 	uint32_t page_flags;
 	/** @num_pages: Number of pages in the page array. */
 	uint32_t num_pages;
@@ -148,6 +151,11 @@ struct ttm_kmap_iter_tt {
 static inline bool ttm_tt_is_populated(struct ttm_tt *tt)
 {
 	return tt->page_flags & TTM_TT_FLAG_PRIV_POPULATED;
+}
+
+static inline bool ttm_tt_is_purgeable(struct ttm_tt *tt)
+{
+	return tt->page_flags & TTM_TT_FLAG_PURGEABLE;
 }
 
 /**
