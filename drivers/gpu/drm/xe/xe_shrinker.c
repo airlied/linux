@@ -8,103 +8,22 @@
 #include <drm/ttm/ttm_backup.h>
 #include <drm/ttm/ttm_bo.h>
 #include <drm/ttm/ttm_tt.h>
-
+#include <drm/ttm/ttm_shrinker.h>
 #include "xe_bo.h"
 #include "xe_pm.h"
 #include "xe_shrinker.h"
-
-/**
- * struct xe_shrinker - per-device shrinker
- * @xe: Back pointer to the device.
- * @lock: Lock protecting accounting.
- * @shrinkable_pages: Number of pages that are currently shrinkable.
- * @purgeable_pages: Number of pages that are currently purgeable.
- * @shrink: Pointer to the mm shrinker.
- * @pm_worker: Worker to wake up the device if required.
- */
-struct xe_shrinker {
-	struct xe_device *xe;
-	rwlock_t lock;
-	long shrinkable_pages;
-	long purgeable_pages;
-	struct shrinker *shrink;
-	struct work_struct pm_worker;
-};
 
 static struct xe_shrinker *to_xe_shrinker(struct shrinker *shrink)
 {
 	return shrink->private_data;
 }
 
-/**
- * xe_shrinker_mod_pages() - Modify shrinker page accounting
- * @shrinker: Pointer to the struct xe_shrinker.
- * @shrinkable: Shrinkable pages delta. May be negative.
- * @purgeable: Purgeable page delta. May be negative.
- *
- * Modifies the shrinkable and purgeable pages accounting.
- */
-void
-xe_shrinker_mod_pages(struct xe_shrinker *shrinker, long shrinkable, long purgeable)
-{
-	write_lock(&shrinker->lock);
-	shrinker->shrinkable_pages += shrinkable;
-	shrinker->purgeable_pages += purgeable;
-	write_unlock(&shrinker->lock);
-}
-
-static s64 xe_shrinker_walk(struct xe_device *xe,
-			    struct ttm_operation_ctx *ctx,
-			    const struct xe_bo_shrink_flags flags,
-			    unsigned long to_scan, unsigned long *scanned)
-{
-	unsigned int mem_type;
-	s64 freed = 0, lret;
-
-	for (mem_type = XE_PL_SYSTEM; mem_type <= XE_PL_TT; ++mem_type) {
-		struct ttm_resource_manager *man = ttm_manager_type(&xe->ttm, mem_type);
-		struct ttm_bo_lru_cursor curs;
-		struct ttm_buffer_object *ttm_bo;
-
-		if (!man || !man->use_tt)
-			continue;
-
-		ttm_bo_lru_for_each_reserved_guarded(&curs, man, ctx, ttm_bo) {
-			if (!ttm_bo_shrink_suitable(ttm_bo, ctx))
-				continue;
-
-			lret = xe_bo_shrink(ctx, ttm_bo, flags, scanned);
-			if (lret < 0)
-				return lret;
-
-			freed += lret;
-			if (*scanned >= to_scan)
-				break;
-		}
-	}
-
-	return freed;
-}
-
 static unsigned long
 xe_shrinker_count(struct shrinker *shrink, struct shrink_control *sc)
 {
 	struct xe_shrinker *shrinker = to_xe_shrinker(shrink);
-	unsigned long num_pages;
-	bool can_backup = !!(sc->gfp_mask & __GFP_FS);
 
-	num_pages = ttm_backup_bytes_avail() >> PAGE_SHIFT;
-	read_lock(&shrinker->lock);
-
-	if (can_backup)
-		num_pages = min_t(unsigned long, num_pages, shrinker->shrinkable_pages);
-	else
-		num_pages = 0;
-
-	num_pages += shrinker->purgeable_pages;
-	read_unlock(&shrinker->lock);
-
-	return num_pages ? num_pages : SHRINK_EMPTY;
+	return ttm_shrinker_count(&shrinker->base, sc);
 }
 
 /*
@@ -124,9 +43,8 @@ static bool xe_shrinker_runtime_pm_get(struct xe_shrinker *shrinker, bool force,
 		return false;
 
 	if (!force) {
-		read_lock(&shrinker->lock);
-		force = (nr_to_scan > shrinker->purgeable_pages && can_backup);
-		read_unlock(&shrinker->lock);
+		long purgeable_pages = ttm_shrinker_nr_purgeable(&shrinker->base);
+		force = (nr_to_scan > purgeable_pages && can_backup);
 		if (!force)
 			return false;
 	}
@@ -157,7 +75,7 @@ static unsigned long xe_shrinker_scan(struct shrinker *shrink, struct shrink_con
 		.no_wait_gpu = ttm_bo_shrink_avoid_wait(),
 	};
 	unsigned long nr_to_scan, nr_scanned = 0, freed = 0;
-	struct xe_bo_shrink_flags shrink_flags = {
+	struct ttm_bo_shrink_flags shrink_flags = {
 		.purge = true,
 		/* Don't request writeback without __GFP_IO. */
 		.writeback = !ctx.no_wait_gpu && (sc->gfp_mask & __GFP_IO),
@@ -169,16 +87,15 @@ static unsigned long xe_shrinker_scan(struct shrinker *shrink, struct shrink_con
 
 	nr_to_scan = sc->nr_to_scan;
 
-	read_lock(&shrinker->lock);
-	purgeable = !!shrinker->purgeable_pages;
-	read_unlock(&shrinker->lock);
+	purgeable = ttm_shrinker_purgeable(&shrinker->base);
 
 	/* Might need runtime PM. Try to wake early if it looks like it. */
 	runtime_pm = xe_shrinker_runtime_pm_get(shrinker, false, nr_to_scan, can_backup);
 
 	if (purgeable && nr_scanned < nr_to_scan) {
-		lret = xe_shrinker_walk(shrinker->xe, &ctx, shrink_flags,
-					nr_to_scan, &nr_scanned);
+		lret = ttm_shrinker_walk(&shrinker->xe->ttm, &ctx, shrink_flags,
+					 xe_bo_shrink,
+					 nr_to_scan, &nr_scanned);
 		if (lret >= 0)
 			freed += lret;
 	}
@@ -192,8 +109,9 @@ static unsigned long xe_shrinker_scan(struct shrinker *shrink, struct shrink_con
 		runtime_pm = xe_shrinker_runtime_pm_get(shrinker, true, 0, can_backup);
 
 	shrink_flags.purge = false;
-	lret = xe_shrinker_walk(shrinker->xe, &ctx, shrink_flags,
-				nr_to_scan, &nr_scanned);
+	lret = ttm_shrinker_walk(&shrinker->xe->ttm, &ctx, shrink_flags,
+				 xe_bo_shrink,
+				 nr_to_scan, &nr_scanned);
 	if (lret >= 0)
 		freed += lret;
 
@@ -227,19 +145,19 @@ struct xe_shrinker *xe_shrinker_create(struct xe_device *xe)
 	if (!shrinker)
 		return ERR_PTR(-ENOMEM);
 
-	shrinker->shrink = shrinker_alloc(0, "xe system shrinker");
-	if (!shrinker->shrink) {
+	shrinker->base.shrink = shrinker_alloc(0, "xe system shrinker");
+	if (!shrinker->base.shrink) {
 		kfree(shrinker);
 		return ERR_PTR(-ENOMEM);
 	}
 
 	INIT_WORK(&shrinker->pm_worker, xe_shrinker_pm);
 	shrinker->xe = xe;
-	rwlock_init(&shrinker->lock);
-	shrinker->shrink->count_objects = xe_shrinker_count;
-	shrinker->shrink->scan_objects = xe_shrinker_scan;
-	shrinker->shrink->private_data = shrinker;
-	shrinker_register(shrinker->shrink);
+	rwlock_init(&shrinker->base.lock);
+	shrinker->base.shrink->count_objects = xe_shrinker_count;
+	shrinker->base.shrink->scan_objects = xe_shrinker_scan;
+	shrinker->base.shrink->private_data = shrinker;
+	shrinker_register(shrinker->base.shrink);
 
 	return shrinker;
 }
@@ -250,9 +168,9 @@ struct xe_shrinker *xe_shrinker_create(struct xe_device *xe)
  */
 void xe_shrinker_destroy(struct xe_shrinker *shrinker)
 {
-	xe_assert(shrinker->xe, !shrinker->shrinkable_pages);
-	xe_assert(shrinker->xe, !shrinker->purgeable_pages);
-	shrinker_free(shrinker->shrink);
+	xe_assert(shrinker->xe, !shrinker->base.shrinkable_pages);
+	xe_assert(shrinker->xe, !shrinker->base.purgeable_pages);
+	shrinker_free(shrinker->base.shrink);
 	flush_work(&shrinker->pm_worker);
 	kfree(shrinker);
 }
