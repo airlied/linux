@@ -324,8 +324,6 @@ struct xe_ttm_tt {
 	struct xe_device *xe;
 	struct sg_table sgt;
 	struct sg_table *sg;
-	/** @purgeable: Whether the content of the pages of @ttm is purgeable. */
-	bool purgeable;
 };
 
 static int xe_tt_map_sg(struct ttm_tt *tt)
@@ -388,7 +386,7 @@ static void xe_ttm_tt_account_add(struct ttm_tt *tt)
 {
 	struct xe_ttm_tt *xe_tt = container_of(tt, struct xe_ttm_tt, ttm);
 
-	if (xe_tt->purgeable)
+	if (tt->page_flags & TTM_TT_FLAG_PURGEABLE)
 		xe_shrinker_mod_pages(xe_tt->xe->mem.shrinker, 0, tt->num_pages);
 	else
 		xe_shrinker_mod_pages(xe_tt->xe->mem.shrinker, tt->num_pages, 0);
@@ -398,7 +396,7 @@ static void xe_ttm_tt_account_subtract(struct ttm_tt *tt)
 {
 	struct xe_ttm_tt *xe_tt = container_of(tt, struct xe_ttm_tt, ttm);
 
-	if (xe_tt->purgeable)
+	if (tt->page_flags & TTM_TT_FLAG_PURGEABLE)
 		xe_shrinker_mod_pages(xe_tt->xe->mem.shrinker, 0, -(long)tt->num_pages);
 	else
 		xe_shrinker_mod_pages(xe_tt->xe->mem.shrinker, -(long)tt->num_pages, 0);
@@ -490,7 +488,6 @@ static struct ttm_tt *xe_ttm_tt_create(struct ttm_buffer_object *ttm_bo,
 static int xe_ttm_tt_populate(struct ttm_device *ttm_dev, struct ttm_tt *tt,
 			      struct ttm_operation_ctx *ctx)
 {
-	struct xe_ttm_tt *xe_tt = container_of(tt, struct xe_ttm_tt, ttm);
 	int err;
 
 	/*
@@ -501,7 +498,7 @@ static int xe_ttm_tt_populate(struct ttm_device *ttm_dev, struct ttm_tt *tt,
 	    !(tt->page_flags & TTM_TT_FLAG_EXTERNAL_MAPPABLE))
 		return 0;
 
-	if (ttm_tt_is_backed_up(tt) && !xe_tt->purgeable) {
+	if (ttm_tt_is_backed_up(tt) && !ttm_tt_is_purgeable(tt)) {
 		err = ttm_tt_restore(ttm_dev, tt, ctx);
 	} else {
 		ttm_tt_clear_backed_up(tt);
@@ -510,7 +507,7 @@ static int xe_ttm_tt_populate(struct ttm_device *ttm_dev, struct ttm_tt *tt,
 	if (err)
 		return err;
 
-	xe_tt->purgeable = false;
+	tt->page_flags &= ~TTM_TT_FLAG_PURGEABLE;
 	xe_ttm_tt_account_add(tt);
 
 	return 0;
@@ -1054,7 +1051,7 @@ long xe_bo_shrink(struct ttm_operation_ctx *ctx, struct ttm_buffer_object *bo,
 	long lret = 0L;
 
 	if (!(tt->page_flags & TTM_TT_FLAG_EXTERNAL_MAPPABLE) ||
-	    (flags.purge && !xe_tt->purgeable))
+	    (flags.purge && !ttm_tt_is_purgeable(tt)))
 		return -EBUSY;
 
 	if (!ttm_bo_eviction_valuable(bo, &place))
@@ -1063,7 +1060,7 @@ long xe_bo_shrink(struct ttm_operation_ctx *ctx, struct ttm_buffer_object *bo,
 	if (!xe_bo_is_xe_bo(bo) || !xe_bo_get_unless_zero(xe_bo))
 		return xe_bo_shrink_purge(ctx, bo, scanned);
 
-	if (xe_tt->purgeable) {
+	if (ttm_tt_is_purgeable(tt)) {
 		if (bo->resource->mem_type != XE_PL_SYSTEM)
 			lret = xe_bo_move_notify(xe_bo, ctx);
 		if (!lret)
@@ -1353,10 +1350,7 @@ static void xe_ttm_bo_swap_notify(struct ttm_buffer_object *ttm_bo)
 	};
 
 	if (ttm_bo->ttm) {
-		struct xe_ttm_tt *xe_tt =
-			container_of(ttm_bo->ttm, struct xe_ttm_tt, ttm);
-
-		if (xe_tt->purgeable)
+		if (ttm_tt_is_purgeable(ttm_bo->ttm))
 			xe_ttm_bo_purge(ttm_bo, &ctx);
 	}
 }
