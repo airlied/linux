@@ -743,7 +743,10 @@ void shrinker_register(struct shrinker *shrinker)
 	}
 
 	mutex_lock(&shrinker_mutex);
-	list_add_tail_rcu(&shrinker->list, &shrinker_list);
+	if (shrinker->flags & SHRINKER_LOWOVERHEAD)
+		list_add_rcu(&shrinker->list, &shrinker_list);
+	else
+		list_add_tail_rcu(&shrinker->list, &shrinker_list);
 	shrinker->flags |= SHRINKER_REGISTERED;
 	shrinker_debugfs_add(shrinker);
 	mutex_unlock(&shrinker_mutex);

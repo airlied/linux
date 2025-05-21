@@ -130,6 +130,7 @@ struct shrinker {
  * non-MEMCG_AWARE shrinker should not have this flag set.
  */
 #define SHRINKER_NONSLAB	BIT(4)
+#define SHRINKER_LOWOVERHEAD	BIT(5)
 
 __printf(2, 3)
 struct shrinker *shrinker_alloc(unsigned int flags, const char *fmt, ...);
