@@ -1338,7 +1338,7 @@ int ttm_pool_mgr_init(unsigned long num_pages)
 #endif
 #endif
 
-	mm_shrinker = shrinker_alloc(0, "drm-ttm_pool");
+	mm_shrinker = shrinker_alloc(SHRINKER_LOWOVERHEAD, "drm-ttm_pool");
 	if (!mm_shrinker)
 		return -ENOMEM;
 
