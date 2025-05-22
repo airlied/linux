@@ -209,7 +209,7 @@ static void ast_cursor_plane_helper_atomic_update(struct drm_plane *plane,
 
 		switch (fb->format->format) {
 		case DRM_FORMAT_ARGB4444:
-			argb4444 = shadow_plane_state->data[0].vaddr;
+			argb4444 = iosys_map_ptr(&shadow_plane_state->data[0]);
 			break;
 		default:
 			argb4444 = ast_cursor_plane->argb4444;
