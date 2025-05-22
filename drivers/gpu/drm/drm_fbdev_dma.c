@@ -215,7 +215,7 @@ static int drm_fbdev_dma_driver_fbdev_probe_tail(struct drm_fb_helper *fb_helper
 	if (dma_obj->map_noncoherent)
 		info->flags |= FBINFO_READS_FAST; /* signal caching */
 	info->screen_size = sizes->surface_height * fb->pitches[0];
-	info->screen_buffer = map.vaddr;
+	info->screen_buffer = iosys_map_ptr(&map);
 	if (!(info->flags & FBINFO_HIDE_SMEM_START)) {
 		if (!drm_WARN_ON(dev, is_vmalloc_addr(info->screen_buffer)))
 			info->fix.smem_start = page_to_phys(virt_to_page(info->screen_buffer));
@@ -294,7 +294,7 @@ int drm_fbdev_dma_driver_fbdev_probe(struct drm_fb_helper *fb_helper,
 	ret = drm_client_buffer_vmap(buffer, &map);
 	if (ret) {
 		goto err_drm_client_buffer_delete;
-	} else if (drm_WARN_ON(dev, map.is_iomem)) {
+	} else if (drm_WARN_ON(dev, iosys_map_is_iomem(&map))) {
 		ret = -ENODEV; /* I/O memory not supported; use generic emulation */
 		goto err_drm_client_buffer_delete;
 	}

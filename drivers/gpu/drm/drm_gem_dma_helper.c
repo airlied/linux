@@ -593,7 +593,7 @@ drm_gem_dma_prime_import_sg_table_vmap(struct drm_device *dev,
 	}
 
 	dma_obj = to_drm_gem_dma_obj(obj);
-	dma_obj->vaddr = map.vaddr;
+	dma_obj->vaddr = iosys_map_ptr(&map);
 
 	return obj;
 }

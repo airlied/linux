@@ -290,7 +290,7 @@ static void mipi_dbi_fb_dirty(struct iosys_map *src, struct drm_framebuffer *fb,
 		if (ret)
 			goto err_msg;
 	} else {
-		tr = src->vaddr; /* TODO: Use mapping abstraction properly */
+		tr = iosys_map_ptr(src); /* TODO: Use mapping abstraction properly */
 	}
 
 	mipi_dbi_set_window_address(dbidev, rect->x1, rect->x2 - 1, rect->y1,
