@@ -103,7 +103,7 @@ static int st7586_buf_copy(void *dst, struct iosys_map *src, struct drm_framebuf
 	if (ret)
 		return ret;
 
-	st7586_xrgb8888_to_gray332(dst, src->vaddr, fb, clip, fmtcnv_state);
+	st7586_xrgb8888_to_gray332(dst, iosys_map_ptr(src), fb, clip, fmtcnv_state);
 
 	drm_gem_fb_end_cpu_access(fb, DMA_FROM_DEVICE);
 

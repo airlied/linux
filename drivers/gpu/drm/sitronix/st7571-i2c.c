@@ -283,7 +283,7 @@ static void st7571_prepare_buffer_monochrome(struct st7571_device *st7571,
 
 	case DRM_FORMAT_R1:
 		size = (rect->x2 - rect->x1) * (rect->y2 - rect->y1) / 8;
-		memcpy(st7571->hwbuf, vmap->vaddr, size);
+		memcpy(st7571->hwbuf, iosys_map_ptr(vmap), size);
 		break;
 	}
 }
@@ -308,12 +308,12 @@ static void st7571_prepare_buffer_grayscale(struct st7571_device *st7571,
 
 	case DRM_FORMAT_R1:
 		size = (rect->x2 - rect->x1) * (rect->y2 - rect->y1) / 8;
-		memcpy(st7571->hwbuf, vmap->vaddr, size);
+		memcpy(st7571->hwbuf, iosys_map_ptr(vmap), size);
 		break;
 
 	case DRM_FORMAT_R2:
 		size = (rect->x2 - rect->x1) * (rect->y2 - rect->y1) / 4;
-		memcpy(st7571->hwbuf, vmap->vaddr, size);
+		memcpy(st7571->hwbuf, iosys_map_ptr(vmap), size);
 		break;
 	};
 }
