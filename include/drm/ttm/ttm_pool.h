@@ -54,9 +54,8 @@ struct ttm_pool_type {
 	enum ttm_caching caching;
 
 	struct list_head shrinker_list;
-
+	struct list_lru pages;
 	spinlock_t lock;
-	struct list_head pages;
 };
 
 /**
