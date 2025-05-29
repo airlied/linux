@@ -327,6 +327,7 @@ static const unsigned int memcg_stat_items[] = {
 	MEMCG_PERCPU_B,
 	MEMCG_VMALLOC,
 	MEMCG_GPU,
+	MEMCG_GPU_RECLAIM,
 	MEMCG_KMEM,
 	MEMCG_ZSWAP_B,
 	MEMCG_ZSWAPPED,
@@ -1360,6 +1361,7 @@ static const struct memory_stat memory_stats[] = {
 	{ "sock",			MEMCG_SOCK			},
 	{ "vmalloc",			MEMCG_VMALLOC			},
 	{ "gpu",			MEMCG_GPU			},
+	{ "gpu_reclaim",		MEMCG_GPU_RECLAIM		},
 	{ "shmem",			NR_SHMEM			},
 #ifdef CONFIG_ZSWAP
 	{ "zswap",			MEMCG_ZSWAP_B			},
@@ -4968,10 +4970,10 @@ void mem_cgroup_uncharge_skmem(struct mem_cgroup *memcg, unsigned int nr_pages)
  * @memcg's configured limit, %false if it doesn't.
  */
 bool mem_cgroup_charge_gpu(struct mem_cgroup *memcg, unsigned int nr_pages,
-			   gfp_t gfp_mask)
+			   gfp_t gfp_mask, bool reclaim)
 {
 	if (try_charge_memcg(memcg, gfp_mask, nr_pages) == 0) {
-		mod_memcg_state(memcg, MEMCG_GPU, nr_pages);
+		mod_memcg_state(memcg, reclaim ? MEMCG_GPU_RECLAIM : MEMCG_GPU, nr_pages);
 		return true;
 	}
 
@@ -4984,13 +4986,21 @@ EXPORT_SYMBOL_GPL(mem_cgroup_charge_gpu);
  * @memcg: memcg to uncharge
  * @nr_pages: number of pages to uncharge
  */
-void mem_cgroup_uncharge_gpu(struct mem_cgroup *memcg, unsigned int nr_pages)
+void mem_cgroup_uncharge_gpu(struct mem_cgroup *memcg, unsigned int nr_pages, bool reclaim)
 {
-	mod_memcg_state(memcg, MEMCG_GPU, -nr_pages);
+	mod_memcg_state(memcg, reclaim ? MEMCG_GPU_RECLAIM : MEMCG_GPU, -nr_pages);
 
 	refill_stock(memcg, nr_pages);
 }
 EXPORT_SYMBOL_GPL(mem_cgroup_uncharge_gpu);
+
+void mem_cgroup_move_gpu_reclaim(struct mem_cgroup *memcg, unsigned int nr_pages,
+				 bool to_reclaim)
+{
+	mod_memcg_state(memcg, to_reclaim ? MEMCG_GPU_RECLAIM : MEMCG_GPU, nr_pages);
+	mod_memcg_state(memcg, to_reclaim ? MEMCG_GPU : MEMCG_GPU_RECLAIM, -nr_pages);	
+}
+EXPORT_SYMBOL_GPL(mem_cgroup_move_gpu_reclaim);
 
 static int __init cgroup_memory(char *s)
 {

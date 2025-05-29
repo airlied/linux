@@ -141,7 +141,9 @@ static int ttm_pool_nid(struct ttm_pool *pool) {
 }
 
 /* Allocate pages of size 1 << order with the given gfp_flags */
-static struct page *ttm_pool_alloc_page(struct ttm_pool *pool, gfp_t gfp_flags,
+static struct page *ttm_pool_alloc_page(struct ttm_pool *pool,
+					struct mem_cgroup *memcg,
+					gfp_t gfp_flags,
 					unsigned int order)
 {
 	unsigned long attr = DMA_ATTR_FORCE_CONTIGUOUS;
@@ -161,6 +163,12 @@ static struct page *ttm_pool_alloc_page(struct ttm_pool *pool, gfp_t gfp_flags,
 		p = alloc_pages_node(pool->nid, gfp_flags, order);
 		if (p) {
 			p->private = order;
+			if (memcg) {
+				if (!mem_cgroup_charge_gpu(memcg, 1 << order, gfp_flags, false)) {
+					__free_pages(p, order);	
+					return NULL;
+				}
+			}
 			mod_node_page_state(NODE_DATA(ttm_pool_nid(pool)), NR_GPU_ACTIVE, (1 << order));
 		}
 		return p;
@@ -196,7 +204,9 @@ error_free:
 }
 
 /* Reset the caching and pages of size 1 << order */
-static void ttm_pool_free_page(struct ttm_pool *pool, enum ttm_caching caching,
+static void ttm_pool_free_page(struct ttm_pool *pool,
+			       struct mem_cgroup *memcg,
+			       enum ttm_caching caching,
 			       unsigned int order, struct page *p)
 {
 	unsigned long attr = DMA_ATTR_FORCE_CONTIGUOUS;
@@ -214,6 +224,9 @@ static void ttm_pool_free_page(struct ttm_pool *pool, enum ttm_caching caching,
 	if (!pool || !pool->use_dma_alloc) {
 		__free_pages(p, order);
 		mod_node_page_state(NODE_DATA(ttm_pool_nid(pool)), NR_GPU_ACTIVE, -(1 << order));
+		if (memcg) {
+			mem_cgroup_uncharge_gpu(memcg, 1 << order, false);
+		}
 		return;
 	}
 
@@ -309,6 +322,8 @@ static void ttm_pool_type_give(struct ttm_pool_type *pt,
 
 	mod_node_page_state(NODE_DATA(nid), NR_GPU_ACTIVE, -(1 << pt->order));
 	mod_node_page_state(NODE_DATA(nid), NR_GPU_RECLAIM, (1 << pt->order));
+	if (memcg)
+		mem_cgroup_move_gpu_reclaim(memcg, (1 << pt->order), true);
 }
 
 static enum lru_status take_one_from_lru(struct list_head *item,
@@ -325,20 +340,52 @@ static enum lru_status take_one_from_lru(struct list_head *item,
 }
 
 /* Take pages from a specific pool_type, return NULL when nothing available */
-static struct page *ttm_pool_type_take(struct ttm_pool_type *pt, struct mem_cgroup *memcg)
+static struct page *ttm_pool_type_take(struct ttm_pool_type *pt, struct mem_cgroup *orig_memcg)
 {
 	struct page *p = NULL;
 	int nid = ttm_pool_nid(pt->pool);
 	unsigned long ret;
 	unsigned long nr_to_walk = 1;
-
+	struct mem_cgroup *memcg = orig_memcg;
 	spin_lock(&pt->lock);
 
-	ret = list_lru_walk_one(&pt->pages, nid, memcg, take_one_from_lru, (void *)&p, &nr_to_walk);
+	while (!p) {
+		ret = list_lru_walk_one(&pt->pages, nid, memcg, take_one_from_lru, (void *)&p, &nr_to_walk);
+		if (ret == 1 && p)
+			break;
+		if (!memcg)
+			break;
+		memcg = parent_mem_cgroup(memcg);
+		if (!memcg)
+			break;
+	}
+
 	if (ret == 1 && p) {
 		atomic_long_sub(1 << pt->order, &allocated_pages);
-		mod_node_page_state(NODE_DATA(nid), NR_GPU_ACTIVE, (1 << pt->order));
+
+		/* remove the page from global reclaim stats */
 		mod_node_page_state(NODE_DATA(nid), NR_GPU_RECLAIM, -(1 << pt->order));
+
+		/* if memcg is the same, just move the accounting */
+		if (memcg == orig_memcg) {
+			mem_cgroup_move_gpu_reclaim(memcg, (1 << pt->order), false);
+		} else {
+			/*
+			 * Otherwise uncharge the page from memcg reclaim,
+			 * and charge it properly to this cgroup.
+			 * if it fails just free the page and bail.
+			 */
+			mem_cgroup_uncharge_gpu(memcg, (1 << pt->order), true);
+			if (!mem_cgroup_charge_gpu(orig_memcg, (1 << pt->order), 0, false)) {
+				__free_pages(p, pt->order);
+				p = NULL;
+			}
+		}
+		if (p) {
+			/* update the global gpu active stats */
+			mod_node_page_state(NODE_DATA(nid), NR_GPU_ACTIVE, (1 << pt->order));
+		}
+
 	}
 	spin_unlock(&pt->lock);
 
@@ -370,7 +417,7 @@ static void ttm_pool_type_fini(struct ttm_pool_type *pt)
 	spin_unlock(&shrinker_lock);
 
 	while ((p = ttm_pool_type_take(pt, NULL)))
-		ttm_pool_free_page(pt->pool, pt->caching, pt->order, p);
+		ttm_pool_free_page(pt->pool, NULL, pt->caching, pt->order, p);
 }
 
 static int ttm_pool_check_memcg(struct mem_cgroup *memcg)
@@ -441,7 +488,7 @@ static unsigned int ttm_pool_shrink(void)
 
 	p = ttm_pool_type_take(pt, NULL);
 	if (p) {
-		ttm_pool_free_page(pt->pool, pt->caching, pt->order, p);
+		ttm_pool_free_page(pt->pool, NULL, pt->caching, pt->order, p);
 		num_pages = 1 << pt->order;
 	} else {
 		num_pages = 0;
@@ -535,7 +582,7 @@ static pgoff_t ttm_pool_unmap_and_free(struct ttm_pool *pool, struct page *page,
 		ttm_pool_type_give(pt, memcg, page);
 	}
 	else
-		ttm_pool_free_page(pool, caching, order, page);
+		ttm_pool_free_page(pool, memcg, caching, order, page);
 
 	return nr;
 }
@@ -810,7 +857,7 @@ static int __ttm_pool_alloc(struct ttm_pool *pool, struct ttm_tt *tt,
 		if (!p) {
 			page_caching = ttm_cached;
 			allow_pools = false;
-			p = ttm_pool_alloc_page(pool, gfp_flags, order);
+			p = ttm_pool_alloc_page(pool, tt->memcg, gfp_flags, order);
 		}
 		/* If that fails, lower the order if possible and retry. */
 		if (!p) {
@@ -846,7 +893,7 @@ static int __ttm_pool_alloc(struct ttm_pool *pool, struct ttm_tt *tt,
 	return 0;
 
 error_free_page:
-	ttm_pool_free_page(pool, page_caching, order, p);
+	ttm_pool_free_page(pool, tt->memcg, page_caching, order, p);
 
 error_free_all:
 	if (tt->restore)
