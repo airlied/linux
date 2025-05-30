@@ -27,7 +27,7 @@
 
 #include <linux/pgtable.h>
 
-#define TTM_NUM_CACHING_TYPES	3
+#define TTM_NUM_CACHING_TYPES	4
 
 /**
  * enum ttm_caching - CPU caching and BUS snooping behavior.
@@ -49,7 +49,12 @@ enum ttm_caching {
 	 * @ttm_cached: Fully cached like normal system memory, requires that
 	 * devices snoop the CPU cache on accesses.
 	 */
-	ttm_cached
+	ttm_cached,
+
+	/**
+	 * @ttm_uncached_ram: Not for device mappings, but for RAM mappings.
+	 */
+	ttm_uncached_ram,
 };
 
 pgprot_t ttm_prot_from_caching(enum ttm_caching caching, pgprot_t tmp);
