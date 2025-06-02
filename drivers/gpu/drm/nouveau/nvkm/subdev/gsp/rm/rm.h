@@ -30,6 +30,21 @@ struct nvkm_rm_wpr {
 	bool offset_set_by_acr;
 };
 
+struct nvkm_rm_chan_alloc_args {
+	u32 handle;
+	u32 nv2080_engine_type;
+	u8 runq;
+	bool priv;
+	int chid;
+	u64 inst_addr;
+	u64 userd_addr;
+	bool userd_sys;
+	u64 mthdbuf_addr;
+	struct nvkm_vmm *vmm;
+	u64 gpfifo_offset;
+	u32 gpfifo_length;
+};
+
 struct nvkm_rm_api {
 	const struct nvkm_rm_api_gsp {
 		void (*set_rmargs)(struct nvkm_gsp *, bool resume);
@@ -110,10 +125,8 @@ struct nvkm_rm_api {
 		unsigned rsvd_chids;
 		int (*rc_triggered)(void *priv, u32 fn, void *repv, u32 repc);
 		struct {
-			int (*alloc)(struct nvkm_gsp_device *, u32 handle,
-				     u32 nv2080_engine_type, u8 runq, bool priv, int chid,
-				     u64 inst_addr, u64 userd_addr, bool userd_sys, u64 mthdbuf_addr,
-				     struct nvkm_vmm *, u64 gpfifo_offset, u32 gpfifo_length,
+			int (*alloc)(struct nvkm_gsp_device *,
+				     struct nvkm_rm_chan_alloc_args *args,
 				     struct nvkm_gsp_object *);
 		} chan;
 	} *fifo;

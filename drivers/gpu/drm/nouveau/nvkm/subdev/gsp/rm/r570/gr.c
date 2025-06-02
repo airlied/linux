@@ -130,13 +130,21 @@ r570_gr_scrubber_init(struct r535_gr *gr)
 	if (ret)
 		goto done;
 
-	ret = rm->api->fifo->chan.alloc(&gr->scrubber.vmm->rm.device, KGRAPHICS_SCRUBBER_HANDLE_CHANNEL,
-					NV2080_ENGINE_TYPE_GR0, 0, false, gr->scrubber.chid,
-					nvkm_memory_addr(gr->scrubber.inst),
-					nvkm_memory_addr(gr->scrubber.inst) + 0x1000,
-					false,
-					nvkm_memory_addr(gr->scrubber.inst) + 0x2000,
-					gr->scrubber.vmm, 0, 0x1000, &gr->scrubber.chan);
+	struct nvkm_rm_chan_alloc_args chan_args;
+	chan_args.handle = KGRAPHICS_SCRUBBER_HANDLE_CHANNEL;
+	chan_args.nv2080_engine_type = NV2080_ENGINE_TYPE_GR0;
+	chan_args.runq = 0;
+	chan_args.priv = false;
+	chan_args.chid = gr->scrubber.chid;
+	chan_args.inst_addr = nvkm_memory_addr(gr->scrubber.inst);
+	chan_args.userd_addr = nvkm_memory_addr(gr->scrubber.inst) + 0x1000;
+	chan_args.userd_sys = false;
+	chan_args.mthdbuf_addr = nvkm_memory_addr(gr->scrubber.inst) + 0x2000;
+	chan_args.vmm = gr->scrubber.vmm;
+	chan_args.gpfifo_offset = 0;
+	chan_args.gpfifo_length = 0x1000;
+	ret = rm->api->fifo->chan.alloc(&gr->scrubber.vmm->rm.device,
+					&chan_args, &gr->scrubber.chan);
 	if (ret)
 		goto done;
 

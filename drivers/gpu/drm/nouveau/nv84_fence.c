@@ -106,7 +106,16 @@ static u32
 nv84_fence_read(struct nouveau_channel *chan)
 {
 	struct nv84_fence_priv *priv = chan->cli->drm->fence;
-	return nouveau_bo_rd32(priv->bo, nv84_fence_chid(chan) * 16/4);
+	dma_rmb();
+	uint32_t *ptr = priv->bo->kmap.virtual;
+	printk(KERN_ERR "fencebo:");
+	for (unsigned i = 0; i < 32; i++) {
+	  printk(KERN_CONT "%08x ", ptr[i]);
+	}
+	printk(KERN_CONT "\n");
+	u32 ret = nouveau_bo_rd32(priv->bo, nv84_fence_chid(chan) * 16/4);
+	printk(KERN_ERR "%s: %d = %d\n", __func__, nv84_fence_chid(chan), ret);
+	return ret;
 }
 
 static void
@@ -115,7 +124,10 @@ nv84_fence_context_del(struct nouveau_channel *chan)
 	struct nv84_fence_priv *priv = chan->cli->drm->fence;
 	struct nv84_fence_chan *fctx = chan->fence;
 
-	nouveau_bo_wr32(priv->bo, nv84_fence_chid(chan) * 16 / 4, fctx->base.sequence);
+	//	nouveau_bo_wr32(priv->bo, nv84_fence_chid(chan) * 16 / 4, fctx->base.sequence);
+	//	dma_wmb();
+	//	nouveau_bo_rd32(priv->bo, nv84_fence_chid(chan) * 16/4);
+
 	mutex_lock(&priv->mutex);
 	nouveau_vma_del(&fctx->vma);
 	mutex_unlock(&priv->mutex);

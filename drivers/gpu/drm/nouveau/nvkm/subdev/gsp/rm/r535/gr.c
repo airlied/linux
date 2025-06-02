@@ -298,13 +298,22 @@ r535_gr_oneinit(struct nvkm_gr *base)
 	if (ret)
 		goto done;
 
-	ret = rm->api->fifo->chan.alloc(&golden.vmm->rm.device, NVKM_RM_CHAN(0),
-					1, 0, true, rm->api->fifo->rsvd_chids,
-					nvkm_memory_addr(golden.inst),
-					nvkm_memory_addr(golden.inst) + 0x1000,
-					false,
-					nvkm_memory_addr(golden.inst) + 0x2000,
-					golden.vmm, 0, 0x1000, &golden.chan);
+	struct nvkm_rm_chan_alloc_args fifo_args;
+
+	fifo_args.handle = NVKM_RM_CHAN(0);
+	fifo_args.nv2080_engine_type = 1;
+	fifo_args.runq = 0;
+	fifo_args.priv = true;
+	fifo_args.chid = rm->api->fifo->rsvd_chids;
+	fifo_args.inst_addr = nvkm_memory_addr(golden.inst);
+	fifo_args.userd_addr = nvkm_memory_addr(golden.inst) + 0x1000;
+	fifo_args.userd_sys = false;
+	fifo_args.mthdbuf_addr = nvkm_memory_addr(golden.inst) + 0x2000;
+	fifo_args.vmm = golden.vmm;
+	fifo_args.gpfifo_offset = 0;
+	fifo_args.gpfifo_length = 0x1000;
+	ret = rm->api->fifo->chan.alloc(&golden.vmm->rm.device,
+					&fifo_args, &golden.chan);
 	if (ret)
 		goto done;
 

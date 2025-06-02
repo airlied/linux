@@ -816,6 +816,7 @@ nouveau_bo_rd32(struct nouveau_bo *nvbo, unsigned index)
 	bool is_iomem;
 	u32 *mem = ttm_kmap_obj_virtual(&nvbo->kmap, &is_iomem);
 
+	dma_wmb();
 	mem += index;
 
 	if (is_iomem)
@@ -830,6 +831,7 @@ nouveau_bo_wr32(struct nouveau_bo *nvbo, unsigned index, u32 val)
 	bool is_iomem;
 	u32 *mem = ttm_kmap_obj_virtual(&nvbo->kmap, &is_iomem);
 
+	dma_rmb();
 	mem += index;
 
 	if (is_iomem)

@@ -321,7 +321,7 @@ nouveau_channel_ctor(struct nouveau_cli *cli, bool priv, u64 runm,
 	if (hosts[cid].oclass >= VOLTA_CHANNEL_GPFIFO_A) {
 		u32 nvif_mem_flags = NVIF_MEM_MAPPABLE | NVIF_MEM_COHERENT;
 		if (device->info.self_hosted) {
-			nvif_mem_flags |= NVIF_MEM_HOST;
+			nvif_mem_flags |= NVIF_MEM_HOST | NVIF_MEM_UNCACHED;
 		} else {
 			nvif_mem_flags |= NVIF_MEM_VRAM;
 		}
