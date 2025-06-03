@@ -346,17 +346,30 @@ static void ttm_pool_type_init(struct ttm_pool_type *pt, struct ttm_pool *pool,
 	spin_unlock(&shrinker_lock);
 }
 
+static enum lru_status pool_free_page(struct list_head *item,
+					  struct list_lru_one *list,
+					  void *cb_arg)
+{
+	struct ttm_pool_type *pt = cb_arg;
+	struct page *p = container_of(item, struct page, lru);
+
+	list_lru_isolate(list, item);
+
+	atomic_long_sub(1 << pt->order, &allocated_pages);
+	ttm_pool_free_page(pt->pool, pt->caching, pt->order, p);
+	return LRU_REMOVED;
+}
+
 /* Remove a pool_type from the global shrinker list and free all pages */
 static void ttm_pool_type_fini(struct ttm_pool_type *pt)
 {
-	struct page *p;
-
 	spin_lock(&shrinker_lock);
 	list_del(&pt->shrinker_list);
 	spin_unlock(&shrinker_lock);
 
-	while ((p = ttm_pool_type_take(pt, ttm_pool_nid(pt->pool))))
-		ttm_pool_free_page(pt->pool, pt->caching, pt->order, p);
+	spin_lock(&pt->lock);
+	list_lru_walk(&pt->pages, pool_free_page, pt, LONG_MAX);
+	spin_unlock(&pt->lock);
 }
 
 /* Return the pool_type to use for the given caching and order */
