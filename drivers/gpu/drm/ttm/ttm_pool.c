@@ -114,10 +114,11 @@ struct ttm_pool_tt_restore {
 
 static unsigned long page_pool_size;
 
-MODULE_PARM_DESC(page_pool_size, "Number of pages in the WC/UC/DMA pool");
+MODULE_PARM_DESC(page_pool_size, "Number of pages in the WC/UC/DMA pool per NUMA node");
 module_param(page_pool_size, ulong, 0644);
 
-static atomic_long_t allocated_pages;
+static unsigned long pool_node_limit[MAX_NUMNODES];
+static atomic_long_t allocated_pages[MAX_NUMNODES];
 
 static struct ttm_pool_type global_write_combined[NR_PAGE_ORDERS];
 static struct ttm_pool_type global_uncached[NR_PAGE_ORDERS];
@@ -299,7 +300,7 @@ static void ttm_pool_type_give(struct ttm_pool_type *pt, int nid, struct page *p
 	list_lru_add(&pt->pages, &p->lru, nid, NULL);
 	rcu_read_unlock();
 	spin_unlock(&pt->lock);
-	atomic_long_add(1 << pt->order, &allocated_pages);
+	atomic_long_add(1 << pt->order, &allocated_pages[nid]);
 }
 
 static enum lru_status take_one_from_lru(struct list_head *item,
@@ -325,7 +326,7 @@ static struct page *ttm_pool_type_take(struct ttm_pool_type *pt, int nid)
 
 	ret = list_lru_walk_node(&pt->pages, nid, take_one_from_lru, (void *)&p, &nr_to_walk);
 	if (ret == 1 && p) {
-		atomic_long_sub(1 << pt->order, &allocated_pages);
+		atomic_long_sub(1 << pt->order, &allocated_pages[nid]);
 	}
 	spin_unlock(&pt->lock);
 
@@ -356,7 +357,7 @@ static enum lru_status pool_free_page(struct list_head *item,
 
 	list_lru_isolate(list, item);
 
-	atomic_long_sub(1 << pt->order, &allocated_pages);
+	atomic_long_sub(1 << pt->order, &allocated_pages[ttm_pool_nid(pt->pool)]);
 	ttm_pool_free_page(pt->pool, pt->caching, pt->order, p);
 	return LRU_REMOVED;
 }
@@ -910,11 +911,13 @@ int ttm_pool_restore_and_alloc(struct ttm_pool *pool, struct ttm_tt *tt,
  */
 void ttm_pool_free(struct ttm_pool *pool, struct ttm_tt *tt)
 {
+	int nid = ttm_pool_nid(pool);
+
 	ttm_pool_free_range(pool, tt, tt->caching, 0, tt->num_pages);
 
-	while (atomic_long_read(&allocated_pages) > page_pool_size) {
-		unsigned long diff = page_pool_size - atomic_long_read(&allocated_pages);
-		ttm_pool_shrink(ttm_pool_nid(pool), diff);
+	while (atomic_long_read(&allocated_pages[nid]) > pool_node_limit[nid]) {
+		unsigned long diff = pool_node_limit[nid] - atomic_long_read(&allocated_pages[nid]);
+		ttm_pool_shrink(nid, diff);
 	}
 }
 EXPORT_SYMBOL(ttm_pool_free);
@@ -1174,7 +1177,7 @@ static unsigned long ttm_pool_shrinker_scan(struct shrinker *shrink,
 	do
 		num_freed += ttm_pool_shrink(sc->nid, sc->nr_to_scan);
 	while (num_freed < sc->nr_to_scan &&
-	       atomic_long_read(&allocated_pages));
+	       atomic_long_read(&allocated_pages[sc->nid]));
 
 	sc->nr_scanned = num_freed;
 
@@ -1185,7 +1188,7 @@ static unsigned long ttm_pool_shrinker_scan(struct shrinker *shrink,
 static unsigned long ttm_pool_shrinker_count(struct shrinker *shrink,
 					     struct shrink_control *sc)
 {
-	unsigned long num_pages = atomic_long_read(&allocated_pages);
+	unsigned long num_pages = atomic_long_read(&allocated_pages[sc->nid]);
 
 	return num_pages ? num_pages : SHRINK_EMPTY;
 }
@@ -1229,8 +1232,12 @@ static void ttm_pool_debugfs_orders(struct ttm_pool_type *pt,
 /* Dump the total amount of allocated pages */
 static void ttm_pool_debugfs_footer(struct seq_file *m)
 {
-	seq_printf(m, "\ntotal\t: %8lu of %8lu\n",
-		   atomic_long_read(&allocated_pages), page_pool_size);
+	int nid;
+
+	for_each_node(nid) {
+		seq_printf(m, "\ntotal node%d\t: %8lu of %8lu\n", nid,
+			   atomic_long_read(&allocated_pages[nid]), pool_node_limit[nid]);
+	}
 }
 
 /* Dump the information for the global pools */
@@ -1325,6 +1332,22 @@ DEFINE_SHOW_ATTRIBUTE(ttm_pool_debugfs_shrink);
 
 #endif
 
+static inline uint64_t ttm_get_node_memory_size(int nid)
+{
+        /* This is directly using si_meminfo_node implementation as the
+         * function is not exported.
+         */
+        int zone_type;
+        uint64_t managed_pages = 0;
+
+        pg_data_t *pgdat = NODE_DATA(nid);
+
+        for (zone_type = 0; zone_type < MAX_NR_ZONES; zone_type++)
+                managed_pages +=
+                        zone_managed_pages(&pgdat->node_zones[zone_type]);
+        return managed_pages * PAGE_SIZE;
+}
+
 /**
  * ttm_pool_mgr_init - Initialize globals
  *
@@ -1336,8 +1359,14 @@ int ttm_pool_mgr_init(unsigned long num_pages)
 {
 	unsigned int i;
 
-	if (!page_pool_size)
-		page_pool_size = num_pages;
+	int nid;
+	for_each_node(nid) {
+		if (!page_pool_size) {
+			uint64_t node_size = ttm_get_node_memory_size(nid);
+			pool_node_limit[nid] = (node_size >> PAGE_SHIFT) / 2;
+		} else
+			pool_node_limit[nid] = page_pool_size;
+	}
 
 	spin_lock_init(&shrinker_lock);
 	INIT_LIST_HEAD(&shrinker_list);
