@@ -130,6 +130,16 @@ static struct list_head shrinker_list;
 static struct shrinker *mm_shrinker;
 static DECLARE_RWSEM(pool_shrink_rwsem);
 
+/* helper to get a current valid node id from a pool */
+static int ttm_pool_nid(struct ttm_pool *pool) {
+	int nid = NUMA_NO_NODE;
+	if (pool)
+		nid = pool->nid;
+	if (nid == NUMA_NO_NODE)
+		nid = numa_node_id();
+	return nid;
+}
+
 /* Allocate pages of size 1 << order with the given gfp_flags */
 static struct page *ttm_pool_alloc_page(struct ttm_pool *pool, gfp_t gfp_flags,
 					unsigned int order)
@@ -272,7 +282,7 @@ static void ttm_pool_unmap(struct ttm_pool *pool, dma_addr_t dma_addr,
 }
 
 /* Give pages into a specific pool_type */
-static void ttm_pool_type_give(struct ttm_pool_type *pt, struct page *p)
+static void ttm_pool_type_give(struct ttm_pool_type *pt, int nid, struct page *p)
 {
 	unsigned int i, num_pages = 1 << pt->order;
 
@@ -284,21 +294,37 @@ static void ttm_pool_type_give(struct ttm_pool_type *pt, struct page *p)
 	}
 
 	spin_lock(&pt->lock);
-	list_add(&p->lru, &pt->pages);
+	INIT_LIST_HEAD(&p->lru);
+	rcu_read_lock();
+	list_lru_add(&pt->pages, &p->lru, nid, NULL);
+	rcu_read_unlock();
 	spin_unlock(&pt->lock);
 	atomic_long_add(1 << pt->order, &allocated_pages);
 }
 
-/* Take pages from a specific pool_type, return NULL when nothing available */
-static struct page *ttm_pool_type_take(struct ttm_pool_type *pt)
+static enum lru_status take_one_from_lru(struct list_head *item,
+					 struct list_lru_one *list,
+					 void *cb_arg)
 {
-	struct page *p;
+	struct page *p = container_of(item, struct page, lru);
 
+	list_lru_isolate(list, item);
+
+	*(struct page **)cb_arg = p;
+	return LRU_REMOVED;
+}
+
+/* Take pages from a specific pool_type, return NULL when nothing available */
+static struct page *ttm_pool_type_take(struct ttm_pool_type *pt, int nid)
+{
+	struct page *p = NULL;
+	unsigned long ret;
+	unsigned long nr_to_walk = 1;
 	spin_lock(&pt->lock);
-	p = list_first_entry_or_null(&pt->pages, typeof(*p), lru);
-	if (p) {
+
+	ret = list_lru_walk_node(&pt->pages, nid, take_one_from_lru, (void *)&p, &nr_to_walk);
+	if (ret == 1 && p) {
 		atomic_long_sub(1 << pt->order, &allocated_pages);
-		list_del(&p->lru);
 	}
 	spin_unlock(&pt->lock);
 
@@ -313,7 +339,7 @@ static void ttm_pool_type_init(struct ttm_pool_type *pt, struct ttm_pool *pool,
 	pt->caching = caching;
 	pt->order = order;
 	spin_lock_init(&pt->lock);
-	INIT_LIST_HEAD(&pt->pages);
+	list_lru_init(&pt->pages);
 
 	spin_lock(&shrinker_lock);
 	list_add_tail(&pt->shrinker_list, &shrinker_list);
@@ -329,7 +355,7 @@ static void ttm_pool_type_fini(struct ttm_pool_type *pt)
 	list_del(&pt->shrinker_list);
 	spin_unlock(&shrinker_lock);
 
-	while ((p = ttm_pool_type_take(pt)))
+	while ((p = ttm_pool_type_take(pt, ttm_pool_nid(pt->pool))))
 		ttm_pool_free_page(pt->pool, pt->caching, pt->order, p);
 }
 
@@ -380,7 +406,7 @@ static unsigned int ttm_pool_shrink(void)
 	list_move_tail(&pt->shrinker_list, &shrinker_list);
 	spin_unlock(&shrinker_lock);
 
-	p = ttm_pool_type_take(pt);
+	p = ttm_pool_type_take(pt, ttm_pool_nid(pt->pool));
 	if (p) {
 		ttm_pool_free_page(pt->pool, pt->caching, pt->order, p);
 		num_pages = 1 << pt->order;
@@ -472,7 +498,7 @@ static pgoff_t ttm_pool_unmap_and_free(struct ttm_pool *pool, struct page *page,
 	}
 
 	if (pt)
-		ttm_pool_type_give(pt, page);
+		ttm_pool_type_give(pt, ttm_pool_nid(pool), page);
 	else
 		ttm_pool_free_page(pool, caching, order, page);
 
@@ -734,7 +760,7 @@ static int __ttm_pool_alloc(struct ttm_pool *pool, struct ttm_tt *tt,
 		p = NULL;
 		pt = ttm_pool_select_type(pool, page_caching, order);
 		if (pt && allow_pools)
-			p = ttm_pool_type_take(pt);
+			p = ttm_pool_type_take(pt, ttm_pool_nid(pool));
 		/*
 		 * If that fails or previously failed, allocate from system.
 		 * Note that this also disallows additional pool allocations using
@@ -1164,12 +1190,10 @@ static unsigned long ttm_pool_shrinker_count(struct shrinker *shrink,
 static unsigned int ttm_pool_type_count(struct ttm_pool_type *pt)
 {
 	unsigned int count = 0;
-	struct page *p;
 
 	spin_lock(&pt->lock);
 	/* Only used for debugfs, the overhead doesn't matter */
-	list_for_each_entry(p, &pt->pages, lru)
-		++count;
+	count = list_lru_count(&pt->pages);
 	spin_unlock(&pt->lock);
 
 	return count;

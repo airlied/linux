@@ -56,7 +56,7 @@ struct ttm_pool_type {
 	struct list_head shrinker_list;
 
 	spinlock_t lock;
-	struct list_head pages;
+	struct list_lru pages;
 };
 
 /**
