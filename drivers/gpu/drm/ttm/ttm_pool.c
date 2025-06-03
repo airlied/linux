@@ -320,6 +320,7 @@ static struct page *ttm_pool_type_take(struct ttm_pool_type *pt, int nid)
 	struct page *p = NULL;
 	unsigned long ret;
 	unsigned long nr_to_walk = 1;
+
 	spin_lock(&pt->lock);
 
 	ret = list_lru_walk_node(&pt->pages, nid, take_one_from_lru, (void *)&p, &nr_to_walk);
@@ -400,12 +401,11 @@ static struct ttm_pool_type *ttm_pool_select_type(struct ttm_pool *pool,
 	return NULL;
 }
 
-/* Free pages using the global shrinker list */
-static unsigned int ttm_pool_shrink(void)
+/* Free pages using the per-node shrinker list */
+static unsigned int ttm_pool_shrink(int nid, unsigned long num_to_free)
 {
 	struct ttm_pool_type *pt;
 	unsigned int num_pages;
-	struct page *p;
 
 	down_read(&pool_shrink_rwsem);
 	spin_lock(&shrinker_lock);
@@ -413,13 +413,8 @@ static unsigned int ttm_pool_shrink(void)
 	list_move_tail(&pt->shrinker_list, &shrinker_list);
 	spin_unlock(&shrinker_lock);
 
-	p = ttm_pool_type_take(pt, ttm_pool_nid(pt->pool));
-	if (p) {
-		ttm_pool_free_page(pt->pool, pt->caching, pt->order, p);
-		num_pages = 1 << pt->order;
-	} else {
-		num_pages = 0;
-	}
+	num_pages = list_lru_walk_node(&pt->pages, nid, pool_free_page, pt, &num_to_free);
+	num_pages *= 1 << pt->order;
 	up_read(&pool_shrink_rwsem);
 
 	return num_pages;
@@ -768,6 +763,7 @@ static int __ttm_pool_alloc(struct ttm_pool *pool, struct ttm_tt *tt,
 		pt = ttm_pool_select_type(pool, page_caching, order);
 		if (pt && allow_pools)
 			p = ttm_pool_type_take(pt, ttm_pool_nid(pool));
+
 		/*
 		 * If that fails or previously failed, allocate from system.
 		 * Note that this also disallows additional pool allocations using
@@ -916,8 +912,10 @@ void ttm_pool_free(struct ttm_pool *pool, struct ttm_tt *tt)
 {
 	ttm_pool_free_range(pool, tt, tt->caching, 0, tt->num_pages);
 
-	while (atomic_long_read(&allocated_pages) > page_pool_size)
-		ttm_pool_shrink();
+	while (atomic_long_read(&allocated_pages) > page_pool_size) {
+		unsigned long diff = page_pool_size - atomic_long_read(&allocated_pages);
+		ttm_pool_shrink(ttm_pool_nid(pool), diff);
+	}
 }
 EXPORT_SYMBOL(ttm_pool_free);
 
@@ -1174,7 +1172,7 @@ static unsigned long ttm_pool_shrinker_scan(struct shrinker *shrink,
 	unsigned long num_freed = 0;
 
 	do
-		num_freed += ttm_pool_shrink();
+		num_freed += ttm_pool_shrink(sc->nid, sc->nr_to_scan);
 	while (num_freed < sc->nr_to_scan &&
 	       atomic_long_read(&allocated_pages));
 
@@ -1366,7 +1364,7 @@ int ttm_pool_mgr_init(unsigned long num_pages)
 #endif
 #endif
 
-	mm_shrinker = shrinker_alloc(0, "drm-ttm_pool");
+	mm_shrinker = shrinker_alloc(SHRINKER_NUMA_AWARE, "drm-ttm_pool");
 	if (!mm_shrinker)
 		return -ENOMEM;
 
