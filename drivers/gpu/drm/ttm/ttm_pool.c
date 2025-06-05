@@ -350,15 +350,16 @@ static void ttm_pool_type_init(struct ttm_pool_type *pt, struct ttm_pool *pool,
 }
 
 static enum lru_status pool_free_page(struct list_head *item,
-					  struct list_lru_one *list,
-					  void *cb_arg)
+				      struct list_lru_one *list,
+				      int nid, struct mem_cgroup *memcg,
+				      void *cb_arg)
 {
 	struct ttm_pool_type *pt = cb_arg;
 	struct page *p = container_of(item, struct page, lru);
 
 	list_lru_isolate(list, item);
 
-	atomic_long_sub(1 << pt->order, &allocated_pages[ttm_pool_nid(pt->pool)]);
+	atomic_long_sub(1 << pt->order, &allocated_pages[nid]);
 	ttm_pool_free_page(pt->pool, pt->caching, pt->order, p);
 	return LRU_REMOVED;
 }
