@@ -1134,6 +1134,8 @@ void binder_alloc_vma_close(struct binder_alloc *alloc)
  */
 enum lru_status binder_alloc_free_page(struct list_head *item,
 				       struct list_lru_one *lru,
+				       int nid,
+				       struct mem_cgroup *memcg,
 				       void *cb_arg)
 	__must_hold(&lru->lock)
 {
