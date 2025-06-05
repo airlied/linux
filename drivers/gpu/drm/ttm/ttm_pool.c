@@ -1319,11 +1319,15 @@ static int ttm_pool_debugfs_shrink_show(struct seq_file *m, void *data)
 		.nr_to_scan = TTM_SHRINKER_BATCH,
 	};
 	unsigned long count;
+	int nid;
 
 	fs_reclaim_acquire(GFP_KERNEL);
-	count = ttm_pool_shrinker_count(mm_shrinker, &sc);
-	seq_printf(m, "%lu/%lu\n", count,
-		   ttm_pool_shrinker_scan(mm_shrinker, &sc));
+	for_each_node(nid) {
+		sc.nid = nid;
+		count = ttm_pool_shrinker_count(mm_shrinker, &sc);
+		seq_printf(m, "%d: %lu/%lu\n", nid, count,
+			   ttm_pool_shrinker_scan(mm_shrinker, &sc));
+	}
 	fs_reclaim_release(GFP_KERNEL);
 
 	return 0;
