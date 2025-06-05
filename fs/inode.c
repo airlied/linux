@@ -919,7 +919,7 @@ EXPORT_SYMBOL_GPL(evict_inodes);
  * with this flag set because they are the inodes that are out of order.
  */
 static enum lru_status inode_lru_isolate(struct list_head *item,
-		struct list_lru_one *lru, int nid, struct mem_cgroup *mem_cgroup, void *arg)
+		struct list_lru_one *lru, void *arg)
 {
 	struct list_head *freeable = arg;
 	struct inode	*inode = container_of(item, struct inode, i_lru);

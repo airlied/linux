@@ -305,7 +305,6 @@ static void ttm_pool_type_give(struct ttm_pool_type *pt, int nid, struct page *p
 
 static enum lru_status take_one_from_lru(struct list_head *item,
 					 struct list_lru_one *list,
-					 int nid, struct mem_cgroup *memcg,
 					 void *cb_arg)
 {
 	struct page *p = container_of(item, struct page, lru);

@@ -459,8 +459,6 @@ static enum lru_status
 xfs_qm_dquot_isolate(
 	struct list_head	*item,
 	struct list_lru_one	*lru,
-	int			nid,
-	struct mem_cgroup	*memcg,
 	void			*arg)
 		__releases(&lru->lock) __acquires(&lru->lock)
 {

@@ -1536,8 +1536,6 @@ static enum lru_status
 xfs_buftarg_drain_rele(
 	struct list_head	*item,
 	struct list_lru_one	*lru,
-	int nid,
-	struct mem_cgroup       *memcg,
 	void			*arg)
 
 {
@@ -1636,8 +1634,6 @@ static enum lru_status
 xfs_buftarg_isolate(
 	struct list_head	*item,
 	struct list_lru_one	*lru,
-	int			nid,
-	struct mem_cgroup 	*memcg,
 	void			*arg)
 {
 	struct xfs_buf		*bp = container_of(item, struct xfs_buf, b_lru);
