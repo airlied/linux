@@ -238,6 +238,8 @@ static int ttm_buffer_object_transfer(struct ttm_buffer_object *bo,
 		return -ENOMEM;
 
 	fbo->base = *bo;
+	if (bo->objcg)
+		obj_cgroup_get(bo->objcg);
 
 	/**
 	 * Fix up members that we shouldn't copy directly:
@@ -261,6 +263,7 @@ static int ttm_buffer_object_transfer(struct ttm_buffer_object *bo,
 	ret = dma_resv_reserve_fences(&fbo->base.base._resv, TTM_NUM_MOVE_FENCES);
 	if (ret) {
 		dma_resv_unlock(&fbo->base.base._resv);
+		obj_cgroup_put(fbo->base.objcg);
 		kfree(fbo);
 		return ret;
 	}
