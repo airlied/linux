@@ -353,13 +353,19 @@ static struct page *ttm_pool_type_take(struct ttm_pool_type *pt, int nid)
 	return p;
 }
 
-/* Initialize and add a pool type to the global shrinker list */
+/* Initialize pool type */
 static void ttm_pool_type_init(struct ttm_pool_type *pt, struct ttm_pool *pool,
 			       enum ttm_caching caching, unsigned int order)
 {
 	pt->pool = pool;
 	pt->caching = caching;
 	pt->order = order;
+	INIT_LIST_HEAD(&pt->shrinker_list);
+}
+
+/* Add a pool type to the global shrinker list */
+static void ttm_pool_type_register(struct ttm_pool_type *pt)
+{
 	list_lru_init(&pt->pages);
 
 	spin_lock(&shrinker_lock);
@@ -399,7 +405,8 @@ static void ttm_pool_type_fini(struct ttm_pool_type *pt)
 	list_del(&pt->shrinker_list);
 	spin_unlock(&shrinker_lock);
 
-	list_lru_walk(&pt->pages, pool_move_to_dispose_list, &dispose, LONG_MAX);
+	if (pt->pages.node)
+		list_lru_walk(&pt->pages, pool_move_to_dispose_list, &dispose, LONG_MAX);
 	ttm_pool_dispose_list(pt, &dispose);
 
 	list_lru_destroy(&pt->pages);
@@ -442,9 +449,15 @@ static unsigned int ttm_pool_shrink(int nid, unsigned long num_to_free)
 
 	down_read(&pool_shrink_rwsem);
 	spin_lock(&shrinker_lock);
-	pt = list_first_entry(&shrinker_list, typeof(*pt), shrinker_list);
-	list_move_tail(&pt->shrinker_list, &shrinker_list);
+	pt = list_first_entry_or_null(&shrinker_list, typeof(*pt), shrinker_list);
+	if (pt)
+		list_move_tail(&pt->shrinker_list, &shrinker_list);
 	spin_unlock(&shrinker_lock);
+
+	if (!pt) {
+		up_read(&pool_shrink_rwsem);
+		return 0;
+	}
 
 	num_pages = list_lru_walk_node(&pt->pages, nid, pool_move_to_dispose_list, &dispose, &num_to_free);
 	num_pages *= 1 << pt->order;
@@ -1155,6 +1168,7 @@ void ttm_pool_init(struct ttm_pool *pool, struct device *dev,
 				continue;
 
 			ttm_pool_type_init(pt, pool, i, j);
+			ttm_pool_type_register(pt);
 		}
 	}
 }
@@ -1413,17 +1427,6 @@ int ttm_pool_mgr_init(unsigned long num_pages)
 				   ttm_uncached, i);
 	}
 
-#ifdef CONFIG_DEBUG_FS
-	debugfs_create_file("page_pool", 0444, ttm_debugfs_root, NULL,
-			    &ttm_pool_debugfs_globals_fops);
-	debugfs_create_file("page_pool_shrink", 0400, ttm_debugfs_root, NULL,
-			    &ttm_pool_debugfs_shrink_fops);
-#ifdef CONFIG_FAULT_INJECTION
-	fault_create_debugfs_attr("backup_fault_inject", ttm_debugfs_root,
-				  &backup_fault_inject);
-#endif
-#endif
-
 	mm_shrinker = shrinker_alloc(SHRINKER_NUMA_AWARE, "drm-ttm_pool");
 	if (!mm_shrinker)
 		return -ENOMEM;
@@ -1434,6 +1437,24 @@ int ttm_pool_mgr_init(unsigned long num_pages)
 	mm_shrinker->seeks = 1;
 
 	shrinker_register(mm_shrinker);
+
+	for (i = 0; i < NR_PAGE_ORDERS; ++i) {
+		ttm_pool_type_register(&global_write_combined[i]);
+		ttm_pool_type_register(&global_uncached[i]);
+		ttm_pool_type_register(&global_dma32_write_combined[i]);
+		ttm_pool_type_register(&global_dma32_uncached[i]);
+	}
+
+#ifdef CONFIG_DEBUG_FS
+	debugfs_create_file("page_pool", 0444, ttm_debugfs_root, NULL,
+			    &ttm_pool_debugfs_globals_fops);
+	debugfs_create_file("page_pool_shrink", 0400, ttm_debugfs_root, NULL,
+			    &ttm_pool_debugfs_shrink_fops);
+#ifdef CONFIG_FAULT_INJECTION
+	fault_create_debugfs_attr("backup_fault_inject", ttm_debugfs_root,
+				  &backup_fault_inject);
+#endif
+#endif
 
 	return 0;
 }
