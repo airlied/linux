@@ -14,13 +14,6 @@ struct spl_custom_float_format {
 	bool sign;
 };
 
-struct spl_custom_float_value {
-	uint32_t mantissa;
-	uint32_t exponenta;
-	uint32_t value;
-	bool negative;
-};
-
 bool SPL_NAMESPACE(spl_convert_to_custom_float_format(
 	struct spl_fixed31_32 value,
 	const struct spl_custom_float_format *format,

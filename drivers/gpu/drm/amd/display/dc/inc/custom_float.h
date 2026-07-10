@@ -28,7 +28,12 @@
 
 #include "bw_fixed.h"
 #include "hw_shared.h"
-#include "opp.h"
+
+struct custom_float_format {
+        uint32_t mantissa_bits;
+        uint32_t exponenta_bits;
+        bool sign;
+};
 
 
 bool convert_to_custom_float_format(
