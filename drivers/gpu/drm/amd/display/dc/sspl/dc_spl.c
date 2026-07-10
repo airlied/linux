@@ -1915,20 +1915,3 @@ bool SPL_NAMESPACE(spl_calculate_scaler_params(struct spl_in *spl_in, struct spl
 
 	return res;
 }
-
-/* External interface to get number of taps only */
-bool SPL_NAMESPACE(spl_get_number_of_taps(struct spl_in *spl_in, struct spl_out *spl_out))
-{
-	bool res = false;
-	bool enable_easf_v = false;
-	bool enable_easf_h = false;
-	bool enable_isharp = false;
-	struct spl_scratch spl_scratch;
-	struct dscl_prog_data *dscl_prog_data = spl_out->dscl_prog_data;
-	const struct spl_scaler_data *data = &spl_scratch.scl_data;
-
-	res = spl_calculate_number_of_taps(spl_in, &spl_scratch, spl_out,
-		&enable_easf_v, &enable_easf_h, &enable_isharp);
-	spl_set_taps_data(dscl_prog_data, data);
-	return res;
-}
