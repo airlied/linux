@@ -5,18 +5,9 @@
 #ifndef SPL_CUSTOM_FLOAT_H_
 #define SPL_CUSTOM_FLOAT_H_
 
-#include "spl_os_types.h"
-#include "spl_fixpt31_32.h"
+#include "dc/inc/custom_float.h"
 
-struct spl_custom_float_format {
-	uint32_t mantissa_bits;
-	uint32_t exponenta_bits;
-	bool sign;
-};
-
-bool SPL_NAMESPACE(spl_convert_to_custom_float_format(
-	struct spl_fixed31_32 value,
-	const struct spl_custom_float_format *format,
-	uint32_t *result));
+#define spl_custom_float_format custom_float_format
+#define spl_convert_to_custom_float_format convert_to_custom_float_format
 
 #endif //SPL_CUSTOM_FLOAT_H_
